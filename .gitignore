@@ -29,7 +29,7 @@
 *.dylib
 
 # Executables
-*.exe
+# *.exe
 *.out
 *.app
 *.i*86
@@ -50,3 +50,6 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# Intermediate
+build/
