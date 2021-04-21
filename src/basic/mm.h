@@ -22,7 +22,8 @@ enum EMMArea
 	MMA_Area_3,
 	MMA_Area_4,
 	MMA_Area_5,
-	MMA_Area_Max
+	MMA_Area_Max,
+	MMA_GLOBAL
 };
 
 void* mm_alloc_area(size_t size, enum EMMArea where);

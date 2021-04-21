@@ -18,10 +18,10 @@ unsigned int util_str_hash(const char* str, unsigned int len)
 
 char util_char_lower(char c)
 {
-	return (unsigned short)c - (((unsigned short)c - 'a') < 26u) << 5;
+	return (unsigned short)c - ((((unsigned short)c - 'a') < 26u) << 5);
 }
 
 char util_char_upper(char c)
 {
-	return (unsigned short)c + (((unsigned short)c - 'A') < 26u) << 5;
+	return (unsigned short)c + ((((unsigned short)c - 'A') < 26u) << 5);
 }

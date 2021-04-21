@@ -5,6 +5,7 @@
 #include "charstream.h"
 #include "mm.h"
 #include "logger.h"
+#include "hstring.h"
 
 
  /* create char stream */
@@ -42,7 +43,7 @@ FCharStream* cs_create_fromfile(const char* filename)
 
 	cs->_streamtype = EST_FILE;
 	cs->_charsource._file = fp;
-	cs->_srcfilename = filename;
+	cs->_srcfilename = hs_hashstr(filename);
 	cs->_line = 1;
 	cs->_col = 1;
 	cs->_ringhead = 0;

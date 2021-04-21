@@ -43,7 +43,8 @@ project "basic"
 	
     files {
 		"./src/basic/*.h",
-		"./src/basic/*.c"
+		"./src/basic/*.c",
+		"./src/basic/*.inl"
     }
 
 -- project libcpp
