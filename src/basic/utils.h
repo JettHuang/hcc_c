@@ -9,10 +9,6 @@
 #include "mm.h"
 
 
-unsigned int util_str_hash(const char* str, unsigned int len);
-char util_char_lower(char c);
-char util_char_upper(char c);
-
 typedef struct tagLocation {
 	const char* _filename;
 	unsigned int _line;
@@ -38,5 +34,20 @@ typedef union tagValue {
 		uint32_t	_chcnt;
 	} _wstr;
 } FValue;
+
+
+unsigned int util_str_hash(const char* str, unsigned int len);
+char util_char_lower(char c);
+char util_char_upper(char c);
+
+const char* util_convert_abs_pathname(const char* pathname);
+int util_is_relative_pathname(const char* pathname);
+
+/* convert xxx\bbb\cc\ to xxx/bbb/cc/ */
+const char* util_normalize_pathname(const char* pathname);
+const char* util_process_bin_dir();
+const char* util_process_working_dir();
+const char* util_getpath_from_pathname(const char* pathname);
+const char* util_make_pathname(const char* path, const char* filename);
 
 #endif /* __UTILS_H__ */

@@ -53,6 +53,28 @@ int main(int argc, char* argv[])
 		cpp_lexer_uninit();
 	}
 
+	{
+		const char* bindir = util_process_bin_dir();
+		const char* workdir = util_process_working_dir();
+		const char* filename = util_normalize_pathname("huang\\cpp.h");
+		const char* path = util_getpath_from_pathname(filename);
+
+		logger_output_s("bindir: %s\n", bindir);
+		logger_output_s("workdir: %s\n", workdir);
+		logger_output_s("filename: %s\n", filename);
+		logger_output_s("path: %s\n", path);
+	}
+	{
+		const char* bindir = util_process_bin_dir();
+		const char* workdir = util_process_working_dir();
+		const char* filename = util_normalize_pathname("working\\cpp.h");
+		const char* path = util_getpath_from_pathname(filename);
+
+		logger_output_s("bindir: %s\n", bindir);
+		logger_output_s("workdir: %s\n", workdir);
+		logger_output_s("filename: %s\n", filename);
+		logger_output_s("path: %s\n", path);
+	}
 	return 0;
 }
 
