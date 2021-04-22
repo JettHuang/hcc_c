@@ -7,8 +7,12 @@
 
 #include "pptoken.h"
 #include "charstream.h"
+#include "mm.h"
 #include <stdio.h>
 
+
+#define CPP_MM_PERMPOOL		MMA_Area_1
+#define CPP_MM_TEMPPOOL		MMA_Area_2
 
 /* macro structure */
 #define MACRO_FLAG_BUILTIN		0x0001
@@ -95,7 +99,6 @@ typedef struct tagCppContext {
 	const char* _strdate;
 	const char* _strtime;
 
-	int32_t		_prev_linenum;
 	struct {
 		int16_t	_valid : 1;
 		FPPToken _tk;
@@ -113,5 +116,24 @@ void cpp_contex_release(FCppContext* ctx);
 void cpp_add_includedir(FCppContext* ctx, const char* dir);
 void cpp_add_definition(FCppContext* ctx, const char* str);
 int cpp_process(FCppContext* ctx, const char* srcfilename, const char* outfilename);
+
+/************************************************************************/
+/* internal interface                                                     */
+/************************************************************************/
+void cpp_add_macro(FCppContext* ctx, const FMacro* m);
+void cpp_remove_macro(FCppContext* ctx, const char* name);
+const FMacro* cpp_find_macro(FCppContext* ctx, const char* name);
+
+int cpp_read_token(FCppContext* ctx, FCharStream* cs, FPPToken *tk, int bwantheader, int ballowerr);
+int cpp_lookahead_token(FCppContext* ctx, FCharStream* cs, FPPToken *tk, int bwantheader, int ballowerr);
+int cpp_read_rowtokens(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, int bwantheader, int ballowerr);
+
+void cpp_output_s(FCppContext* ctx, const char* format, ...);
+void cpp_output_blankline(FCppContext* ctx, int lines);
+void cpp_output_linectrl(FCppContext* ctx, const char* filename, int line);
+void cpp_output_tokens(FCppContext* ctx, FTKListNode* tklist);
+
+int cpp_do_control(FCppContext* ctx, FTKListNode* tklist);
+int cpp_expand_rowtokens(FCppContext* ctx, FTKListNode* tklist, int bscannextlines);
 
 #endif /* __CPP_H__ */
