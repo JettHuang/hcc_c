@@ -46,7 +46,7 @@ void cpp_contex_init(FCppContext* ctx)
 	ctx->_strdate = NULL;
 	ctx->_strtime = NULL;
 	ctx->_lookaheadtk._valid = 0;
-
+	
 	cpp_init_date(ctx);
 	// built-in macros
 	{
@@ -79,10 +79,6 @@ void cpp_contex_init(FCppContext* ctx)
 	}
 	{
 		FMacro m = { hs_hashstr("__VA_ARGS__"), MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
-		cpp_add_macro(ctx, &m);
-	}
-	{
-		FMacro m = { hs_hashstr("defined"), MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE | MACRO_FLAG_HIDDEN, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 }
@@ -153,6 +149,23 @@ int cpp_lookahead_token(FCppContext* ctx, FCharStream* cs, FPPToken* tk, int bwa
 	ctx->_lookaheadtk._valid = 1;
 	*tk = ctx->_lookaheadtk._tk;
 	return result || ballowerr;
+}
+
+int cpp_read_tokentolist(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, int bwantheader, int ballowerr)
+{
+	FTKListNode* tknode = NULL;
+
+	tknode = mm_alloc_area(sizeof(FTKListNode), CPP_MM_TEMPPOOL);
+	assert(tknode);
+	tknode->_next = NULL;
+
+	if (!cpp_read_token(ctx, cs, &tknode->_tk, bwantheader, ballowerr))
+	{
+		return 0;
+	}
+
+	*tail = tknode;
+	return 1;
 }
 
 int cpp_read_rowtokens(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, int bwantheader, int ballowerr)
@@ -233,19 +246,20 @@ int cpp_process(FCppContext* ctx, const char* srcfilename, const char* outfilena
 	{
 		FSourceCodeContext* top = ctx->_sourcestack;
 		int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
-		int savedlinenum = top->_cs->_line;
 		FTKListNode* tklist = NULL;
+		int start_linenum = top->_cs->_line, ctrloutputlines = 0;
 
 		if (!cpp_read_rowtokens(ctx, top->_cs, &tklist, 0, !bcondblockpass))
 		{
 			return 0;
 		}
-
 		if (tklist->_tk._type == TK_POUND) /* '#' */
 		{
-			cpp_output_blankline(ctx, 1);
-			if (!cpp_do_control(ctx, tklist)) {
+			if (!cpp_do_control(ctx, tklist, &ctrloutputlines)) {
 				return 0;
+			}
+			if (ctrloutputlines >= 0) {
+				cpp_output_blankline(ctx, top->_cs->_line - start_linenum - ctrloutputlines);
 			}
 		}
 		else
@@ -257,17 +271,19 @@ int cpp_process(FCppContext* ctx, const char* srcfilename, const char* outfilena
 				}
 
 				cpp_output_tokens(ctx, tklist);
+				cpp_output_blankline(ctx, top->_cs->_line - start_linenum - 1);
 			}
 			else
 			{
-				cpp_output_blankline(ctx, 1);
+				cpp_output_blankline(ctx, top->_cs->_line - start_linenum);
 			}
-
-			cpp_output_blankline(ctx, top->_cs->_line - savedlinenum - 1);
 
 			/* check end of source file */
 			if (tklist->_tk._type == TK_EOF)
 			{
+				/* release char stream */
+				cs_release(top->_cs);
+
 				/* check #if else stack empty ? */
 				if (top->_condstack != NULL)
 				{

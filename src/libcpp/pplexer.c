@@ -470,6 +470,7 @@ int cpp_lexer_read_token(FCharStream* cs, int bwantheader, FPPToken *tk)
 	tk->_wscnt = 0;
 	tk->_hidesetid = -1;
 
+#if 0 /* #include <> "" parsing */
 	if (bwantheader)
 	{
 		static FAction action0 = MAKE_ACTION(S_HCHAR_SEQ, TK_NONE);
@@ -486,6 +487,7 @@ int cpp_lexer_read_token(FCharStream* cs, int bwantheader, FPPToken *tk)
 		g_lexerfsm[currstate]['<'] = action0;
 		g_lexerfsm[currstate]['\"'] = action1;
 	}
+#endif
 
 	charbuffer_empty();
 	while (1)

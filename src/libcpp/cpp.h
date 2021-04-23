@@ -62,6 +62,9 @@ enum ECtrlType
 #define COND_FAILED_PARENT		0x01
 #define COND_FAILED_SELF		0x02
 #define CHECK_COND_PASS(flags)	(!((flags) & (COND_FAILED_PARENT | COND_FAILED_SELF)))
+#define CHECK_OUTER_COND_PASS(flags)	(!((flags) & (COND_FAILED_PARENT)))
+
+#define CHECK_IS_EOFLINE(ty)	((ty) == TK_EOF || (ty) == TK_NEWLINE)
 
 /* condition section */
 typedef struct tagConditionBlock {
@@ -103,6 +106,7 @@ typedef struct tagCppContext {
 		int16_t	_valid : 1;
 		FPPToken _tk;
 	} _lookaheadtk;
+
 } FCppContext;
 
 
@@ -126,6 +130,7 @@ const FMacro* cpp_find_macro(FCppContext* ctx, const char* name);
 
 int cpp_read_token(FCppContext* ctx, FCharStream* cs, FPPToken *tk, int bwantheader, int ballowerr);
 int cpp_lookahead_token(FCppContext* ctx, FCharStream* cs, FPPToken *tk, int bwantheader, int ballowerr);
+int cpp_read_tokentolist(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, int bwantheader, int ballowerr);
 int cpp_read_rowtokens(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, int bwantheader, int ballowerr);
 
 void cpp_output_s(FCppContext* ctx, const char* format, ...);
@@ -133,7 +138,9 @@ void cpp_output_blankline(FCppContext* ctx, int lines);
 void cpp_output_linectrl(FCppContext* ctx, const char* filename, int line);
 void cpp_output_tokens(FCppContext* ctx, FTKListNode* tklist);
 
-int cpp_do_control(FCppContext* ctx, FTKListNode* tklist);
+int cpp_do_control(FCppContext* ctx, FTKListNode* tklist, int *outputlines);
 int cpp_expand_rowtokens(FCppContext* ctx, FTKListNode* tklist, int bscannextlines);
+
+int cpp_eval_constexpr(FTKListNode* tklist, int* result);
 
 #endif /* __CPP_H__ */
