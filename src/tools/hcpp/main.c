@@ -10,18 +10,20 @@
 
 #include <stdio.h>
 #include <assert.h>
+#include <string.h>
 
 
 int main(int argc, char* argv[])
 {
 	const char* h0, *h1;
+	const char* str = "huangheshui...";
 
 	h0 = hs_hashstr("huangheshui...");
-	h1 = hs_hashstr("huangheshui...");
+	h1 = hs_hashstr(str);
 	assert(h0 == h1);
 	
 	h0 = hs_hashnstr("xyz\0uvw...", sizeof("xyz\0uvw..."));
-	h1 = hs_hashnstr("xyz\0uvw...", sizeof("xyz\0uvw..."));
+	h1 = hs_hashnstr2("xyz\0uvw...", sizeof("xyz\0uvw...") - 1);
 	assert(h0 == h1);
 	
 	{
