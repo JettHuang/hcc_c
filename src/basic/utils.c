@@ -23,6 +23,18 @@ unsigned int util_str_hash(const char* str, unsigned int len)
 	return h;
 }
 
+unsigned int util_str_hash2(const char* str, unsigned int len)
+{
+	unsigned int h = 0;
+	while (len-- > 0)
+	{
+		h = h * 13131 + (unsigned int)*str++;
+	}
+
+	h = h * 13131 + (unsigned int)'\0';
+	return h;
+}
+
 char util_char_lower(char c)
 {
 	return (unsigned short)c - ((((unsigned short)c - 'a') < 26u) << 5);

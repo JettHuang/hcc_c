@@ -54,3 +54,32 @@ const char* hs_hashnstr(const char* str, unsigned int len)
 
 	return ptrentry->_ch;
 }
+
+const char* hs_hashnstr2(const char* str, unsigned int len)
+{
+	unsigned int hash = util_str_hash2(str, len);
+	unsigned int index = hash % TABLE_SIZE;
+	FHashEntry* ptrentry = g_htable[index];
+
+	len++;
+	while (ptrentry)
+	{
+		if (ptrentry->_count == len && !memcmp(ptrentry->_ch, str, len))
+		{
+			return ptrentry->_ch;
+		}
+
+		ptrentry = ptrentry->_next;
+	} /* end while */
+
+	ptrentry = (FHashEntry*)mm_alloc_area(ENTRY_BYTES(len), HASH_POOL);
+	if (!ptrentry) { return NULL; }
+
+	memcpy(ptrentry->_ch, str, len-1);
+	ptrentry->_ch[len-1] = '\0';
+	ptrentry->_count = len;
+	ptrentry->_next = g_htable[index];
+	g_htable[index] = ptrentry;
+
+	return ptrentry->_ch;
+}

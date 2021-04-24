@@ -9,6 +9,7 @@
 #include "pplexer.h"
 
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 
 
@@ -47,38 +48,48 @@ void cpp_contex_init(FCppContext* ctx)
 	ctx->_strtime = NULL;
 	ctx->_lookaheadtk._valid = 0;
 	
+	ctx->_HS__DATE__ = hs_hashstr("__DATE__");
+	ctx->_HS__FILE__ = hs_hashstr("__FILE__");
+	ctx->_HS__LINE__ = hs_hashstr("__LINE__");
+	ctx->_HS__STDC__ = hs_hashstr("__STDC__");
+	ctx->_HS__STDC_HOSTED__ = hs_hashstr("__STDC_HOSTED__");
+	ctx->_HS__STDC_VERSION__ = hs_hashstr("__STDC_VERSION__");
+	ctx->_HS__TIME__ = hs_hashstr("__TIME__");
+	ctx->_HS__VA_ARGS__ = hs_hashstr("__VA_ARGS__");
+	ctx->_HS__DEFINED__ = hs_hashstr("defined");
+
 	cpp_init_date(ctx);
 	// built-in macros
 	{
-		FMacro m = { hs_hashstr("__DATE__"), MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__DATE__, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { hs_hashstr("__FILE__"), MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__FILE__, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { hs_hashstr("__LINE__"), MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__LINE__, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { hs_hashstr("__STDC__"), MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__STDC__, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { hs_hashstr("__STDC_HOSTED__"), MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__STDC_HOSTED__, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { hs_hashstr("__STDC_VERSION__"), MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__STDC_VERSION__, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { hs_hashstr("__TIME__"), MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__TIME__, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { hs_hashstr("__VA_ARGS__"), MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__VA_ARGS__, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 }
@@ -156,7 +167,11 @@ int cpp_read_tokentolist(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, 
 	FTKListNode* tknode = NULL;
 
 	tknode = mm_alloc_area(sizeof(FTKListNode), CPP_MM_TEMPPOOL);
-	assert(tknode);
+	if (!tknode) {
+		logger_output_s("error: out of memory, at %s:%d\n", __FILE__, __LINE__);
+		return 0;
+	}
+
 	tknode->_next = NULL;
 
 	if (!cpp_read_token(ctx, cs, &tknode->_tk, bwantheader, ballowerr))
@@ -175,7 +190,11 @@ int cpp_read_rowtokens(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, in
 	do 
 	{
 		tknode = mm_alloc_area(sizeof(FTKListNode), CPP_MM_TEMPPOOL);
-		assert(tknode);
+		if (!tknode) {
+			logger_output_s("error: out of memory, at %s:%d\n", __FILE__, __LINE__);
+			return 0;
+		}
+		
 		tknode->_next = NULL;
 
 		if (!cpp_read_token(ctx, cs, &tknode->_tk, bwantheader, ballowerr))
@@ -266,7 +285,7 @@ int cpp_process(FCppContext* ctx, const char* srcfilename, const char* outfilena
 		{
 			if (bcondblockpass)
 			{
-				if (!cpp_expand_rowtokens(ctx, tklist, 1)) {
+				if (!cpp_expand_rowtokens(ctx, &tklist, 1)) {
 					return 0;
 				}
 
@@ -302,4 +321,42 @@ int cpp_process(FCppContext* ctx, const char* srcfilename, const char* outfilena
 	} /* end while */
 
 	return 1;
+}
+
+FCharStream* cpp_open_includefile(FCppContext* ctx, const char* filename, const char* dir, int bsearchsys)
+{
+	char strbuf[1024];
+	FCharStream* cs = NULL;
+	const char* headername = util_normalize_pathname(filename);
+
+	if (util_is_relative_pathname(headername))
+	{
+		if (!bsearchsys)
+		{
+			strcpy(strbuf, dir);
+			strcat(strbuf, headername);
+			cs = cs_create_fromfile(strbuf);
+			if (!cs) {
+				bsearchsys = 1;
+			}
+		}
+		if (bsearchsys)
+		{
+			FStrListNode* sysdir = ctx->_includedirs;
+			for (; sysdir; sysdir = sysdir->_next)
+			{
+				strcpy(strbuf, sysdir->_str);
+				strcat(strbuf, headername);
+
+				cs = cs_create_fromfile(strbuf);
+				if (cs) { break; }
+			} /* end for */
+		}
+	}
+	else
+	{
+		cs = cs_create_fromfile(headername);
+	}
+
+	return cs;
 }

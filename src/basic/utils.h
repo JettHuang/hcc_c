@@ -37,6 +37,7 @@ typedef union tagValue {
 
 
 unsigned int util_str_hash(const char* str, unsigned int len);
+unsigned int util_str_hash2(const char* str, unsigned int len);
 char util_char_lower(char c);
 char util_char_upper(char c);
 

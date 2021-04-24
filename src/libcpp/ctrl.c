@@ -4,6 +4,7 @@
 
 #include "cpp.h"
 #include "logger.h"
+#include "hstring.h"
 #include <string.h>
 
 
@@ -89,7 +90,7 @@ static int ctrl_if_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlin
 			return 0;
 		}
 
-		if (!cpp_eval_constexpr(expr, &eval));
+		if (!cpp_eval_constexpr(ctx, expr, &eval));
 		{
 			return 0;
 		}
@@ -226,7 +227,7 @@ static int ctrl_elif_handler(FCppContext* ctx, FTKListNode* tklist, int* outputl
 			return 0;
 		}
 
-		if (!cpp_eval_constexpr(expr, &eval));
+		if (!cpp_eval_constexpr(ctx, expr, &eval));
 		{
 			return 0;
 		}
@@ -358,35 +359,223 @@ static int ctrl_endif_handler(FCppContext* ctx, FTKListNode* tklist, int* output
 
 static int ctrl_include_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
 {
-	return 1;
-}
+	FSourceCodeContext* top = ctx->_sourcestack;
+	int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
+	int bsearchsysdir = 0;
+	const char* headerfile = NULL;
+	FCharStream* newcs = NULL;
 
-static int ctrl_define_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
-{
+	if (!bcondblockpass) {
+		return 1;
+	}
+
+	/* syntax: #include <xxx>  #include "..." */
+	{
+		char strbuf[512];
+		int bsyntaxerr = 1;
+		FTKListNode* start = tklist->_next->_next;
+		if (start->_tk._type == TK_CONSTANT_STR)
+		{
+			if (CHECK_IS_EOFLINE(start->_next->_tk._type))
+			{
+				size_t n = strlen(start->_tk._str);
+				strncpy(strbuf, start->_tk._str + 1, n - 2); /* remove "" */
+				headerfile = hs_hashstr(strbuf);
+				bsyntaxerr = 0;
+			}
+		}
+		else if (start->_tk._type == TK_LESS) /* < */
+		{
+			FTKListNode* next = start->_next;
+			strbuf[0] = '\0';
+			while (next->_tk._type != TK_LESS && next->_tk._type != TK_GREAT && !CHECK_IS_EOFLINE(next->_tk._type))
+			{
+				strcat(strbuf, next->_tk._str);
+				next = next->_next;
+			}
+			if (next->_tk._type == TK_GREAT && CHECK_IS_EOFLINE(next->_next->_tk._type))
+			{
+				headerfile = hs_hashstr(strbuf);
+				bsyntaxerr = 0;
+			}
+			bsearchsysdir = 1;
+		}
+
+		if (bsyntaxerr)
+		{
+			logger_output_s("syntax error: #include is invalid at %s:%d\n", start->_tk._loc._filename, start->_tk._loc._line);
+			return 0;
+		}
+	}
+
+	newcs = cpp_open_includefile(ctx, headerfile, top->_srcdir, bsearchsysdir);
+	if (!newcs) {
+		logger_output_s("error: open header file failed, %s at %s:%d\n", headerfile, tklist->_tk._loc._filename, tklist->_tk._loc._line);
+		return 0;
+	}
+
+	/* check recursive including */
+	for (top = ctx->_sourcestack; top; top = top->_up)
+	{
+		if (top->_cs->_srcfilename == newcs->_srcfilename)
+		{
+			logger_output_s("error: open header file recursive, %s at %s:%d\n", headerfile, tklist->_tk._loc._filename, tklist->_tk._loc._line);
+			return 0;
+		}
+	} /* end for */
+
+	/* push new source code */
+	top = mm_alloc_area(sizeof(FSourceCodeContext), CPP_MM_PERMPOOL);
+	if (!top) { return 0; }
+
+	top->_cs = newcs;
+	top->_srcfilename = newcs->_srcfilename;
+	top->_srcdir = util_getpath_from_pathname(newcs->_srcfilename);
+	top->_condstack = NULL;
+	top->_up = NULL;
+
+	/* push to stack */
+	top->_up = ctx->_sourcestack;
+	ctx->_sourcestack = top;
+	/* process source codes. */
+	cpp_output_linectrl(ctx, newcs->_srcfilename, newcs->_line);
 	return 1;
 }
 
 static int ctrl_undef_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
 {
+	FSourceCodeContext* top = ctx->_sourcestack;
+	int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
+	FTKListNode* id = NULL;
+	const FMacro* macro = NULL;
+
+	if (!bcondblockpass) {
+		return 1;
+	}
+
+	/* #undef ID */
+	id = tklist->_next->_next;
+	if (id->_tk._type != TK_ID || !CHECK_IS_EOFLINE(id->_next->_tk._type))
+	{
+		logger_output_s("syntax error: #undef marco, at %s:%d\n", id->_tk._loc._filename, id->_tk._loc._line);
+		return 0;
+	}
+
+	if (id->_tk._str == ctx->_HS__DEFINED__)
+	{
+		logger_output_s("error: #undef defined is not allowed, at %s:%d\n", id->_tk._loc._filename, id->_tk._loc._line);
+		return 0;
+	}
+
+	macro = cpp_find_macro(ctx, id->_tk._str);
+	if (macro && (macro->_flags & MACRO_FLAG_UNCHANGE))
+	{
+		logger_output_s("error: #undef %s is not allowed, at %s:%d\n", id->_tk._str, id->_tk._loc._filename, id->_tk._loc._line);
+		return 0;
+	}
+
+	if (macro)
+	{
+		cpp_remove_macro(ctx, id->_tk._str);
+	}
 	return 1;
 }
 
 static int ctrl_line_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
 {
+	FSourceCodeContext* top = ctx->_sourcestack;
+	int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
+	FTKListNode* expr = tklist->_next->_next;
+
+	const char* filename = NULL;
+	int linenum = 0;
+
+	if (!bcondblockpass) {
+		return 1;
+	}
+
+	if (!cpp_expand_rowtokens(ctx, &expr, 0))
+	{
+		return 0;
+	}
+
+	/* #line number filename */
+	if (expr->_tk._type == TK_PPNUMBER && CHECK_IS_EOFLINE(expr->_next->_tk._type))
+	{
+		linenum = atol(expr->_tk._str);
+	}
+	else if (expr->_tk._type == TK_PPNUMBER && expr->_next->_tk._type == TK_CONSTANT_STR && CHECK_IS_EOFLINE(expr->_next->_next->_tk._type))
+	{
+		const char* cnststr = expr->_next->_tk._str;
+		linenum = atol(expr->_tk._str);
+		filename = hs_hashnstr2(cnststr + 1, strlen(cnststr) - 2); /* omit 2 " */
+		filename = util_normalize_pathname(filename);
+	}
+	else
+	{
+		logger_output_s("syntax error: #line number filename(opt), at %s:%d\n", tklist->_tk._loc._filename, tklist->_tk._loc._line);
+		return 0;
+	}
+
+	top->_cs->_line = linenum;
+	if (filename) {
+		top->_cs->_srcfilename = filename;
+	}
+
+	cpp_output_linectrl(ctx, filename, linenum);
+	*outputlines = 1;
+
 	return 1;
 }
 
 static int ctrl_error_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
 {
-	return 1;
+	FSourceCodeContext* top = ctx->_sourcestack;
+	int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
+
+	if (!bcondblockpass) {
+		return 1;
+	}
+
+	cpp_output_tokens(ctx, tklist);
+	*outputlines = 1;
+	return 0;
 }
 
 static int ctrl_pragma_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
 {
+	FSourceCodeContext* top = ctx->_sourcestack;
+	int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
+
+	if (!bcondblockpass) {
+		return 1;
+	}
+
+	cpp_output_tokens(ctx, tklist);
+	*outputlines = 1;
 	return 1;
 }
 
 static int ctrl_unknown_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
 {
+	FSourceCodeContext* top = ctx->_sourcestack;
+	int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
+
+	/* # newline is allowed */
+	if (!CHECK_IS_EOFLINE(tklist->_next->_tk._type))
+	{
+		if (bcondblockpass)
+		{
+			FTKListNode* tknode = tklist->_next;
+			logger_output_s("error: unknown preprocessor directive %s at %s:%d\n", tknode->_tk._str, tknode->_tk._loc._filename, tknode->_tk._loc._line);
+			return 0;
+		}
+	}
+	return 1;
+}
+
+static int ctrl_define_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
+{
+	// TODO:
 	return 1;
 }

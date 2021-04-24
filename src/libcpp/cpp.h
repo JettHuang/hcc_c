@@ -107,6 +107,15 @@ typedef struct tagCppContext {
 		FPPToken _tk;
 	} _lookaheadtk;
 
+	const char* _HS__DATE__;
+	const char* _HS__FILE__;
+	const char* _HS__LINE__;
+	const char* _HS__STDC__;
+	const char* _HS__STDC_HOSTED__;
+	const char* _HS__STDC_VERSION__;
+	const char* _HS__TIME__;
+	const char* _HS__VA_ARGS__;
+	const char* _HS__DEFINED__;
 } FCppContext;
 
 
@@ -139,8 +148,9 @@ void cpp_output_linectrl(FCppContext* ctx, const char* filename, int line);
 void cpp_output_tokens(FCppContext* ctx, FTKListNode* tklist);
 
 int cpp_do_control(FCppContext* ctx, FTKListNode* tklist, int *outputlines);
-int cpp_expand_rowtokens(FCppContext* ctx, FTKListNode* tklist, int bscannextlines);
+int cpp_expand_rowtokens(FCppContext* ctx, FTKListNode** tklist, int bscannextlines);
 
-int cpp_eval_constexpr(FTKListNode* tklist, int* result);
+int cpp_eval_constexpr(FCppContext* ctx, FTKListNode* tklist, int* result);
+FCharStream* cpp_open_includefile(FCppContext* ctx, const char* filename, const char*dir, int bsearchsys);
 
 #endif /* __CPP_H__ */
