@@ -16,19 +16,19 @@ typedef struct tagCtrlMeta {
 	fnCtrlHandlerPtr _handler;
 } FCtrlMeta;
 
-static int ctrl_if_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
-static int ctrl_ifdef_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
-static int ctrl_ifndef_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
-static int ctrl_elif_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
-static int ctrl_else_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
-static int ctrl_endif_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
-static int ctrl_include_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
-static int ctrl_define_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
-static int ctrl_undef_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
-static int ctrl_line_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
-static int ctrl_error_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
-static int ctrl_pragma_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
-static int ctrl_unknown_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
+static BOOL ctrl_if_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
+static BOOL ctrl_ifdef_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
+static BOOL ctrl_ifndef_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
+static BOOL ctrl_elif_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
+static BOOL ctrl_else_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
+static BOOL ctrl_endif_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
+static BOOL ctrl_include_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
+static BOOL ctrl_define_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
+static BOOL ctrl_undef_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
+static BOOL ctrl_line_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
+static BOOL ctrl_error_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
+static BOOL ctrl_pragma_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
+static BOOL ctrl_unknown_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines);
 
 static const FCtrlMeta g_ctrls[] =
 {
@@ -72,7 +72,7 @@ static FConditionBlock* alloc_condtionblock()
 	return mm_alloc_area(sizeof(FConditionBlock), CPP_MM_PERMPOOL);
 }
 
-static int ctrl_if_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
+static BOOL ctrl_if_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
 {
 	FSourceCodeContext* top = ctx->_sourcestack;
 	int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
@@ -87,12 +87,12 @@ static int ctrl_if_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlin
 		if (CHECK_IS_EOFLINE(expr->_tk._type))
 		{
 			logger_output_s("syntax error: #if expression, at %s:%d\n", expr->_tk._loc._filename, expr->_tk._loc._line);
-			return 0;
+			return FALSE;
 		}
 
 		if (!cpp_eval_constexpr(ctx, expr, &eval));
 		{
-			return 0;
+			return FALSE;
 		}
 
 		if (!eval) {
@@ -108,17 +108,17 @@ static int ctrl_if_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlin
 	FConditionBlock* condblk = alloc_condtionblock();
 	if (!condblk) {
 		logger_output_s("error: out of memory. at %s:%d\n", __FILE__, __LINE__);
-		return 0;
+		return FALSE;
 	}
 
 	condblk->_ctrltype = Ctrl_if;
 	condblk->_flags = flags;
 	condblk->_up = top->_condstack;
 	top->_condstack = condblk;
-	return 1;
+	return TRUE;
 }
 
-static int ctrl_ifdef_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
+static BOOL ctrl_ifdef_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
 {
 	FSourceCodeContext* top = ctx->_sourcestack;
 	int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
@@ -132,7 +132,7 @@ static int ctrl_ifdef_handler(FCppContext* ctx, FTKListNode* tklist, int* output
 		if (id->_tk._type != TK_ID || CHECK_IS_EOFLINE(id->_next->_tk._type))
 		{
 			logger_output_s("syntax error: #ifdef expression, at %s:%d\n", id->_tk._loc._filename, id->_tk._loc._line);
-			return 0;
+			return FALSE;
 		}
 
 		if (!cpp_find_macro(ctx, id->_tk._str)) {
@@ -148,17 +148,17 @@ static int ctrl_ifdef_handler(FCppContext* ctx, FTKListNode* tklist, int* output
 	FConditionBlock* condblk = alloc_condtionblock();
 	if (!condblk) {
 		logger_output_s("error: out of memory. at %s:%d\n", __FILE__, __LINE__);
-		return 0;
+		return FALSE;
 	}
 
 	condblk->_ctrltype = Ctrl_ifdef;
 	condblk->_flags = flags;
 	condblk->_up = top->_condstack;
 	top->_condstack = condblk;
-	return 1;
+	return TRUE;
 }
 
-static int ctrl_ifndef_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
+static BOOL ctrl_ifndef_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
 {
 	FSourceCodeContext* top = ctx->_sourcestack;
 	int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
@@ -172,7 +172,7 @@ static int ctrl_ifndef_handler(FCppContext* ctx, FTKListNode* tklist, int* outpu
 		if (id->_tk._type != TK_ID || CHECK_IS_EOFLINE(id->_next->_tk._type))
 		{
 			logger_output_s("syntax error: #ifndef expression, at %s:%d\n", id->_tk._loc._filename, id->_tk._loc._line);
-			return 0;
+			return FALSE;
 		}
 
 		if (cpp_find_macro(ctx, id->_tk._str)) {
@@ -188,7 +188,7 @@ static int ctrl_ifndef_handler(FCppContext* ctx, FTKListNode* tklist, int* outpu
 	FConditionBlock* condblk = alloc_condtionblock();
 	if (!condblk) {
 		logger_output_s("error: out of memory. at %s:%d\n", __FILE__, __LINE__);
-		return 0;
+		return FALSE;
 	}
 
 	condblk->_ctrltype = Ctrl_ifndef;
@@ -196,10 +196,10 @@ static int ctrl_ifndef_handler(FCppContext* ctx, FTKListNode* tklist, int* outpu
 	condblk->_up = top->_condstack;
 	top->_condstack = condblk;
 
-	return 1;
+	return TRUE;
 }
 
-static int ctrl_elif_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
+static BOOL ctrl_elif_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
 {
 	FSourceCodeContext* top = ctx->_sourcestack;
 	int boutercondblockpass = top->_condstack == NULL || CHECK_OUTER_COND_PASS(top->_condstack->_flags);
@@ -211,7 +211,7 @@ static int ctrl_elif_handler(FCppContext* ctx, FTKListNode* tklist, int* outputl
 		top->_condstack->_ctrltype != Ctrl_elif)
 	{
 		logger_output_s("error: #elif is not matching. at %s:%d\n", top->_cs->_srcfilename, top->_cs->_line - 1);
-		return 0;
+		return FALSE;
 	}
 
 	if (boutercondblockpass)
@@ -224,12 +224,12 @@ static int ctrl_elif_handler(FCppContext* ctx, FTKListNode* tklist, int* outputl
 		if (CHECK_IS_EOFLINE(expr->_tk._type))
 		{
 			logger_output_s("syntax error: #elif expression, at %s:%d\n", expr->_tk._loc._filename, expr->_tk._loc._line);
-			return 0;
+			return FALSE;
 		}
 
 		if (!cpp_eval_constexpr(ctx, expr, &eval));
 		{
-			return 0;
+			return FALSE;
 		}
 
 		/* check prev siblings condition result */
@@ -253,7 +253,7 @@ static int ctrl_elif_handler(FCppContext* ctx, FTKListNode* tklist, int* outputl
 	FConditionBlock* condblk = alloc_condtionblock();
 	if (!condblk) {
 		logger_output_s("error: out of memory. at %s:%d\n", __FILE__, __LINE__);
-		return 0;
+		return FALSE;
 	}
 
 	condblk->_ctrltype = Ctrl_elif;
@@ -261,10 +261,10 @@ static int ctrl_elif_handler(FCppContext* ctx, FTKListNode* tklist, int* outputl
 	condblk->_up = top->_condstack;
 	top->_condstack = condblk;
 
-	return 1;
+	return TRUE;
 }
 
-static int ctrl_else_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
+static BOOL ctrl_else_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
 {
 	FSourceCodeContext* top = ctx->_sourcestack;
 	int boutercondblockpass = top->_condstack == NULL || CHECK_OUTER_COND_PASS(top->_condstack->_flags);
@@ -276,7 +276,7 @@ static int ctrl_else_handler(FCppContext* ctx, FTKListNode* tklist, int* outputl
 		top->_condstack->_ctrltype != Ctrl_elif)
 	{
 		logger_output_s("error: #else is not matching. at %s:%d\n", top->_cs->_srcfilename, top->_cs->_line - 1);
-		return 0;
+		return FALSE;
 	}
 
 	if (boutercondblockpass)
@@ -289,7 +289,7 @@ static int ctrl_else_handler(FCppContext* ctx, FTKListNode* tklist, int* outputl
 		if (!CHECK_IS_EOFLINE(expr->_tk._type))
 		{
 			logger_output_s("syntax error: #else expression, at %s:%d\n", expr->_tk._loc._filename, expr->_tk._loc._line);
-			return 0;
+			return FALSE;
 		}
 
 		/* check prev siblings condition result */
@@ -313,7 +313,7 @@ static int ctrl_else_handler(FCppContext* ctx, FTKListNode* tklist, int* outputl
 	FConditionBlock* condblk = alloc_condtionblock();
 	if (!condblk) {
 		logger_output_s("error: out of memory. at %s:%d\n", __FILE__, __LINE__);
-		return 0;
+		return FALSE;
 	}
 
 	condblk->_ctrltype = Ctrl_else;
@@ -321,10 +321,10 @@ static int ctrl_else_handler(FCppContext* ctx, FTKListNode* tklist, int* outputl
 	condblk->_up = top->_condstack;
 	top->_condstack = condblk;
 
-	return 1;
+	return TRUE;
 }
 
-static int ctrl_endif_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
+static BOOL ctrl_endif_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
 {
 	FSourceCodeContext* top = ctx->_sourcestack;
 	FTKListNode* expr = tklist->_next->_next; /* # endif \n */
@@ -333,7 +333,7 @@ static int ctrl_endif_handler(FCppContext* ctx, FTKListNode* tklist, int* output
 	if (!CHECK_IS_EOFLINE(expr->_tk._type))
 	{
 		logger_output_s("syntax error: #endif expression, at %s:%d\n", expr->_tk._loc._filename, expr->_tk._loc._line);
-		return 0;
+		return FALSE;
 	}
 
 	while (top->_condstack)
@@ -350,14 +350,14 @@ static int ctrl_endif_handler(FCppContext* ctx, FTKListNode* tklist, int* output
 	if (!top->_condstack)
 	{
 		logger_output_s("syntax error: #endif is not matching, at %s:%d\n", expr->_tk._loc._filename, expr->_tk._loc._line);
-		return 0;
+		return FALSE;
 	}
 
 	top->_condstack = top->_condstack->_up;
-	return 1;
+	return TRUE;
 }
 
-static int ctrl_include_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
+static BOOL ctrl_include_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
 {
 	FSourceCodeContext* top = ctx->_sourcestack;
 	int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
@@ -366,7 +366,7 @@ static int ctrl_include_handler(FCppContext* ctx, FTKListNode* tklist, int* outp
 	FCharStream* newcs = NULL;
 
 	if (!bcondblockpass) {
-		return 1;
+		return TRUE;
 	}
 
 	/* syntax: #include <xxx>  #include "..." */
@@ -404,14 +404,14 @@ static int ctrl_include_handler(FCppContext* ctx, FTKListNode* tklist, int* outp
 		if (bsyntaxerr)
 		{
 			logger_output_s("syntax error: #include is invalid at %s:%d\n", start->_tk._loc._filename, start->_tk._loc._line);
-			return 0;
+			return FALSE;
 		}
 	}
 
 	newcs = cpp_open_includefile(ctx, headerfile, top->_srcdir, bsearchsysdir);
 	if (!newcs) {
 		logger_output_s("error: open header file failed, %s at %s:%d\n", headerfile, tklist->_tk._loc._filename, tklist->_tk._loc._line);
-		return 0;
+		return FALSE;
 	}
 
 	/* check recursive including */
@@ -420,13 +420,13 @@ static int ctrl_include_handler(FCppContext* ctx, FTKListNode* tklist, int* outp
 		if (top->_cs->_srcfilename == newcs->_srcfilename)
 		{
 			logger_output_s("error: open header file recursive, %s at %s:%d\n", headerfile, tklist->_tk._loc._filename, tklist->_tk._loc._line);
-			return 0;
+			return FALSE;
 		}
 	} /* end for */
 
 	/* push new source code */
 	top = mm_alloc_area(sizeof(FSourceCodeContext), CPP_MM_PERMPOOL);
-	if (!top) { return 0; }
+	if (!top) { return FALSE; }
 
 	top->_cs = newcs;
 	top->_srcfilename = newcs->_srcfilename;
@@ -439,10 +439,10 @@ static int ctrl_include_handler(FCppContext* ctx, FTKListNode* tklist, int* outp
 	ctx->_sourcestack = top;
 	/* process source codes. */
 	cpp_output_linectrl(ctx, newcs->_srcfilename, newcs->_line);
-	return 1;
+	return TRUE;
 }
 
-static int ctrl_undef_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
+static BOOL ctrl_undef_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
 {
 	FSourceCodeContext* top = ctx->_sourcestack;
 	int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
@@ -450,7 +450,7 @@ static int ctrl_undef_handler(FCppContext* ctx, FTKListNode* tklist, int* output
 	const FMacro* macro = NULL;
 
 	if (!bcondblockpass) {
-		return 1;
+		return TRUE;
 	}
 
 	/* #undef ID */
@@ -458,30 +458,30 @@ static int ctrl_undef_handler(FCppContext* ctx, FTKListNode* tklist, int* output
 	if (id->_tk._type != TK_ID || !CHECK_IS_EOFLINE(id->_next->_tk._type))
 	{
 		logger_output_s("syntax error: #undef marco, at %s:%d\n", id->_tk._loc._filename, id->_tk._loc._line);
-		return 0;
+		return FALSE;
 	}
 
 	if (id->_tk._str == ctx->_HS__DEFINED__)
 	{
 		logger_output_s("error: #undef defined is not allowed, at %s:%d\n", id->_tk._loc._filename, id->_tk._loc._line);
-		return 0;
+		return FALSE;
 	}
 
 	macro = cpp_find_macro(ctx, id->_tk._str);
 	if (macro && (macro->_flags & MACRO_FLAG_UNCHANGE))
 	{
 		logger_output_s("error: #undef %s is not allowed, at %s:%d\n", id->_tk._str, id->_tk._loc._filename, id->_tk._loc._line);
-		return 0;
+		return FALSE;
 	}
 
 	if (macro)
 	{
 		cpp_remove_macro(ctx, id->_tk._str);
 	}
-	return 1;
+	return TRUE;
 }
 
-static int ctrl_line_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
+static BOOL ctrl_line_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
 {
 	FSourceCodeContext* top = ctx->_sourcestack;
 	int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
@@ -491,12 +491,12 @@ static int ctrl_line_handler(FCppContext* ctx, FTKListNode* tklist, int* outputl
 	int linenum = 0;
 
 	if (!bcondblockpass) {
-		return 1;
+		return TRUE;
 	}
 
 	if (!cpp_expand_rowtokens(ctx, &expr, 0))
 	{
-		return 0;
+		return FALSE;
 	}
 
 	/* #line number filename */
@@ -514,7 +514,7 @@ static int ctrl_line_handler(FCppContext* ctx, FTKListNode* tklist, int* outputl
 	else
 	{
 		logger_output_s("syntax error: #line number filename(opt), at %s:%d\n", tklist->_tk._loc._filename, tklist->_tk._loc._line);
-		return 0;
+		return FALSE;
 	}
 
 	top->_cs->_line = linenum;
@@ -525,38 +525,38 @@ static int ctrl_line_handler(FCppContext* ctx, FTKListNode* tklist, int* outputl
 	cpp_output_linectrl(ctx, filename, linenum);
 	*outputlines = 1;
 
-	return 1;
+	return TRUE;
 }
 
-static int ctrl_error_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
+static BOOL ctrl_error_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
 {
 	FSourceCodeContext* top = ctx->_sourcestack;
 	int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
 
 	if (!bcondblockpass) {
-		return 1;
+		return TRUE;
 	}
 
 	cpp_output_tokens(ctx, tklist);
 	*outputlines = 1;
-	return 0;
+	return FALSE;
 }
 
-static int ctrl_pragma_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
+static BOOL ctrl_pragma_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
 {
 	FSourceCodeContext* top = ctx->_sourcestack;
 	int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
 
 	if (!bcondblockpass) {
-		return 1;
+		return TRUE;
 	}
 
 	cpp_output_tokens(ctx, tklist);
 	*outputlines = 1;
-	return 1;
+	return TRUE;
 }
 
-static int ctrl_unknown_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
+static BOOL ctrl_unknown_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
 {
 	FSourceCodeContext* top = ctx->_sourcestack;
 	int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
@@ -568,14 +568,196 @@ static int ctrl_unknown_handler(FCppContext* ctx, FTKListNode* tklist, int* outp
 		{
 			FTKListNode* tknode = tklist->_next;
 			logger_output_s("error: unknown preprocessor directive %s at %s:%d\n", tknode->_tk._str, tknode->_tk._loc._filename, tknode->_tk._loc._line);
-			return 0;
+			return FALSE;
 		}
 	}
-	return 1;
+	return TRUE;
 }
 
-static int ctrl_define_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
+/* compare tokens */
+static BOOL compare_tokens(FTKListNode* lhs, FTKListNode* rhs)
 {
-	// TODO:
-	return 1;
+	while (lhs != rhs)
+	{
+		if (!lhs || !rhs) { return FALSE; }
+		if (lhs->_tk._type != rhs->_tk._type) { return FALSE; }
+		if (lhs->_tk._str != rhs->_tk._str) { return FALSE; }
+		if ((lhs->_tk._wscnt == 0) != (rhs->_tk._wscnt == 0)) { return FALSE; }
+
+		lhs = lhs->_next;
+		rhs = rhs->_next;
+	} /* end while */
+
+	return TRUE;
+}
+
+static BOOL ctrl_define_handler(FCppContext* ctx, FTKListNode* tklist, int* outputlines)
+{
+	FSourceCodeContext* top = ctx->_sourcestack;
+	int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
+	FTKListNode* id = tklist->_next->_next;
+	const FMacro* ptrexist;
+	FTKListNode* args_head, *args_tail, *body_head, *body_tail, *tkitr;
+	int argc;
+
+
+	if (!bcondblockpass) {
+		return TRUE;
+	}
+
+	/* #define ID (xxx yyy zzz) NL */
+	if (id->_tk._type != TK_ID)
+	{
+		logger_output_s("syntax error: #define ID xxx at %s:%d\n", tklist->_tk._loc._filename, tklist->_tk._loc._line);
+		return FALSE;
+	}
+
+	if ((id->_tk._str == ctx->_HS__DEFINED__) || 
+		((ptrexist = cpp_find_macro(ctx, id->_tk._str)) && (ptrexist->_flags & MACRO_FLAG_UNCHANGE)))
+	{
+		logger_output_s("error: #define %s is not allowed at %s:%d\n", id->_tk._str, tklist->_tk._loc._filename, tklist->_tk._loc._line);
+		return FALSE;
+	}
+
+	argc = -1;
+	args_head = args_tail = body_head = body_tail = NULL;
+	tkitr = id->_next;
+	if (tkitr->_tk._type == TK_LPAREN && tkitr->_tk._wscnt == 0)
+	{
+		/* macro with args. for example:
+		   #define X()		YYY
+		   #define X(a, b)	a b
+		*/
+		tkitr = tkitr->_next;
+		argc = 0;
+		if (tkitr->_tk._type != TK_RPAREN)
+		{
+			FTKListNode* tmp;
+
+			/* gather arguments */
+			for (;;)
+			{
+				argc++;
+				if (tkitr->_tk._type != TK_ID)
+				{
+					logger_output_s("syntax error: #define require ID at %s:%d:%d\n", tkitr->_tk._loc._filename, tkitr->_tk._loc._line, tkitr->_tk._loc._col);
+					return FALSE;
+				}
+
+				/* check if exist an argument has the same name */
+				for (tmp = args_head; tmp; tmp = tmp->_next)
+				{
+					if (tmp->_tk._str == tkitr->_tk._str)
+					{
+						logger_output_s("syntax error: #define duplicate macro argument at %s:%d:%d\n", tkitr->_tk._loc._filename, tkitr->_tk._loc._line, tkitr->_tk._loc._col);
+						return FALSE;
+					}
+				}
+
+				if (!args_head) { 
+					args_head = args_tail = tkitr; 
+				}
+				else {
+					args_tail->_next = tkitr;
+					args_tail = tkitr;
+				}
+
+				tkitr = tkitr->_next;
+				args_tail->_next = NULL;
+				if (tkitr->_tk._type == TK_RPAREN)
+				{
+					break;
+				}
+				if (tkitr->_tk._type != TK_COMMA)
+				{
+					logger_output_s("syntax error: #define require ',' at %s:%d:%d\n", tkitr->_tk._loc._filename, tkitr->_tk._loc._line, tkitr->_tk._loc._col);
+					return FALSE;
+				}
+
+				tkitr = tkitr->_next;
+			} /* end for ;; */
+		}
+	
+		/* omit ')' */
+		tkitr = tkitr->_next;
+	}
+
+	while (tkitr && !CHECK_IS_EOFLINE(tkitr->_tk._type))
+	{
+		if (!body_head) {
+			body_head = body_tail = tkitr;
+		}
+		else {
+			body_tail->_next = tkitr;
+			body_tail = tkitr;
+		}
+
+		tkitr = tkitr->_next;
+		body_tail->_next = NULL;
+	}
+
+	if (body_head && body_head->_tk._type == TK_DOUBLE_POUND)
+	{
+		logger_output_s("syntax error: ## should not be at here, at %s:%d:%d\n", body_head->_tk._loc._filename, body_head->_tk._loc._line, body_head->_tk._loc._col);
+		return FALSE;
+	}
+	if (body_tail && body_tail->_tk._type == TK_DOUBLE_POUND)
+	{
+		logger_output_s("syntax error: ## should not be at here, at %s:%d:%d\n", body_tail->_tk._loc._filename, body_tail->_tk._loc._line, body_tail->_tk._loc._col);
+		return FALSE;
+	}
+
+	/* compare with exist macro */
+	if (ptrexist)
+	{
+		if (!compare_tokens(args_head, ptrexist->_args) || !compare_tokens(body_head, ptrexist->_body))
+		{
+			logger_output_s("syntax error: macro '%s'redefined at %s:%d, previous define is at %s:%d\n", id->_tk._str, id->_tk._loc._filename, id->_tk._loc._line,
+				ptrexist->_loc._filename, ptrexist->_loc._line);
+			return FALSE;
+		}
+	}
+	else
+	{
+		FMacro m;
+
+		m._name = id->_tk._str;
+		m._loc = id->_tk._loc;
+		m._flags = 0;
+		m._argc = argc;
+		m._args = cpp_duplicate_tklist(args_head, CPP_MM_PERMPOOL);
+		m._body = cpp_duplicate_tklist(body_head, CPP_MM_PERMPOOL);
+
+		cpp_add_macro(ctx, &m);
+	}
+
+	return TRUE;
+}
+
+
+FTKListNode* cpp_duplicate_tklist(FTKListNode* orglist, enum EMMArea where)
+{
+	FTKListNode* itr, *head, *tail;
+
+	head = tail = NULL;
+	for (itr = orglist; itr; itr = itr->_next)
+	{
+		FTKListNode* node = mm_alloc_area(sizeof(FTKListNode), where);
+		if (!node) {
+			logger_output_s("error: out of memory! %s:%d\n", __FILE__, __LINE__);
+			return NULL;
+		}
+
+		*node = *itr;
+		node->_next = NULL;
+		if (!head) {
+			head = tail = node;
+		}
+		else {
+			tail->_next = node;
+			tail = node;
+		}
+	} /* end for */
+
+	return head;
 }

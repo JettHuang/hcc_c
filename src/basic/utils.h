@@ -9,6 +9,10 @@
 #include "mm.h"
 
 
+#define TRUE		1
+#define FALSE		0
+typedef int			BOOL;
+
 typedef struct tagLocation {
 	const char* _filename;
 	unsigned int _line;
@@ -42,7 +46,7 @@ char util_char_lower(char c);
 char util_char_upper(char c);
 
 const char* util_convert_abs_pathname(const char* pathname);
-int util_is_relative_pathname(const char* pathname);
+BOOL util_is_relative_pathname(const char* pathname);
 
 /* convert xxx\bbb\cc\ to xxx/bbb/cc/ */
 const char* util_normalize_pathname(const char* pathname);

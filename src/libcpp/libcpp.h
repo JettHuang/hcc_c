@@ -7,5 +7,5 @@
  
  #include "cpp.h"
  
- #end /* __LIB_CPP_H__ */
+ #endif /* __LIB_CPP_H__ */
  

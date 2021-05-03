@@ -7,6 +7,7 @@
 
 #include "pptoken.h"
 #include "charstream.h"
+#include "utils.h"
 #include "mm.h"
 #include <stdio.h>
 
@@ -27,6 +28,7 @@ typedef struct tagTokenListNode {
 
 typedef struct tagMacro {
 	const char*  _name;
+	FLocation	 _loc;
 	int16_t		 _flags;
 	int16_t      _argc; /* -1: object macro,  0:no args(#define X() xxx) */
 	FTKListNode* _args;
@@ -128,7 +130,7 @@ void cpp_contex_release(FCppContext* ctx);
 
 void cpp_add_includedir(FCppContext* ctx, const char* dir);
 void cpp_add_definition(FCppContext* ctx, const char* str);
-int cpp_process(FCppContext* ctx, const char* srcfilename, const char* outfilename);
+BOOL cpp_process(FCppContext* ctx, const char* srcfilename, const char* outfilename);
 
 /************************************************************************/
 /* internal interface                                                     */
@@ -137,20 +139,21 @@ void cpp_add_macro(FCppContext* ctx, const FMacro* m);
 void cpp_remove_macro(FCppContext* ctx, const char* name);
 const FMacro* cpp_find_macro(FCppContext* ctx, const char* name);
 
-int cpp_read_token(FCppContext* ctx, FCharStream* cs, FPPToken *tk, int bwantheader, int ballowerr);
-int cpp_lookahead_token(FCppContext* ctx, FCharStream* cs, FPPToken *tk, int bwantheader, int ballowerr);
-int cpp_read_tokentolist(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, int bwantheader, int ballowerr);
-int cpp_read_rowtokens(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, int bwantheader, int ballowerr);
+BOOL cpp_read_token(FCppContext* ctx, FCharStream* cs, FPPToken *tk, int bwantheader, int ballowerr);
+BOOL cpp_lookahead_token(FCppContext* ctx, FCharStream* cs, FPPToken *tk, int bwantheader, int ballowerr);
+BOOL cpp_read_tokentolist(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, int bwantheader, int ballowerr);
+BOOL cpp_read_rowtokens(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, int bwantheader, int ballowerr);
 
 void cpp_output_s(FCppContext* ctx, const char* format, ...);
 void cpp_output_blankline(FCppContext* ctx, int lines);
 void cpp_output_linectrl(FCppContext* ctx, const char* filename, int line);
 void cpp_output_tokens(FCppContext* ctx, FTKListNode* tklist);
 
-int cpp_do_control(FCppContext* ctx, FTKListNode* tklist, int *outputlines);
-int cpp_expand_rowtokens(FCppContext* ctx, FTKListNode** tklist, int bscannextlines);
+BOOL cpp_do_control(FCppContext* ctx, FTKListNode* tklist, int *outputlines);
+BOOL cpp_expand_rowtokens(FCppContext* ctx, FTKListNode** tklist, int bscannextlines);
+FTKListNode* cpp_duplicate_tklist(FTKListNode* orglist, enum EMMArea where);
 
-int cpp_eval_constexpr(FCppContext* ctx, FTKListNode* tklist, int* result);
+BOOL cpp_eval_constexpr(FCppContext* ctx, FTKListNode* tklist, int* result);
 FCharStream* cpp_open_includefile(FCppContext* ctx, const char* filename, const char*dir, int bsearchsys);
 
 #endif /* __CPP_H__ */

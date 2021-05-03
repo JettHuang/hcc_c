@@ -13,6 +13,8 @@
 #include <time.h>
 
 
+static FLocation empty_loc = { NULL, 0, 0 };
+
 static void cpp_init_date(FCppContext* ctx)
 {
 	static const char wday_name[][4] = {
@@ -61,35 +63,35 @@ void cpp_contex_init(FCppContext* ctx)
 	cpp_init_date(ctx);
 	// built-in macros
 	{
-		FMacro m = { ctx->_HS__DATE__, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__DATE__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { ctx->_HS__FILE__, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__FILE__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { ctx->_HS__LINE__, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__LINE__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { ctx->_HS__STDC__, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__STDC__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { ctx->_HS__STDC_HOSTED__, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__STDC_HOSTED__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { ctx->_HS__STDC_VERSION__, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__STDC_VERSION__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { ctx->_HS__TIME__, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__TIME__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { ctx->_HS__VA_ARGS__, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__VA_ARGS__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 }
@@ -138,22 +140,22 @@ void cpp_add_definition(FCppContext* ctx, const char* str)
 	/* parsing from command line -DXXX=YYY */
 }
 
-int cpp_read_token(FCppContext* ctx, FCharStream* cs, FPPToken* tk, int bwantheader, int ballowerr)
+BOOL cpp_read_token(FCppContext* ctx, FCharStream* cs, FPPToken* tk, int bwantheader, int ballowerr)
 {
 	if (ctx->_lookaheadtk._valid) {
 		ctx->_lookaheadtk._valid = 0;
 		*tk = ctx->_lookaheadtk._tk;
-		return 1;
+		return TRUE;
 	}
 
 	return cpp_lexer_read_token(cs, bwantheader, tk) || ballowerr;
 }
 
-int cpp_lookahead_token(FCppContext* ctx, FCharStream* cs, FPPToken* tk, int bwantheader, int ballowerr)
+BOOL cpp_lookahead_token(FCppContext* ctx, FCharStream* cs, FPPToken* tk, int bwantheader, int ballowerr)
 {
 	if (ctx->_lookaheadtk._valid) {
 		*tk = ctx->_lookaheadtk._tk;
-		return 1;
+		return TRUE;
 	}
 
 	int result = cpp_lexer_read_token(cs, bwantheader, &(ctx->_lookaheadtk._tk));
@@ -162,28 +164,28 @@ int cpp_lookahead_token(FCppContext* ctx, FCharStream* cs, FPPToken* tk, int bwa
 	return result || ballowerr;
 }
 
-int cpp_read_tokentolist(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, int bwantheader, int ballowerr)
+BOOL cpp_read_tokentolist(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, int bwantheader, int ballowerr)
 {
 	FTKListNode* tknode = NULL;
 
 	tknode = mm_alloc_area(sizeof(FTKListNode), CPP_MM_TEMPPOOL);
 	if (!tknode) {
 		logger_output_s("error: out of memory, at %s:%d\n", __FILE__, __LINE__);
-		return 0;
+		return FALSE;
 	}
 
 	tknode->_next = NULL;
 
 	if (!cpp_read_token(ctx, cs, &tknode->_tk, bwantheader, ballowerr))
 	{
-		return 0;
+		return FALSE;
 	}
 
 	*tail = tknode;
-	return 1;
+	return TRUE;
 }
 
-int cpp_read_rowtokens(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, int bwantheader, int ballowerr)
+BOOL cpp_read_rowtokens(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, int bwantheader, int ballowerr)
 {
 	enum EPPToken tktype = TK_UNCLASS;
 	FTKListNode* tknode = NULL;
@@ -192,14 +194,14 @@ int cpp_read_rowtokens(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, in
 		tknode = mm_alloc_area(sizeof(FTKListNode), CPP_MM_TEMPPOOL);
 		if (!tknode) {
 			logger_output_s("error: out of memory, at %s:%d\n", __FILE__, __LINE__);
-			return 0;
+			return FALSE;
 		}
 		
 		tknode->_next = NULL;
 
 		if (!cpp_read_token(ctx, cs, &tknode->_tk, bwantheader, ballowerr))
 		{
-			return 0;
+			return FALSE;
 		}
 
 		/* append to list */
@@ -207,7 +209,7 @@ int cpp_read_rowtokens(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, in
 		tail = &tknode->_next;
 		tktype = tknode->_tk._type;
 	} while (tktype != TK_EOF && tktype != TK_NEWLINE);
-	return 1;
+	return TRUE;
 }
 
 void cpp_output_s(FCppContext* ctx, const char* format, ...)
@@ -234,17 +236,17 @@ void cpp_output_linectrl(FCppContext* ctx, const char* filename, int line)
 	cpp_output_s(ctx, "#line  %d  \"%s\"\n", line, filename);
 }
 
-int cpp_process(FCppContext* ctx, const char* srcfilename, const char* outfilename)
+BOOL cpp_process(FCppContext* ctx, const char* srcfilename, const char* outfilename)
 {
 	FCharStream* maincs = NULL;
 	FSourceCodeContext* srcctx = NULL;
 	const char* absfilename = util_convert_abs_pathname(srcfilename);
 
 	maincs = cs_create_fromfile(absfilename);
-	if (!maincs) { return 0; }
+	if (!maincs) { return FALSE; }
 
 	srcctx = mm_alloc_area(sizeof(FSourceCodeContext), CPP_MM_PERMPOOL);
-	if (!srcctx) { return 0; }
+	if (!srcctx) { return FALSE; }
 
 	if (outfilename) {
 		ctx->_outfp = fopen(outfilename, "wt");
@@ -270,12 +272,12 @@ int cpp_process(FCppContext* ctx, const char* srcfilename, const char* outfilena
 
 		if (!cpp_read_rowtokens(ctx, top->_cs, &tklist, 0, !bcondblockpass))
 		{
-			return 0;
+			return FALSE;
 		}
 		if (tklist->_tk._type == TK_POUND) /* '#' */
 		{
 			if (!cpp_do_control(ctx, tklist, &ctrloutputlines)) {
-				return 0;
+				return FALSE;
 			}
 			if (ctrloutputlines >= 0) {
 				cpp_output_blankline(ctx, top->_cs->_line - start_linenum - ctrloutputlines);
@@ -286,7 +288,7 @@ int cpp_process(FCppContext* ctx, const char* srcfilename, const char* outfilena
 			if (bcondblockpass)
 			{
 				if (!cpp_expand_rowtokens(ctx, &tklist, 1)) {
-					return 0;
+					return FALSE;
 				}
 
 				cpp_output_tokens(ctx, tklist);
@@ -307,7 +309,7 @@ int cpp_process(FCppContext* ctx, const char* srcfilename, const char* outfilena
 				if (top->_condstack != NULL)
 				{
 					logger_output_s("error: #if #endif is not matching. in source %s\n", top->_srcfilename);
-					return 0;
+					return FALSE;
 				}
 
 				top = top->_up;
@@ -320,7 +322,7 @@ int cpp_process(FCppContext* ctx, const char* srcfilename, const char* outfilena
 		}
 	} /* end while */
 
-	return 1;
+	return TRUE;
 }
 
 FCharStream* cpp_open_includefile(FCppContext* ctx, const char* filename, const char* dir, int bsearchsys)

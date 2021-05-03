@@ -63,7 +63,7 @@ const char* util_convert_abs_pathname(const char* pathname)
 	return hs_hashstr(pathname);
 }
 
-int util_is_relative_pathname(const char* pathname)
+BOOL util_is_relative_pathname(const char* pathname)
 {
 	int len = strlen(pathname);
 	int bIsRooted = len &&
