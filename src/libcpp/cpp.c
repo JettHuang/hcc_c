@@ -32,10 +32,10 @@ static void cpp_init_date(FCppContext* ctx)
 	time(&rawtime);
 	timeinfo = localtime(&rawtime);
 
-	sprintf(result, "%.3s %2d %d", mon_name[timeinfo->tm_mon], timeinfo->tm_mday, 1900 + timeinfo->tm_year);
+	sprintf(result, "\"%.3s %2d %d\"", mon_name[timeinfo->tm_mon], timeinfo->tm_mday, 1900 + timeinfo->tm_year);
 	ctx->_strdate = hs_hashstr(result);
 
-	sprintf(result, "%.2d:%.2d:%.2d", timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+	sprintf(result, "\"%.2d:%.2d:%.2d\"", timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
 	ctx->_strtime = hs_hashstr(result);
 }
 

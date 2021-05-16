@@ -7,6 +7,7 @@
 
 #include <string.h>
 #include <ctype.h>
+#include <assert.h>
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -173,4 +174,42 @@ const char* util_make_pathname(const char* path, const char* filename)
 	}
 	strcat(szbuf, filename);
 	return hs_hashstr(szbuf);
+}
+
+
+void array_init(FArray* array, int cap, int elesize, enum EMMArea where)
+{
+	array->_capacity = cap;
+	array->_data = NULL;
+	array->_elecount = 0;
+	array->_elesize = elesize;
+	array->_marea = where;
+
+	array->_data = mm_alloc_area(cap * elesize, where);
+}
+
+void array_enlarge(FArray* array, int count)
+{
+	if (array->_capacity < count)
+	{
+		int newcap = count * 2;
+		void* data = mm_alloc_area(newcap * array->_elesize, array->_marea);
+		if (data)
+		{
+			memcpy(data, array->_data, array->_elecount * array->_elesize);
+		}
+
+		assert(data);
+		array->_data = data;
+		array->_capacity = newcap;
+	}
+}
+
+void array_copy(FArray* dst, FArray* src)
+{
+	assert(dst->_capacity >= src->_elecount);
+	assert(dst->_elesize == src->_elesize);
+
+	memcpy(dst->_data, src->_data, src->_elecount * src->_elesize);
+	dst->_elecount = src->_elecount;
 }

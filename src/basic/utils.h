@@ -55,4 +55,18 @@ const char* util_process_working_dir();
 const char* util_getpath_from_pathname(const char* pathname);
 const char* util_make_pathname(const char* path, const char* filename);
 
+
+typedef struct tagArray
+{
+	void* _data;
+	int	  _elecount;
+	int   _capacity;
+	int   _elesize;
+	enum EMMArea _marea;
+} FArray;
+
+void array_init(FArray* array, int cap, int elesize, enum EMMArea where);
+void array_enlarge(FArray* array, int count);
+void array_copy(FArray* dst, FArray* src);
+
 #endif /* __UTILS_H__ */
