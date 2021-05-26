@@ -139,10 +139,10 @@ void cpp_add_macro(FCppContext* ctx, const FMacro* m);
 void cpp_remove_macro(FCppContext* ctx, const char* name);
 const FMacro* cpp_find_macro(FCppContext* ctx, const char* name);
 
-BOOL cpp_read_token(FCppContext* ctx, FCharStream* cs, FPPToken *tk, int bwantheader, int ballowerr);
-BOOL cpp_lookahead_token(FCppContext* ctx, FCharStream* cs, FPPToken *tk, int bwantheader, int ballowerr);
-BOOL cpp_read_tokentolist(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, int bwantheader, int ballowerr);
-BOOL cpp_read_rowtokens(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, int bwantheader, int ballowerr);
+BOOL cpp_read_token(FCppContext* ctx, FCharStream* cs, FPPToken *tk, BOOL bwantheader, BOOL ballowerr);
+BOOL cpp_lookahead_token(FCppContext* ctx, FCharStream* cs, FPPToken *tk, BOOL bwantheader, BOOL ballowerr);
+BOOL cpp_read_tokentolist(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, BOOL bwantheader, BOOL ballowerr);
+BOOL cpp_read_rowtokens(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, BOOL bwantheader, BOOL ballowerr);
 
 void cpp_output_s(FCppContext* ctx, const char* format, ...);
 void cpp_output_blankline(FCppContext* ctx, int lines);

@@ -140,7 +140,7 @@ void cpp_add_definition(FCppContext* ctx, const char* str)
 	/* parsing from command line -DXXX=YYY */
 }
 
-BOOL cpp_read_token(FCppContext* ctx, FCharStream* cs, FPPToken* tk, int bwantheader, int ballowerr)
+BOOL cpp_read_token(FCppContext* ctx, FCharStream* cs, FPPToken* tk, BOOL bwantheader, BOOL ballowerr)
 {
 	if (ctx->_lookaheadtk._valid) {
 		ctx->_lookaheadtk._valid = 0;
@@ -151,7 +151,7 @@ BOOL cpp_read_token(FCppContext* ctx, FCharStream* cs, FPPToken* tk, int bwanthe
 	return cpp_lexer_read_token(cs, bwantheader, tk) || ballowerr;
 }
 
-BOOL cpp_lookahead_token(FCppContext* ctx, FCharStream* cs, FPPToken* tk, int bwantheader, int ballowerr)
+BOOL cpp_lookahead_token(FCppContext* ctx, FCharStream* cs, FPPToken* tk, BOOL bwantheader, BOOL ballowerr)
 {
 	if (ctx->_lookaheadtk._valid) {
 		*tk = ctx->_lookaheadtk._tk;
@@ -164,7 +164,7 @@ BOOL cpp_lookahead_token(FCppContext* ctx, FCharStream* cs, FPPToken* tk, int bw
 	return result || ballowerr;
 }
 
-BOOL cpp_read_tokentolist(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, int bwantheader, int ballowerr)
+BOOL cpp_read_tokentolist(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, BOOL bwantheader, BOOL ballowerr)
 {
 	FTKListNode* tknode = NULL;
 
@@ -185,7 +185,7 @@ BOOL cpp_read_tokentolist(FCppContext* ctx, FCharStream* cs, FTKListNode** tail,
 	return TRUE;
 }
 
-BOOL cpp_read_rowtokens(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, int bwantheader, int ballowerr)
+BOOL cpp_read_rowtokens(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, BOOL bwantheader, BOOL ballowerr)
 {
 	enum EPPToken tktype = TK_UNCLASS;
 	FTKListNode* tknode = NULL;

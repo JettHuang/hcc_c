@@ -186,6 +186,62 @@ static BOOL macro_expand_builtin(FCppContext* ctx, FTKListNode* curtk, FTKListNo
 	return TRUE;
 }
 
+static BOOL macro_gather_args(FCppContext* ctx, FTKListNode ** tklist, int bscannextlines, FArray *args, int *argc)
+{
+	FSourceCodeContext* top = ctx->_sourcestack;
+	*argc = -1;
+
+	/* look for '(' */
+	for (;;)
+	{
+		if (*tklist == NULL)
+		{
+			if (bscannextlines)
+			{
+				FPPToken aheadtk;
+
+				if (!cpp_lookahead_token(ctx, top->_cs, &aheadtk, FALSE, FALSE))
+				{
+					return FALSE;
+				}
+				if (aheadtk._type == TK_POUND) /* the next line is # control line */
+				{
+					return TRUE;
+				}
+
+				if (!cpp_read_rowtokens(ctx, top->_cs, tklist, FALSE, FALSE))
+				{
+					return FALSE;
+				}
+			}
+			else
+			{
+				return TRUE;
+			}
+		}
+
+		if ((*tklist)->_tk._type == TK_LPAREN)
+		{
+			break;
+		}
+		else if ((*tklist)->_tk._type != TK_NEWLINE)
+		{
+			return TRUE;
+		}
+
+		(*tklist) = (*tklist)->_next;
+	} /* end for ;; */
+
+	// TODO:
+
+	return FALSE;
+}
+
+static BOOL macro_expand_userdefined(FExpandContext* expctx, const FMacro* m, FArray* args, FTKListNode** replacement)
+{
+	return FALSE;
+}
+
 static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKListNode** tklist, int bscannextlines)
 {
 	FTKListNode** where = tklist;
@@ -193,7 +249,7 @@ static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKList
 
 	while (tkitr)
 	{
-		FTKListNode* replacement = NULL;
+		FTKListNode* replacement = NULL, *tkmacro = NULL;
 		const FMacro* m = NULL;
 
 		if (tkitr->_tk._type != TK_ID) {
@@ -213,6 +269,7 @@ static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKList
 			}
 		}
 
+		tkmacro = tkitr;
 		/* special for defined   defined(ID) */
 		if (tkitr->_tk._str == ctx->_HS__DEFINED__)
 		{
@@ -279,9 +336,71 @@ static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKList
 		else
 		{
 			/* expanding normal macro */
-			// TODO:
-		}
+			FTKListNode *repitr;
+			FArray args;
 
+			array_init(&args, 32, sizeof(FTKListNode*), CPP_MM_TEMPPOOL);
+			tkitr = tkitr->_next;
+			if (m->_argc != -1) /* function like macro */
+			{
+				/* gather parameters */
+				int argc = -1;
+				if (!macro_gather_args(ctx, &tkitr, bscannextlines, &args, &argc))
+				{
+					return FALSE;
+				}
+
+				if (argc < 0) /* not actually a call (no '()'), so don't expanding */
+				{
+					where = &tkitr->_next;
+					tkitr = tkitr->_next;
+					continue;
+				}
+				else if (argc != m->_argc)
+				{
+					logger_output_s("error: expand macro '%s' failed, disagreement arguments count at %s:%d\n", tkmacro->_tk._str, tkmacro->_tk._loc._filename, tkmacro->_tk._loc._line);
+					return FALSE;
+				}
+			}
+			
+			if (!macro_expand_userdefined(expctx, m, &args, &replacement))
+			{
+				return FALSE;
+			}
+
+			/* distribute hidden-set */
+			if (tkmacro->_tk._hidesetid == -1)
+			{
+				tkmacro->_tk._hidesetid = macro_expand_alloc_hiddenset(expctx, -1);
+			}
+			macro_expand_add_hidden(expctx, tkmacro->_tk._hidesetid, tkmacro->_tk._str);
+			
+			for (repitr = replacement; repitr; repitr = repitr->_next)
+			{
+				if (repitr->_tk._hidesetid == -1)
+				{
+					repitr->_tk._hidesetid = macro_expand_alloc_hiddenset(expctx, tkmacro->_tk._hidesetid);
+				}
+			}
+		} /* end normal macro */
+
+		/* do replacement */
+		if (replacement)
+		{
+			replacement->_tk._wscnt = tkmacro->_tk._wscnt;
+			*where = replacement;
+
+			for (; replacement->_next; replacement = replacement->_next)
+			{
+				/* do nothing */
+			}
+			where = &replacement->_next;
+			replacement->_next = tkitr;
+		}
+		else
+		{
+			*where = tkitr;
+		}
 	} /* end while tkitr */
 
 	return TRUE;
