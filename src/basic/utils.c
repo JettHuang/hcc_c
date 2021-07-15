@@ -205,6 +205,16 @@ void array_enlarge(FArray* array, int count)
 	}
 }
 
+void array_append(FArray* array, void* item)
+{
+	void* data;
+
+	array_enlarge(array, array->_elecount + 1);
+	data = (char*)(array->_data) + array->_elesize * array->_elecount;
+	memcpy(data, item, array->_elesize);
+	array->_elecount++;
+}
+
 void array_copy(FArray* dst, FArray* src)
 {
 	assert(dst->_capacity >= src->_elecount);
@@ -212,4 +222,13 @@ void array_copy(FArray* dst, FArray* src)
 
 	memcpy(dst->_data, src->_data, src->_elecount * src->_elesize);
 	dst->_elecount = src->_elecount;
+}
+
+void* array_element(FArray* array, int index)
+{
+	void* data;
+
+	assert(array->_elecount > index && index >= 0);
+	data = (char*)(array->_data) + array->_elesize * index;
+	return data;
 }

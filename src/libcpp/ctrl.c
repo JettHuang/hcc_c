@@ -712,7 +712,7 @@ static BOOL ctrl_define_handler(FCppContext* ctx, FTKListNode* tklist, int* outp
 	{
 		if (!compare_tokens(args_head, ptrexist->_args) || !compare_tokens(body_head, ptrexist->_body))
 		{
-			logger_output_s("syntax error: macro '%s'redefined at %s:%d, previous define is at %s:%d\n", id->_tk._str, id->_tk._loc._filename, id->_tk._loc._line,
+			logger_output_s("syntax error: macro '%s're-defined at %s:%d, previous define is at %s:%d\n", id->_tk._str, id->_tk._loc._filename, id->_tk._loc._line,
 				ptrexist->_loc._filename, ptrexist->_loc._line);
 			return FALSE;
 		}
@@ -735,9 +735,10 @@ static BOOL ctrl_define_handler(FCppContext* ctx, FTKListNode* tklist, int* outp
 }
 
 
-FTKListNode* cpp_duplicate_tklist(FTKListNode* orglist, enum EMMArea where)
+FTKListNode* cpp_duplicate_tklist(const FTKListNode* orglist, enum EMMArea where)
 {
-	FTKListNode* itr, *head, *tail;
+	const FTKListNode *itr;
+	FTKListNode *head, * tail;
 
 	head = tail = NULL;
 	for (itr = orglist; itr; itr = itr->_next)
@@ -760,4 +761,18 @@ FTKListNode* cpp_duplicate_tklist(FTKListNode* orglist, enum EMMArea where)
 	} /* end for */
 
 	return head;
+}
+
+FTKListNode* cpp_duplicate_token(const FTKListNode* orgtk, enum EMMArea where)
+{
+	FTKListNode* node = mm_alloc_area(sizeof(FTKListNode), where);
+	if (!node) {
+		logger_output_s("error: out of memory! %s:%d\n", __FILE__, __LINE__);
+		return NULL;
+	}
+
+	*node = *orgtk;
+	node->_next = NULL;
+
+	return node;
 }

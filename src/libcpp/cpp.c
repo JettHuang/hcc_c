@@ -231,10 +231,33 @@ void cpp_output_blankline(FCppContext* ctx, int lines)
 	}
 }
 
+void cpp_output_whitespace(FCppContext* ctx, int wscnt)
+{
+	while (wscnt-- > 0)
+	{
+		cpp_output_s(ctx, " ");
+	}
+}
+
 void cpp_output_linectrl(FCppContext* ctx, const char* filename, int line)
 {
 	cpp_output_s(ctx, "#line  %d  \"%s\"\n", line, filename);
 }
+
+void cpp_output_tokens(FCppContext* ctx, FTKListNode* tklist)
+{
+	while (tklist)
+	{
+		cpp_output_whitespace(ctx, tklist->_tk._wscnt);
+		if (tklist->_tk._str)
+		{
+			cpp_output_s(ctx, tklist->_tk._str);
+		}
+
+		tklist = tklist->_next;
+	} /* end while */
+}
+
 
 BOOL cpp_process(FCppContext* ctx, const char* srcfilename, const char* outfilename)
 {

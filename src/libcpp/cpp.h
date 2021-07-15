@@ -146,12 +146,14 @@ BOOL cpp_read_rowtokens(FCppContext* ctx, FCharStream* cs, FTKListNode** tail, B
 
 void cpp_output_s(FCppContext* ctx, const char* format, ...);
 void cpp_output_blankline(FCppContext* ctx, int lines);
+void cpp_output_whitespace(FCppContext* ctx, int wscnt);
 void cpp_output_linectrl(FCppContext* ctx, const char* filename, int line);
 void cpp_output_tokens(FCppContext* ctx, FTKListNode* tklist);
 
 BOOL cpp_do_control(FCppContext* ctx, FTKListNode* tklist, int *outputlines);
 BOOL cpp_expand_rowtokens(FCppContext* ctx, FTKListNode** tklist, int bscannextlines);
-FTKListNode* cpp_duplicate_tklist(FTKListNode* orglist, enum EMMArea where);
+FTKListNode* cpp_duplicate_tklist(const FTKListNode* orglist, enum EMMArea where);
+FTKListNode* cpp_duplicate_token(const FTKListNode* orgtk, enum EMMArea where);
 
 BOOL cpp_eval_constexpr(FCppContext* ctx, FTKListNode* tklist, int* result);
 FCharStream* cpp_open_includefile(FCppContext* ctx, const char* filename, const char*dir, int bsearchsys);

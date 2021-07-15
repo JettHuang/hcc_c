@@ -6,6 +6,8 @@
 #include "cpp.h"
 #include "logger.h"
 #include "hstring.h"
+#include "pplexer.h"
+#include <string.h>
 
 
 void cpp_add_macro(FCppContext* ctx, const FMacro* m)
@@ -133,7 +135,7 @@ static BOOL macro_expand_builtin(FCppContext* ctx, FTKListNode* curtk, FTKListNo
 
 	newtk->_next = NULL;
 	newtk->_tk._type = TK_UNCLASS;
-	newtk->_tk._loc._filename = hs_hashstr("cpp builtin");
+	newtk->_tk._loc._filename = hs_hashstr("cpp built-in");
 	newtk->_tk._loc._line = 0;
 	newtk->_tk._loc._col = 0;
 	newtk->_tk._hidesetid = -1;
@@ -188,9 +190,11 @@ static BOOL macro_expand_builtin(FCppContext* ctx, FTKListNode* curtk, FTKListNo
 
 static BOOL macro_gather_args(FCppContext* ctx, FTKListNode ** tklist, int bscannextlines, FArray *args, int *argc)
 {
+	FTKListNode *argsstart, *argsitr, *argument, *argumenttail;
+	int lparen_cnt;
 	FSourceCodeContext* top = ctx->_sourcestack;
+	
 	*argc = -1;
-
 	/* look for '(' */
 	for (;;)
 	{
@@ -232,17 +236,481 @@ static BOOL macro_gather_args(FCppContext* ctx, FTKListNode ** tklist, int bscan
 		(*tklist) = (*tklist)->_next;
 	} /* end for ;; */
 
-	// TODO:
+	/* search for terminating ), possibility extending the row */
+	assert((*tklist)->_next != NULL);
+	argsstart = (*tklist)->_next;
+	lparen_cnt = 1;
+	while (lparen_cnt > 0)
+	{
+		if ((*tklist)->_next == NULL)
+		{
+			if (bscannextlines)
+			{
+				FPPToken aheadtk;
 
-	return FALSE;
+				if (!cpp_lookahead_token(ctx, top->_cs, &aheadtk, FALSE, FALSE))
+				{
+					return FALSE;
+				}
+				if (aheadtk._type == TK_POUND) /* the next line is # control line */
+				{
+					return FALSE;
+				}
+
+				if (!cpp_read_rowtokens(ctx, top->_cs, &((*tklist)->_next), FALSE, FALSE))
+				{
+					return FALSE;
+				}
+			}
+			else
+			{
+				return FALSE;
+			}
+		}
+	
+		if ((*tklist)->_tk._type == TK_EOF)
+		{
+			logger_output_s("error: gather macro arguments failed, at %s:%d\n", (*tklist)->_tk._loc._filename, (*tklist)->_tk._loc._line);
+			return FALSE;
+		}
+		else if ((*tklist)->_tk._type == TK_LPAREN)
+		{
+			lparen_cnt++;
+		}
+		else if ((*tklist)->_tk._type == TK_RPAREN)
+		{
+			lparen_cnt--;
+		}
+
+		*tklist = (*tklist)->_next;
+	} /* end while */
+
+	/* now go back and gather arguments */
+	argument = argumenttail = NULL;
+	for (argsitr = argsstart; lparen_cnt >= 0; argsitr = argsitr->_next)
+	{
+		FTKListNode *duptk = NULL;
+
+		if (argsitr->_tk._type == TK_LPAREN)
+		{
+			lparen_cnt++;
+		}
+		else if (argsitr->_tk._type == TK_RPAREN)
+		{
+			lparen_cnt--;
+		}
+		else if (argsitr->_tk._type == TK_NEWLINE)
+		{
+			continue;
+		}
+
+		if ((argsitr->_tk._type == TK_COMMA && lparen_cnt == 0)
+			|| (lparen_cnt == -1 && (args->_elecount != 0 || argument != NULL)))
+		{
+			array_append(args, argument);
+			argument = argumenttail = NULL;
+			continue;
+		}
+
+		duptk = cpp_duplicate_token(argsitr, CPP_MM_TEMPPOOL);
+		if (argument == NULL)
+		{
+			duptk->_tk._wscnt = 0;
+			argument = duptk;
+			argumenttail = argument;
+		}
+		else
+		{
+			argumenttail->_next = duptk;
+			argumenttail = duptk;
+		}
+
+	} /* end for */
+	
+	*argc = args->_elecount;
+	return TRUE;
 }
 
-static BOOL macro_expand_userdefined(FExpandContext* expctx, const FMacro* m, FArray* args, FTKListNode** replacement)
+/* find argument index if exist*/
+static int find_argument_index(const FMacro* m, const char* hstr)
 {
-	return FALSE;
+	int index = -1;
+	FTKListNode* itr = m->_args;
+	while (itr)
+	{
+		index++;
+		if (itr->_tk._str == hstr) {
+			break;
+		}
+	}
+
+	return index;
 }
 
-static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKListNode** tklist, int bscannextlines)
+static FTKListNode* stringfy_tokenlist(FTKListNode* tklist, enum EMMArea where)
+{
+	const char* hstr;
+	char* szbuf;
+	int k, bufsize;
+	FTKListNode* tkitr;
+
+	bufsize = 3; /* " " '\0' */
+	for (k = 0, tkitr = tklist; tkitr; tkitr = tkitr->_next, k++)
+	{
+		const char* s = NULL;
+		int isstr = (tkitr->_tk._type == TK_CONSTANT_STR) || (tkitr->_tk._type == TK_CONSTANT_CHAR);
+		
+		if (tkitr->_tk._type == TK_NONE)
+		{
+			continue;
+		}
+
+		if (k != 0 && tkitr->_tk._wscnt > 0)
+		{
+			bufsize++;
+		}
+
+		s = tkitr->_tk._str;
+		for (; *s; s++)
+		{
+			if (isstr && (*s == '"' || *s == '\\'))
+			{
+				bufsize++; /* add a '\\' */
+			}
+
+			bufsize++;
+		}
+	} /* end for */
+
+	szbuf = mm_alloc(bufsize);
+	if (!szbuf)
+	{
+		logger_output_s("error: out of memory! %s:%d\n", __FILE__, __LINE__);
+		return NULL;
+	}
+
+	szbuf[0] = '\"';
+	for (k = 1, tkitr = tklist; tkitr; tkitr = tkitr->_next)
+	{
+		const char* s = NULL;
+		int isstr = (tkitr->_tk._type == TK_CONSTANT_STR) || (tkitr->_tk._type == TK_CONSTANT_CHAR);
+
+		if (tkitr->_tk._type == TK_NONE)
+		{
+			continue;
+		}
+
+		if (k != 1 && tkitr->_tk._wscnt > 0)
+		{
+			szbuf[k++] = ' ';
+		}
+
+		s = tkitr->_tk._str;
+		for (; *s; s++)
+		{
+			if (isstr && (*s == '"' || *s == '\\'))
+			{
+				szbuf[k++] = '\\';
+			}
+
+			szbuf[k++] = *s;
+		}
+	} /* end for */
+
+	szbuf[k++] = '\"';
+	szbuf[k] = '\0';
+
+	hstr = hs_hashstr(szbuf);
+	mm_free(szbuf);
+
+	/* alloc new token */
+	FTKListNode* newtk = mm_alloc_area(sizeof(FTKListNode), where);
+	if (!newtk) {
+		logger_output_s("error: out of memory! %s:%d\n", __FILE__, __LINE__);
+		return NULL;
+	}
+
+	newtk->_next = NULL;
+	newtk->_tk._type = TK_CONSTANT_STR;
+	newtk->_tk._loc._filename = hs_hashstr("cpp generated");
+	newtk->_tk._loc._line = 0;
+	newtk->_tk._loc._col = 0;
+	newtk->_tk._hidesetid = -1;
+	newtk->_tk._wscnt = 1;
+	newtk->_tk._str = hstr;
+
+	return newtk;
+}
+
+/* concat tokens */
+static FTKListNode* concat_tokenlist(FTKListNode* llist, FTKListNode* rlist, enum EMMArea where)
+{
+	int bufsize;
+	char* szbuf, *dst;
+	const char* src;
+	FTKListNode *result, *lhs, *rhs, **tail;
+
+	if (llist == NULL || llist->_tk._type == TK_NONE) {
+		return rlist;
+	}
+	if (rlist == NULL) {
+		return llist;
+	}
+
+	result = llist;
+	tail = NULL;
+	for (lhs = llist; lhs; lhs = lhs->_next)
+	{
+		if (lhs->_next == NULL) {
+			break;
+		}
+		tail = &lhs->_next;
+	}
+	if (tail == NULL) {
+		result = NULL;
+	}
+
+	rhs = rlist;
+	rlist = rlist->_next;
+
+	bufsize = 1;
+	bufsize += strlen(lhs->_tk._str);
+	bufsize += strlen(rhs->_tk._str);
+
+	szbuf = mm_alloc(bufsize);
+	if (!szbuf)
+	{
+		logger_output_s("error: out of memory! %s:%d\n", __FILE__, __LINE__);
+		return NULL;
+	}
+	
+	dst = szbuf;
+	for (src=lhs->_tk._str; *src; )
+	{
+		*dst++ = *src++;
+	}
+	for (src=rhs->_tk._str; *src; )
+	{
+		*dst++ = *src++;
+	}
+	*dst = '\0';
+
+	/* re-parsing */
+	{
+		FCharStream* cs = cs_create_fromstring(szbuf);
+		FTKListNode* tknode = NULL;
+
+		while (1)
+		{
+			tknode = mm_alloc_area(sizeof(FTKListNode), where);
+			if (!tknode) {
+				logger_output_s("error: out of memory, at %s:%d\n", __FILE__, __LINE__);
+				mm_free(szbuf);
+				return NULL;
+			}
+
+			tknode->_next = NULL;
+			cpp_lexer_read_token(cs, 0, &tknode->_tk);
+
+			if (tknode->_tk._type == TK_EOF || tknode->_tk._type == TK_NEWLINE)
+			{
+				break;
+			}
+
+			if (result == NULL)
+			{
+				result = tknode;
+				tail = &(tknode->_next);
+			}
+			else
+			{
+				*tail = tknode;
+				tail = &(tknode->_next);
+			}
+		} /* end while (1) */
+
+		cs_release(cs);
+	}
+	
+	assert(tail);
+	*tail = rlist;
+	
+	mm_free(szbuf);
+	return result;
+}
+
+static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKListNode** tklist, BOOL bscannextlines);
+
+/* \brief
+   this function handle the following:
+   1. substitute actual arguments for #X  X##Y
+   2. expand actual arguments, and substitute it
+*/
+static BOOL macro_expand_userdefined(FExpandContext* expctx, FCppContext* ctx, const FMacro* m, FArray* args, FTKListNode** replacement)
+{
+	FTKListNode* dupbody, *prevprev, *prev, *curr, *next;
+	int argidx0, argidx1;
+
+	dupbody = cpp_duplicate_tklist(m->_body, CPP_MM_TEMPPOOL);
+	for (prevprev = prev = NULL, curr = dupbody; curr; prevprev = prev, prev = curr, curr = curr->_next)
+	{
+		if (curr->_tk._type == TK_POUND) /* # string operator */
+		{
+			next = curr->_next;
+			if (next && (argidx0 = find_argument_index(m, next->_tk._str)) >= 0)
+			{
+				FTKListNode* newtk = stringfy_tokenlist((FTKListNode*)array_element(args, argidx0), CPP_MM_TEMPPOOL);
+				curr = newtk;
+				curr->_next = next->_next;
+				if (prev == NULL) {
+					dupbody = curr;
+				}
+				else {
+					prev->_next = curr;
+				}
+			}
+		}
+		else if (curr->_tk._type == TK_DOUBLE_POUND) /* ## concat operator */
+		{
+			FTKListNode* llist, * rlist, *newtklist, *savednext;
+
+			next = curr->_next;
+			if (prev == NULL || next == NULL)
+			{
+				logger_output_s("macro syntax error: ## at %s:%d\n", curr->_tk._str, curr->_tk._loc._filename, curr->_tk._loc._line);
+				return FALSE;
+			}
+
+			argidx0 = find_argument_index(m, prev->_tk._str);
+			argidx1 = find_argument_index(m, next->_tk._str);
+			if (argidx0 < 0) {
+				llist = cpp_duplicate_token(prev, CPP_MM_TEMPPOOL);
+			}
+			else {
+				llist = cpp_duplicate_tklist((FTKListNode*)array_element(args, argidx0), CPP_MM_TEMPPOOL);
+			}
+
+			if (argidx1 < 0) {
+				rlist = cpp_duplicate_token(next, CPP_MM_TEMPPOOL);
+			}
+			else {
+				rlist = cpp_duplicate_tklist((FTKListNode*)array_element(args, argidx1), CPP_MM_TEMPPOOL);
+			}
+
+			newtklist = concat_tokenlist(llist, rlist, CPP_MM_TEMPPOOL);
+			if (newtklist == NULL)
+			{
+				newtklist = mm_alloc_area(sizeof(FTKListNode), CPP_MM_TEMPPOOL);
+				if (!newtklist) {
+					logger_output_s("error: out of memory, at %s:%d\n", __FILE__, __LINE__);
+					return FALSE;
+				}
+
+				newtklist->_next = NULL;
+				newtklist->_tk._type = TK_NONE;
+				newtklist->_tk._loc._filename = hs_hashstr("cpp generated");
+				newtklist->_tk._loc._line = 0;
+				newtklist->_tk._loc._col = 0;
+				newtklist->_tk._hidesetid = -1;
+				newtklist->_tk._wscnt = 1;
+				newtklist->_tk._str = NULL;
+			}
+
+			curr = newtklist;
+			savednext = next->_next;
+			if (prevprev == NULL) {
+				dupbody = curr;
+			}
+			else {
+				prevprev->_next = curr;
+			}
+			prev = prevprev;
+			prevprev = NULL;
+
+			for (; curr->_next; prevprev = prev, prev = curr, curr = curr->_next)
+			{
+				/* do nothing */
+			}
+			curr->_next = savednext;
+		}
+		else if (curr->_tk._type == TK_ID)
+		{
+			next = curr->_next;
+			if (!next || next->_tk._type != TK_DOUBLE_POUND)
+			{
+				FTKListNode* expandarg;
+
+				expandarg = NULL;
+				argidx0 = find_argument_index(m, curr->_tk._str);
+				if (argidx0 >= 0)
+				{
+					expandarg = cpp_duplicate_tklist((FTKListNode*)array_element(args, argidx0), CPP_MM_TEMPPOOL);
+					if (!macro_expand_inner(expctx, ctx, &expandarg, FALSE))
+					{
+						logger_output_s("error: expand macro argument failed, ## at %s:%d\n", curr->_tk._str, curr->_tk._loc._filename, curr->_tk._loc._line);
+						return FALSE;
+					}
+				}
+
+				if (expandarg)
+				{
+					expandarg->_tk._wscnt += curr->_tk._wscnt;
+				}
+				else
+				{
+					expandarg = mm_alloc_area(sizeof(FTKListNode), CPP_MM_TEMPPOOL);
+					if (!expandarg) {
+						logger_output_s("error: out of memory, at %s:%d\n", __FILE__, __LINE__);
+						return FALSE;
+					}
+
+					expandarg->_next = NULL;
+					expandarg->_tk._type = TK_NONE;
+					expandarg->_tk._loc._filename = hs_hashstr("cpp generated");
+					expandarg->_tk._loc._line = 0;
+					expandarg->_tk._loc._col = 0;
+					expandarg->_tk._hidesetid = -1;
+					expandarg->_tk._wscnt = 1;
+					expandarg->_tk._str = NULL;
+				}
+
+				curr = expandarg;
+				if (prev == NULL) {
+					dupbody = curr;
+				}
+				else {
+					prev->_next = curr;
+				}
+
+				for (; curr->_next; prevprev = prev, prev = curr, curr = curr->_next)
+				{
+					/* do nothing */
+				}
+				curr->_next = next;
+			}
+		}
+
+	} /* end for */
+
+	/* remove none-head TK_NONE */
+	for (prev = NULL, curr = dupbody; curr;)
+	{
+		if (curr->_tk._type == TK_NONE && curr != dupbody)
+		{
+			prev->_next = curr->_next;
+			curr = curr->_next;
+		}
+		else
+		{
+			prev = curr; curr = curr->_next;
+		}
+	}
+
+	*replacement = dupbody;
+	return TRUE;
+}
+
+static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKListNode** tklist, BOOL bscannextlines)
 {
 	FTKListNode** where = tklist;
 	FTKListNode* tkitr = *tklist;
@@ -327,7 +795,7 @@ static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKList
 		{
 			if (!macro_expand_builtin(ctx, tkitr, &replacement))
 			{
-				logger_output_s("error: expand builtin '%s' failed, at %s:%d\n", tkitr->_tk._str, tkitr->_tk._loc._filename, tkitr->_tk._loc._line);
+				logger_output_s("error: expand built-in '%s' failed, at %s:%d\n", tkitr->_tk._str, tkitr->_tk._loc._filename, tkitr->_tk._loc._line);
 				return FALSE;
 			}
 
@@ -363,7 +831,7 @@ static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKList
 				}
 			}
 			
-			if (!macro_expand_userdefined(expctx, m, &args, &replacement))
+			if (!macro_expand_userdefined(expctx, ctx, m, &args, &replacement))
 			{
 				return FALSE;
 			}
@@ -396,6 +864,7 @@ static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKList
 			}
 			where = &replacement->_next;
 			replacement->_next = tkitr;
+			tkitr = replacement;
 		}
 		else
 		{
