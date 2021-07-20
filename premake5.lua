@@ -92,7 +92,7 @@ project "hcpp"
 	dependson { "basic", "libcpp" }
 	links { "basic", "libcpp" }
 	
-	debugargs { "-F \"test0.i\" dist/samples/test0.c" }
+	debugargs { "-o \"test0.i\" dist/samples/test0.c" }
 	
     includedirs {
 		"./src/basic",

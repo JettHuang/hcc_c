@@ -109,7 +109,12 @@ static BOOL macro_epxand_is_hidden(FExpandContext* ctx, int setid, const char* n
 	FArray* dstset = NULL;
 	int k;
 
-	assert(setid >= 0 && setid < ctx->_hidden_sets._elecount);
+	if (setid < 0)
+	{
+		return FALSE;
+	}
+
+	assert(setid < ctx->_hidden_sets._elecount);
 	dstset = (FArray*)(ctx->_hidden_sets._data) + setid;
 	for (k = 0; k < dstset->_elecount; k++)
 	{

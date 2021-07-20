@@ -251,7 +251,7 @@ void cpp_output_tokens(FCppContext* ctx, FTKListNode* tklist)
 		cpp_output_whitespace(ctx, tklist->_tk._wscnt);
 		if (tklist->_tk._str)
 		{
-			cpp_output_s(ctx, tklist->_tk._str);
+			cpp_output_s(ctx, "%s", tklist->_tk._str);
 		}
 
 		tklist = tklist->_next;

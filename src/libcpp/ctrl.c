@@ -380,6 +380,7 @@ static BOOL ctrl_include_handler(FCppContext* ctx, FTKListNode* tklist, int* out
 			{
 				size_t n = strlen(start->_tk._str);
 				strncpy(strbuf, start->_tk._str + 1, n - 2); /* remove "" */
+				strbuf[n - 2] = '\0';
 				headerfile = hs_hashstr(strbuf);
 				bsyntaxerr = 0;
 			}
