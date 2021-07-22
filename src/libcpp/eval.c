@@ -278,7 +278,7 @@ typedef struct tagOperatorStack
 // return TRUE if no error
 static BOOL eval_op_stack(FValStack *InOperandStack, FOpStack *InOperatorStack, BOOL* bDoCalculation)
 {
-	const enum EOperator op = STACK_POP(InOperandStack);
+	const enum EOperator op = STACK_POP(InOperatorStack);
 	int64_t result = 0, rhs, lhs, cond;
 
 	*bDoCalculation = TRUE;

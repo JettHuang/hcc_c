@@ -83,14 +83,18 @@ static BOOL ctrl_if_handler(FCppContext* ctx, FTKListNode* tklist, int* outputli
 		int eval = 0;
 		FTKListNode* expr = tklist->_next->_next; /* # if expr */
 		
-		assert(!expr);
+		assert(expr);
 		if (CHECK_IS_EOFLINE(expr->_tk._type))
 		{
 			logger_output_s("syntax error: #if expression, at %s:%d\n", expr->_tk._loc._filename, expr->_tk._loc._line);
 			return FALSE;
 		}
 
-		if (!cpp_eval_constexpr(ctx, expr, &eval));
+		if (!cpp_expand_rowtokens(ctx, &expr, FALSE)) {
+			return FALSE;
+		}
+
+		if (!cpp_eval_constexpr(ctx, expr, &eval))
 		{
 			return FALSE;
 		}
@@ -129,7 +133,7 @@ static BOOL ctrl_ifdef_handler(FCppContext* ctx, FTKListNode* tklist, int* outpu
 		FTKListNode* id = tklist->_next->_next; /* # ifdef ID */
 
 		assert(id);
-		if (id->_tk._type != TK_ID || CHECK_IS_EOFLINE(id->_next->_tk._type))
+		if (id->_tk._type != TK_ID || !CHECK_IS_EOFLINE(id->_next->_tk._type))
 		{
 			logger_output_s("syntax error: #ifdef expression, at %s:%d\n", id->_tk._loc._filename, id->_tk._loc._line);
 			return FALSE;
@@ -169,7 +173,7 @@ static BOOL ctrl_ifndef_handler(FCppContext* ctx, FTKListNode* tklist, int* outp
 		FTKListNode* id = tklist->_next->_next; /* # ifdef ID */
 
 		assert(id);
-		if (id->_tk._type != TK_ID || CHECK_IS_EOFLINE(id->_next->_tk._type))
+		if (id->_tk._type != TK_ID || !CHECK_IS_EOFLINE(id->_next->_tk._type))
 		{
 			logger_output_s("syntax error: #ifndef expression, at %s:%d\n", id->_tk._loc._filename, id->_tk._loc._line);
 			return FALSE;
@@ -206,9 +210,9 @@ static BOOL ctrl_elif_handler(FCppContext* ctx, FTKListNode* tklist, int* output
 	int16_t flags = 0;
 
 	/* check if else endif matching */
-	if (top->_condstack == NULL || top->_condstack->_ctrltype != Ctrl_if ||
-		top->_condstack->_ctrltype != Ctrl_ifdef || top->_condstack->_ctrltype != Ctrl_ifndef ||
-		top->_condstack->_ctrltype != Ctrl_elif)
+	if (top->_condstack == NULL || (top->_condstack->_ctrltype != Ctrl_if &&
+		top->_condstack->_ctrltype != Ctrl_ifdef && top->_condstack->_ctrltype != Ctrl_ifndef &&
+		top->_condstack->_ctrltype != Ctrl_elif))
 	{
 		logger_output_s("error: #elif is not matching. at %s:%d\n", top->_cs->_srcfilename, top->_cs->_line - 1);
 		return FALSE;
@@ -220,14 +224,18 @@ static BOOL ctrl_elif_handler(FCppContext* ctx, FTKListNode* tklist, int* output
 		int eval = 0, bprevsiblingpass = 0;
 		FTKListNode* expr = tklist->_next->_next; /* # if expr */
 
-		assert(!expr);
+		assert(expr);
 		if (CHECK_IS_EOFLINE(expr->_tk._type))
 		{
 			logger_output_s("syntax error: #elif expression, at %s:%d\n", expr->_tk._loc._filename, expr->_tk._loc._line);
 			return FALSE;
 		}
 
-		if (!cpp_eval_constexpr(ctx, expr, &eval));
+		if (!cpp_expand_rowtokens(ctx, &expr, FALSE)) {
+			return FALSE;
+		}
+
+		if (!cpp_eval_constexpr(ctx, expr, &eval))
 		{
 			return FALSE;
 		}
@@ -271,9 +279,9 @@ static BOOL ctrl_else_handler(FCppContext* ctx, FTKListNode* tklist, int* output
 	int16_t flags = 0;
 
 	/* check if else endif matching */
-	if (top->_condstack == NULL || top->_condstack->_ctrltype != Ctrl_if ||
-		top->_condstack->_ctrltype != Ctrl_ifdef || top->_condstack->_ctrltype != Ctrl_ifndef ||
-		top->_condstack->_ctrltype != Ctrl_elif)
+	if (top->_condstack == NULL || (top->_condstack->_ctrltype != Ctrl_if &&
+		top->_condstack->_ctrltype != Ctrl_ifdef && top->_condstack->_ctrltype != Ctrl_ifndef &&
+		top->_condstack->_ctrltype != Ctrl_elif))
 	{
 		logger_output_s("error: #else is not matching. at %s:%d\n", top->_cs->_srcfilename, top->_cs->_line - 1);
 		return FALSE;
@@ -285,7 +293,7 @@ static BOOL ctrl_else_handler(FCppContext* ctx, FTKListNode* tklist, int* output
 		int bprevsiblingpass = 0;
 		FTKListNode* expr = tklist->_next->_next; /* # else \n */
 
-		assert(!expr);
+		assert(expr);
 		if (!CHECK_IS_EOFLINE(expr->_tk._type))
 		{
 			logger_output_s("syntax error: #else expression, at %s:%d\n", expr->_tk._loc._filename, expr->_tk._loc._line);
@@ -329,7 +337,7 @@ static BOOL ctrl_endif_handler(FCppContext* ctx, FTKListNode* tklist, int* outpu
 	FSourceCodeContext* top = ctx->_sourcestack;
 	FTKListNode* expr = tklist->_next->_next; /* # endif \n */
 
-	assert(!expr);
+	assert(expr);
 	if (!CHECK_IS_EOFLINE(expr->_tk._type))
 	{
 		logger_output_s("syntax error: #endif expression, at %s:%d\n", expr->_tk._loc._filename, expr->_tk._loc._line);

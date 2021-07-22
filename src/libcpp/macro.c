@@ -78,8 +78,8 @@ static int macro_expand_alloc_hiddenset(FExpandContext* ctx, int dupfrom)
 	FArray* newset = NULL;
 	int setid = ctx->_hidden_sets._elecount;
 	
-	array_enlarge(&ctx->_hidden_sets, setid+1);
-	newset = (FArray*)(ctx->_hidden_sets._data) + setid;
+	array_append_zeroed(&ctx->_hidden_sets);
+	newset = (FArray*)array_element(&ctx->_hidden_sets, setid);
 	array_init(newset, 128, sizeof(const char*), CPP_MM_TEMPPOOL);
 	if (dupfrom >= 0)
 	{
@@ -87,7 +87,7 @@ static int macro_expand_alloc_hiddenset(FExpandContext* ctx, int dupfrom)
 
 		assert(dupfrom < setid);
 		srcset = (FArray*)(ctx->_hidden_sets._data) + dupfrom;
-		array_enlarge(newset, srcset->_elecount);
+		array_make_cap_enough(newset, srcset->_elecount);
 		array_copy(newset, srcset);
 	}
 
@@ -99,9 +99,8 @@ static void macro_expand_add_hidden(FExpandContext* ctx, int setid, const char* 
 	FArray* dstset = NULL;
 	
 	assert(setid >= 0 && setid < ctx->_hidden_sets._elecount);
-	dstset = (FArray*)(ctx->_hidden_sets._data) + setid;
-	array_enlarge(dstset, dstset->_elecount + 1);
-	*((const char**)(dstset->_data) + dstset->_elecount) = name;
+	dstset = (FArray*)array_element(&ctx->_hidden_sets, setid);
+	array_append(dstset, &name);
 }
 
 static BOOL macro_epxand_is_hidden(FExpandContext* ctx, int setid, const char* name)
@@ -244,10 +243,25 @@ static BOOL macro_gather_args(FCppContext* ctx, FTKListNode ** tklist, int bscan
 	/* search for terminating ), possibility extending the row */
 	assert((*tklist)->_next != NULL);
 	argsstart = (*tklist)->_next;
+	*tklist = argsstart;
 	lparen_cnt = 1;
 	while (lparen_cnt > 0)
 	{
-		if ((*tklist)->_next == NULL)
+		if ((*tklist)->_tk._type == TK_EOF)
+		{
+			logger_output_s("error: gather macro arguments failed, at %s:%d\n", (*tklist)->_tk._loc._filename, (*tklist)->_tk._loc._line);
+			return FALSE;
+		}
+		else if ((*tklist)->_tk._type == TK_LPAREN)
+		{
+			lparen_cnt++;
+		}
+		else if ((*tklist)->_tk._type == TK_RPAREN)
+		{
+			lparen_cnt--;
+		}
+
+		if (lparen_cnt > 0 && (*tklist)->_next == NULL)
 		{
 			if (bscannextlines)
 			{
@@ -271,20 +285,6 @@ static BOOL macro_gather_args(FCppContext* ctx, FTKListNode ** tklist, int bscan
 			{
 				return FALSE;
 			}
-		}
-	
-		if ((*tklist)->_tk._type == TK_EOF)
-		{
-			logger_output_s("error: gather macro arguments failed, at %s:%d\n", (*tklist)->_tk._loc._filename, (*tklist)->_tk._loc._line);
-			return FALSE;
-		}
-		else if ((*tklist)->_tk._type == TK_LPAREN)
-		{
-			lparen_cnt++;
-		}
-		else if ((*tklist)->_tk._type == TK_RPAREN)
-		{
-			lparen_cnt--;
 		}
 
 		*tklist = (*tklist)->_next;
@@ -312,7 +312,7 @@ static BOOL macro_gather_args(FCppContext* ctx, FTKListNode ** tklist, int bscan
 		if ((argsitr->_tk._type == TK_COMMA && lparen_cnt == 0)
 			|| (lparen_cnt == -1 && (args->_elecount != 0 || argument != NULL)))
 		{
-			array_append(args, argument);
+			array_append(args, &argument);
 			argument = argumenttail = NULL;
 			continue;
 		}
@@ -339,17 +339,16 @@ static BOOL macro_gather_args(FCppContext* ctx, FTKListNode ** tklist, int bscan
 /* find argument index if exist*/
 static int find_argument_index(const FMacro* m, const char* hstr)
 {
-	int index = -1;
+	int index;
 	FTKListNode* itr = m->_args;
-	while (itr)
+	for (index = 0;itr;itr = itr->_next, index++)
 	{
-		index++;
 		if (itr->_tk._str == hstr) {
-			break;
+			return index;
 		}
 	}
 
-	return index;
+	return -1;
 }
 
 static FTKListNode* stringfy_tokenlist(FTKListNode* tklist, enum EMMArea where)
@@ -544,7 +543,7 @@ static FTKListNode* concat_tokenlist(FTKListNode* llist, FTKListNode* rlist, enu
 	return result;
 }
 
-static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKListNode** tklist, BOOL bscannextlines);
+static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKListNode** tklisthd, BOOL bscannextlines);
 
 /* \brief
    this function handle the following:
@@ -564,7 +563,7 @@ static BOOL macro_expand_userdefined(FExpandContext* expctx, FCppContext* ctx, c
 			next = curr->_next;
 			if (next && (argidx0 = find_argument_index(m, next->_tk._str)) >= 0)
 			{
-				FTKListNode* newtk = stringfy_tokenlist((FTKListNode*)array_element(args, argidx0), CPP_MM_TEMPPOOL);
+				FTKListNode* newtk = stringfy_tokenlist(*(FTKListNode**)array_element(args, argidx0), CPP_MM_TEMPPOOL);
 				curr = newtk;
 				curr->_next = next->_next;
 				if (prev == NULL) {
@@ -592,14 +591,14 @@ static BOOL macro_expand_userdefined(FExpandContext* expctx, FCppContext* ctx, c
 				llist = cpp_duplicate_token(prev, CPP_MM_TEMPPOOL);
 			}
 			else {
-				llist = cpp_duplicate_tklist((FTKListNode*)array_element(args, argidx0), CPP_MM_TEMPPOOL);
+				llist = cpp_duplicate_tklist(*(FTKListNode**)array_element(args, argidx0), CPP_MM_TEMPPOOL);
 			}
 
 			if (argidx1 < 0) {
 				rlist = cpp_duplicate_token(next, CPP_MM_TEMPPOOL);
 			}
 			else {
-				rlist = cpp_duplicate_tklist((FTKListNode*)array_element(args, argidx1), CPP_MM_TEMPPOOL);
+				rlist = cpp_duplicate_tklist(*(FTKListNode**)array_element(args, argidx1), CPP_MM_TEMPPOOL);
 			}
 
 			newtklist = concat_tokenlist(llist, rlist, CPP_MM_TEMPPOOL);
@@ -649,50 +648,50 @@ static BOOL macro_expand_userdefined(FExpandContext* expctx, FCppContext* ctx, c
 				argidx0 = find_argument_index(m, curr->_tk._str);
 				if (argidx0 >= 0)
 				{
-					expandarg = cpp_duplicate_tklist((FTKListNode*)array_element(args, argidx0), CPP_MM_TEMPPOOL);
+					expandarg = cpp_duplicate_tklist(*(FTKListNode**)array_element(args, argidx0), CPP_MM_TEMPPOOL);
 					if (!macro_expand_inner(expctx, ctx, &expandarg, FALSE))
 					{
-						logger_output_s("error: expand macro argument failed, ## at %s:%d\n", curr->_tk._str, curr->_tk._loc._filename, curr->_tk._loc._line);
-						return FALSE;
-					}
-				}
-
-				if (expandarg)
-				{
-					expandarg->_tk._wscnt += curr->_tk._wscnt;
-				}
-				else
-				{
-					expandarg = mm_alloc_area(sizeof(FTKListNode), CPP_MM_TEMPPOOL);
-					if (!expandarg) {
-						logger_output_s("error: out of memory, at %s:%d\n", __FILE__, __LINE__);
+						logger_output_s("error: expand macro argument failed, at %s:%d\n", curr->_tk._str, curr->_tk._loc._filename, curr->_tk._loc._line);
 						return FALSE;
 					}
 
-					expandarg->_next = NULL;
-					expandarg->_tk._type = TK_NONE;
-					expandarg->_tk._loc._filename = hs_hashstr("cpp generated");
-					expandarg->_tk._loc._line = 0;
-					expandarg->_tk._loc._col = 0;
-					expandarg->_tk._hidesetid = -1;
-					expandarg->_tk._wscnt = 1;
-					expandarg->_tk._str = NULL;
-				}
+					if (expandarg)
+					{
+						expandarg->_tk._wscnt += curr->_tk._wscnt;
+					}
+					else
+					{
+						expandarg = mm_alloc_area(sizeof(FTKListNode), CPP_MM_TEMPPOOL);
+						if (!expandarg) {
+							logger_output_s("error: out of memory, at %s:%d\n", __FILE__, __LINE__);
+							return FALSE;
+						}
 
-				curr = expandarg;
-				if (prev == NULL) {
-					dupbody = curr;
-				}
-				else {
-					prev->_next = curr;
-				}
+						expandarg->_next = NULL;
+						expandarg->_tk._type = TK_NONE;
+						expandarg->_tk._loc._filename = hs_hashstr("cpp generated");
+						expandarg->_tk._loc._line = 0;
+						expandarg->_tk._loc._col = 0;
+						expandarg->_tk._hidesetid = -1;
+						expandarg->_tk._wscnt = 1;
+						expandarg->_tk._str = NULL;
+					}
 
-				for (; curr->_next; prevprev = prev, prev = curr, curr = curr->_next)
-				{
-					/* do nothing */
-				}
-				curr->_next = next;
-			}
+					curr = expandarg;
+					if (prev == NULL) {
+						dupbody = curr;
+					}
+					else {
+						prev->_next = curr;
+					}
+
+					for (; curr->_next; prevprev = prev, prev = curr, curr = curr->_next)
+					{
+						/* do nothing */
+					}
+					curr->_next = next;
+				} /* end if */
+			} /* end if */
 		}
 
 	} /* end for */
@@ -715,14 +714,14 @@ static BOOL macro_expand_userdefined(FExpandContext* expctx, FCppContext* ctx, c
 	return TRUE;
 }
 
-static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKListNode** tklist, BOOL bscannextlines)
+static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKListNode** tklisthd, BOOL bscannextlines)
 {
-	FTKListNode** where = tklist;
-	FTKListNode* tkitr = *tklist;
+	FTKListNode** where = tklisthd;
+	FTKListNode* tkitr = *tklisthd;
 
 	while (tkitr)
 	{
-		FTKListNode* replacement = NULL, *tkmacro = NULL;
+		FTKListNode* replacement = NULL, *replacementtail = NULL, *tkmacro = NULL;
 		const FMacro* m = NULL;
 
 		if (tkitr->_tk._type != TK_ID) {
@@ -862,14 +861,14 @@ static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKList
 		{
 			replacement->_tk._wscnt = tkmacro->_tk._wscnt;
 			*where = replacement;
+			replacementtail = replacement;
 
-			for (; replacement->_next; replacement = replacement->_next)
+			for (; replacementtail->_next; replacementtail = replacementtail->_next)
 			{
 				/* do nothing */
 			}
-			where = &replacement->_next;
-			replacement->_next = tkitr;
-			tkitr = replacement;
+			replacementtail->_next = tkitr;
+			tkitr = replacement; /* re-scan */
 		}
 		else
 		{

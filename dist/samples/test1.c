@@ -1,18 +1,19 @@
 /* \brief
  *   main.c
  */
- 
+#if 1
+
 #define X   100
 
 #if X > 0 ? X > 50 ? 0 : 1 : 100
 
-testing conditon expression
+testing conditon expression xxxx
 
 #endif
 
 #if X > 0 ? (X-'a') : 100
 
-testing conditon expression
+testing conditon expression yyyy
 
 #endif
  
@@ -83,6 +84,7 @@ typedef __va_list va_list;
 typedef void *__gnuc_va_list;
 #endif
 
+#endif /* endif 0 */
 
 int main(int argc, char* argv)
 {

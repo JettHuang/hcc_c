@@ -310,7 +310,7 @@ BOOL cpp_process(FCppContext* ctx, const char* srcfilename, const char* outfilen
 		{
 			if (bcondblockpass)
 			{
-				if (!cpp_expand_rowtokens(ctx, &tklist, 1)) {
+				if (!cpp_expand_rowtokens(ctx, &tklist, TRUE)) {
 					return FALSE;
 				}
 

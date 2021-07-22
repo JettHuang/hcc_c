@@ -66,9 +66,11 @@ typedef struct tagArray
 } FArray;
 
 void array_init(FArray* array, int cap, int elesize, enum EMMArea where);
-void array_enlarge(FArray* array, int count);
-void array_append(FArray* array, void* item);
+void array_make_cap_enough(FArray* array, int count);
+void array_append(FArray* array, void* ptritem);
+void array_append_zeroed(FArray* array);
 void array_copy(FArray* dst, FArray* src);
+/* return pointer to item */
 void* array_element(FArray* array, int index);
 
 #endif /* __UTILS_H__ */

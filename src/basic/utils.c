@@ -188,7 +188,7 @@ void array_init(FArray* array, int cap, int elesize, enum EMMArea where)
 	array->_data = mm_alloc_area(cap * elesize, where);
 }
 
-void array_enlarge(FArray* array, int count)
+void array_make_cap_enough(FArray* array, int count)
 {
 	if (array->_capacity < count)
 	{
@@ -205,13 +205,23 @@ void array_enlarge(FArray* array, int count)
 	}
 }
 
-void array_append(FArray* array, void* item)
+void array_append(FArray* array, void* ptritem)
 {
 	void* data;
 
-	array_enlarge(array, array->_elecount + 1);
+	array_make_cap_enough(array, array->_elecount + 1);
 	data = (char*)(array->_data) + array->_elesize * array->_elecount;
-	memcpy(data, item, array->_elesize);
+	memcpy(data, ptritem, array->_elesize);
+	array->_elecount++;
+}
+
+void array_append_zeroed(FArray* array)
+{
+	void* data;
+
+	array_make_cap_enough(array, array->_elecount + 1);
+	data = (char*)(array->_data) + array->_elesize * array->_elecount;
+	memset(data, 0, array->_elesize);
 	array->_elecount++;
 }
 
