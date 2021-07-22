@@ -70,7 +70,7 @@ typedef struct tagExpandContext
 
 static void macro_expand_init(FExpandContext* ctx)
 {
-	array_init(&ctx->_hidden_sets, 128, sizeof(FArray), CPP_MM_TEMPPOOL);
+	array_init(&ctx->_hidden_sets, 64, sizeof(FArray), CPP_MM_TEMPPOOL);
 }
 
 static int macro_expand_alloc_hiddenset(FExpandContext* ctx, int dupfrom)

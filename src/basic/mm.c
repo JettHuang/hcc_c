@@ -47,7 +47,7 @@ void  mm_free(void* ptr)
 
 
 #define MM_NORMAL_CHUNK_SIZE		(1024*8)
-#define MM_SINGLE_CHUNK_SIZE		(1024*1)
+#define MM_SINGLE_CHUNK_SIZE		(1024*2)
 #define MM_ALLOC_ALIGN				(4)
 
 #define ALIGN_PTR(ptr, a)		((char*)(((char*)(ptr) - (char*)0 + (a - 1)) & (~(a - 1))))
@@ -156,6 +156,22 @@ static void free_area(FMmArea* area)
 	area->_freechunk = NULL;
 }
 
+static int get_chunks_count_area(FMmArea* area)
+{
+	FMmChunk* chunk;
+	int count = 0;
+
+	assert(area);
+	chunk = area->_freechunk;
+	while (chunk)
+	{
+		count++;
+		chunk = chunk->_next;
+	} /* end while */
+
+	return count;
+}
+
 static FMmArea g_areas[MMA_Area_Max] = { { NULL } };
 
 void* mm_alloc_area(size_t size, enum EMMArea where)
@@ -170,4 +186,11 @@ void mm_free_area(enum EMMArea where)
 	assert(where >= MMA_Area_0 && where < MMA_Area_Max);
 
 	free_area(&g_areas[(int)where]);
+}
+
+int mm_get_area_chunks(enum EMMArea where)
+{
+	assert(where >= MMA_Area_0 && where < MMA_Area_Max);
+
+	return get_chunks_count_area(&g_areas[(int)where]);
 }

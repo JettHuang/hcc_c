@@ -28,5 +28,6 @@ enum EMMArea
 
 void* mm_alloc_area(size_t size, enum EMMArea where);
 void mm_free_area(enum EMMArea where);
+int mm_get_area_chunks(enum EMMArea where);
 
 #endif /* __MM_H__ */

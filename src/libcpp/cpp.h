@@ -14,6 +14,7 @@
 
 #define CPP_MM_PERMPOOL		MMA_Area_1
 #define CPP_MM_TEMPPOOL		MMA_Area_2
+#define CPP_MM_TEMPPOOL_MAXCNT		4	/* free temporary memory when temp pools exceed this count */
 
 /* macro structure */
 #define MACRO_FLAG_BUILTIN		0x0001

@@ -288,6 +288,13 @@ BOOL cpp_process(FCppContext* ctx, const char* srcfilename, const char* outfilen
 
 	while (ctx->_sourcestack)
 	{
+		/* conditional free temporary memory */
+		if (mm_get_area_chunks(CPP_MM_TEMPPOOL) > CPP_MM_TEMPPOOL_MAXCNT)
+		{
+			/* fprintf(stderr, "free temp pool %d\n", mm_get_area_chunks(CPP_MM_TEMPPOOL)); */
+			mm_free_area(CPP_MM_TEMPPOOL);
+		}
+
 		FSourceCodeContext* top = ctx->_sourcestack;
 		int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
 		FTKListNode* tklist = NULL;
