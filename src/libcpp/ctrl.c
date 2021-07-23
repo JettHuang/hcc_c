@@ -785,3 +785,60 @@ FTKListNode* cpp_duplicate_token(const FTKListNode* orgtk, enum EMMArea where)
 
 	return node;
 }
+
+void cpp_add_definition(FCppContext* ctx, const char* str)
+{
+	FSourceCodeContext srcctx;
+	FCharStream* cs;
+	FTKListNode* tklist;
+	char* szbuf, * s;
+	int szlen, lines;
+
+
+	/* parsing from command line -DXXX -DXXX=YYY */
+	if (!str)
+	{
+		return;
+	}
+
+	szlen = strlen(str) + sizeof("#define ");
+	szbuf = mm_alloc_area(szlen, CPP_MM_TEMPPOOL);
+	if (!szbuf) {
+		return;
+	}
+
+	sprintf(szbuf, "#define %s", str);
+	for (s = szbuf; *s; s++)
+	{
+		if (*s == '=')
+		{
+			*s = ' ';
+			break;
+		}
+	} /* end while */
+
+	cs = cs_create_fromstring(szbuf);
+	if (!cs)
+	{
+		logger_output_s("error: out of memory, at %s:%d\n", __FILE__, __LINE__);
+		return;
+	}
+
+	cs->_srcfilename = hs_hashstr("cmd-args");
+	srcctx._cs = cs;
+	srcctx._srcfilename = cs->_srcfilename;
+	srcctx._srcdir = NULL;
+	srcctx._condstack = NULL;
+	srcctx._up = NULL;
+	/* push to stack */
+	ctx->_sourcestack = &srcctx;
+
+	if (!cpp_read_rowtokens(ctx, cs, &tklist, 0, 0) ||
+		!ctrl_define_handler(ctx, tklist, &lines))
+	{
+		logger_output_s("warning: command -D parsing failed,  %s\n", str);
+	}
+
+	ctx->_sourcestack = NULL;
+	cs_release(cs);
+}

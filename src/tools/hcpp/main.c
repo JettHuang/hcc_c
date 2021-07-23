@@ -17,12 +17,6 @@
 #define OPTPARSE_API static
 #include "optparse.h"
 
-#define hash_hash # ## #
-#define mkstr(a) # a
-#define in_between(a) mkstr(a)
-#define join(c, d) in_between(c hash_hash d)
-
-char p[] = in_between(c hash_hash c); // join(x, y); /* equivalent to char p[] = "x ## y"; */
 
 int main(int argc, char* argv[])
 {
@@ -44,7 +38,7 @@ int main(int argc, char* argv[])
 			cpp_add_includedir(&cpp, options.optarg);
 			break;
 		case 'D':
-			logger_output_s("D %s\n", options.optarg);
+			cpp_add_definition(&cpp, options.optarg);
 			break;
 		case 'o':
 			outfilename = options.optarg;

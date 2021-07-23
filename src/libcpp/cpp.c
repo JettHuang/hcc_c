@@ -135,11 +135,6 @@ void cpp_add_includedir(FCppContext* ctx, const char* dir)
 	ctx->_includedirs = ptrnode;
 }
 
-void cpp_add_definition(FCppContext* ctx, const char* str)
-{
-	/* parsing from command line -DXXX=YYY */
-}
-
 BOOL cpp_read_token(FCppContext* ctx, FCharStream* cs, FPPToken* tk, BOOL bwantheader, BOOL ballowerr)
 {
 	if (ctx->_lookaheadtk._valid) {
