@@ -80,7 +80,13 @@ project "libcc"
 	
     files {
 		"./src/libcc/*.h",
-		"./src/libcc/*.c"
+		"./src/libcc/*.c",
+		"./src/libcc/lexer/*.h",
+		"./src/libcc/lexer/*.c",
+		"./src/libcc/parser/*.h",
+		"./src/libcc/parser/*.c",
+		"./src/libcc/generator/*.h",
+		"./src/libcc/generator/*.c"
     }
 	
 group "tools"
