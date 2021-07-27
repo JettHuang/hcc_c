@@ -32,10 +32,10 @@ typedef union tagValue {
 	double		_double;
 	long double	_ldouble;
 	const char* _astr;
-	union
+	struct
 	{
 		const char* _str;
-		uint32_t	_chcnt;
+		uint32_t	_chcnt; /* include tail '00' */
 	} _wstr;
 } FValue;
 

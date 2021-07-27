@@ -481,7 +481,7 @@ static BOOL eval_op_stack(FValStack *InOperandStack, FOpStack *InOperatorStack, 
 		assert(InOperandStack->_cur_top >= 1);
 		rhs = STACK_POP(InOperandStack);
 		lhs = STACK_POP(InOperandStack);
-		result = lhs | rhs ? 1 : 0;
+		result = (lhs | rhs) ? 1 : 0;
 		STACK_PUSH(InOperandStack, result);
 	}
 	break;

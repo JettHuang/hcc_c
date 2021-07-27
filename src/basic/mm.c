@@ -176,8 +176,11 @@ static FMmArea g_areas[MMA_Area_Max] = { { NULL } };
 
 void* mm_alloc_area(size_t size, enum EMMArea where)
 {
-	assert(where >= MMA_Area_0 && where < MMA_Area_Max);
+	if (size <= 0) {
+		return NULL;
+	}
 
+	assert(where >= MMA_Area_0 && where < MMA_Area_Max);
 	return alloc_area(&g_areas[(int)where], size);
 }
 

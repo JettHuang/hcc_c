@@ -89,16 +89,16 @@ enum EState
 	S_QCHAR_SEQ_EOF,
 
 	S_MAX,
-	S_END,   // end of state-machine
-	S_END_STAR // end of state-machine without eat current char
+	S_END,   /* end of state-machine */
+	S_END_STAR /* end of state-machine without eat current char */
 };
 
-// action indicators
+/* action indicators */
 #define ACT_KEEPSTATE		0x00
 #define ACT_NEWSTATE		0x01
 #define ACT_OLDSTATE		0x02
 
-// character classes
+/* character classes */
 #define	C_ALPH	1
 #define	C_NUM	2
 #define	C_XX	3

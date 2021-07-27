@@ -1,22 +1,23 @@
-// tokens
-// chapter 6.4 in n1124_c99_specs_final.pdf
-//
-// token:
-//    keyword
-//    identifier
-//    constant
-//    string-literal
-//    punctuator
-//
-// preprocessing-token:
-//    header-name
-//    identifier
-//    pp-number
-//    character-constant
-//    string-literal
-//    punctuator
-//    each non-white-space character that cannot be one of the above
-//
+/* 
+* tokens
+* chapter 6.4 in n1124_c99_specs_final.pdf
+*
+* token:
+*    keyword
+*    identifier
+*    constant
+*    string-literal
+*    punctuator
+*
+* preprocessing-token:
+*    header-name
+*    identifier
+*    pp-number
+*    character-constant
+*    string-literal
+*    punctuator
+*    each non-white-space character that cannot be one of the above
+*/
 
 #define TK_IS_KEYWORD				0x0001
 #define TK_IS_RESERVE				0x0002
@@ -36,7 +37,7 @@
 #endif
 
 TOKEN(TK_NONE, "none", 0)
-//keywords
+/* keywords */
 TOKEN(TK_AUTO, "auto", TK_IS_KEYWORD | TK_IS_STORAGE_SPECIFIER)
 TOKEN(TK_ENUM, "enum", TK_IS_KEYWORD | TK_IS_TYPE_SPECIFIER)
 TOKEN(TK_RESTRICT, "restrict", TK_IS_KEYWORD | TK_IS_TYPE_QUALIFIER)
@@ -72,10 +73,10 @@ TOKEN(TK_ELSE, "else", TK_IS_KEYWORD | TK_IS_STATEMENT)
 TOKEN(TK_REGISTER, "register", TK_IS_KEYWORD | TK_IS_STORAGE_SPECIFIER)
 TOKEN(TK_UNION, "union", TK_IS_KEYWORD | TK_IS_TYPE_SPECIFIER)
 
-// identifier
+/* identifier */
 TOKEN(TK_ID, "identifier", TK_IS_CONSTEXPR)
 
-// constant
+/* constant */
 TOKEN(TK_CONSTANT_INT, "constant-int", TK_IS_CONSTEXPR)
 TOKEN(TK_CONSTANT_UINT, "constant-unsigned-int", TK_IS_CONSTEXPR)
 TOKEN(TK_CONSTANT_LONG, "constant-long", TK_IS_CONSTEXPR)
@@ -88,11 +89,11 @@ TOKEN(TK_CONSTANT_LDOUBLE, "constant-long-double", TK_IS_CONSTEXPR)
 TOKEN(TK_CONSTANT_CHAR, "constant-character", TK_IS_CONSTEXPR)
 TOKEN(TK_CONSTANT_WCHAR, "constant-wide-character", TK_IS_CONSTEXPR)
 
-// string literal
+/* string literal */
 TOKEN(TK_CONSTANT_STR, "string-literal", 0)
 TOKEN(TK_CONSTANT_WSTR, "string-wide-literal", 0)
 
-// punctuator
+/* punctuator */
 TOKEN(TK_LBRACKET,      "[", TK_IS_PUNCTUATOR)
 TOKEN(TK_RBRACKET,      "]", TK_IS_PUNCTUATOR)
 TOKEN(TK_LPAREN,        "(", TK_IS_PUNCTUATOR | TK_IS_CONSTEXPR)
@@ -143,7 +144,7 @@ TOKEN(TK_POUND,         "#", TK_IS_PUNCTUATOR)
 TOKEN(TK_DOUBLE_POUND,  "##", TK_IS_PUNCTUATOR)
 TOKEN(TK_UNCLASS,		"unclass", 0)
 
-// for preprocessing-token
+/* for preprocessing-token */
 TOKEN(TK_HEADER_NAME, "header-name", 0)
 TOKEN(TK_PPNUMBER, "pp-number", 0)
 TOKEN(TK_NEWLINE,  "new line", 0)
