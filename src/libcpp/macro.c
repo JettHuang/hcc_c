@@ -849,7 +849,8 @@ static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKList
 			
 			for (repitr = replacement; repitr; repitr = repitr->_next)
 			{
-				if (repitr->_tk._hidesetid == -1)
+				/* only check macro id to alloc hidden-set */
+				if (repitr->_tk._type == TK_ID && repitr->_tk._hidesetid == -1 && cpp_find_macro(ctx, repitr->_tk._str))
 				{
 					repitr->_tk._hidesetid = macro_expand_alloc_hiddenset(expctx, tkmacro->_tk._hidesetid);
 				}
