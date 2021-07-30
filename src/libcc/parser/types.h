@@ -57,35 +57,29 @@ typedef struct tagCCType
 	int16_t _align;		/* align in bytes */
 	int16_t	_size;		/* size in bytes */
 	
-	struct tagCCSymbol *_symbol;
-	struct tagCCType   *_next;	/* pointer to successor type */
+	struct tagCCType   *_type;	/* pointer to successor type */
 
 	union {
-		struct tagSymbolListNode* _enums; /* for enum type */
-		int32_t		_elecount; /* for array */
+		struct tagCCSymbol* _symbol; /* for other types */
 		struct
 		{
-			struct tagStructField* _next;
-			uint8_t	_cfields : 1; /* has const field? */
-			uint8_t	_vfields : 1; /* has volatile field? */
-		} s; /* for struct(union) */
-
-		struct  
-		{
-			struct tagCCType* _ret;
-			struct tagSymbolListNode* _parameters; /* ... means ellipsis parameter */
-		} f;
+			struct tagCCType** _protos; /* params type array, end with NULL */
+		} f; /* function proto */
 	} u;
 	
 } FCCType;
 
 typedef struct tagStructField
 {
-	struct tagStructField *_next;
-	struct tagCCSymbol *_symbol;
-	int32_t			_offset;
-	int16_t			_bitsize;
-	int16_t			_lsb; /* least significant bit */
+	const char* _name;
+	FLocation   _loc;
+	FCCType*    _type;
+
+	int32_t		_offset;
+	int16_t		_bitsize;
+	int16_t		_lsb; /* least significant bit */
+
+	struct tagStructField* _next; /* pointer to sibling field */
 } FCCField;
 
 
@@ -112,7 +106,7 @@ typedef struct tagCCTypeMetrics
 } FCCTypeMetrics;
 
 /* types context */
-typedef struct tagCCTypesContext
+typedef struct tagCCBuiltinTypes
 {
 	/* build-in or common types */
 	FCCType* _chartype;
@@ -131,6 +125,40 @@ typedef struct tagCCTypesContext
 	FCCType* _ldoubletype;
 	FCCType* _voidtype;
 	FCCType* _ellipsistype; /* ... */
-} FCCTypesContext;
+} FCCBuiltinTypes;
+
+void cc_type_init(const FCCTypeMetrics* m);
+
+/* qualify a type */
+FCCType* cc_type_qual(FCCType* ty);
+/* get unqualified type */
+FCCType* cc_type_unqual(FCCType* ty);
+
+/* new a pointer to type */
+FCCType* cc_type_ptr(FCCType* ty);
+/* get the dereferenced type */
+FCCType* cc_type_deref(FCCType* ty);
+
+/* create a array type */
+FCCType* cc_type_newarray(FCCType*ty, int elecnt, int align);
+/* translate a array to pointer type */
+FCCType* cc_type_arraytoptr(FCCType* ty);
+
+/* new a struct type (STRUCT, UNION, ENUM)*/
+FCCType* cc_type_newstruct(int op, const char* name, int level);
+/* add a field (type: fty) to struct(sty) */
+FCCField* cc_type_newfield(const char* name, FCCType* sty, FCCType* fty);
+FCCField* cc_type_findfield(const char* name, FCCType* sty);
+FCCField* cc_type_fields(FCCType* sty);
+
+/* new a function type */
+FCCType* cc_type_func(FCCType* ret, FCCType** proto);
+FCCType* cc_type_rettype(FCCType* fn);
+/* check a function has variance parameter */
+BOOL cc_type_isvariance(FCCType* fn);
+
+BOOL cc_type_isequal(FCCType* ty1, FCCType* ty2);
+FCCType* cc_type_promote(FCCType* ty);
+FCCType* cc_type_remove(int level);
 
 #endif /* __CC_TYPES_H__ */

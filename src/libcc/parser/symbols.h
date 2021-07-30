@@ -43,8 +43,7 @@ typedef struct tagCCSymbol
 	int32_t _sclass;
 
 	struct tagType *_type;
-	FValue	_value;
-
+	
 	/* flags */
 	uint16_t _addressed : 1;
 	uint16_t _computed : 1;
@@ -52,6 +51,23 @@ typedef struct tagCCSymbol
 	uint16_t _generated : 1;
 	uint16_t _defined : 1;
 	uint16_t _isparameter : 1;
+
+	union {
+		struct tagSymbolListNode* _enumids; /* for enum */
+		struct
+		{
+			struct tagStructField* _fields;
+			uint8_t	_cfields : 1; /* has const field? */
+			uint8_t	_vfields : 1; /* has volatile field? */
+		} s; /* for struct(union) */
+
+		struct {
+			FValue min, max;
+		} limits; /* for built-in type */
+
+		FValue	_value; /* for normal ids */
+	} u;
+
 } FCCSymbol;
 
 typedef struct tagSymbolListNode
