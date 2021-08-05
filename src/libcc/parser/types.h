@@ -32,7 +32,7 @@
 #define Type_Pointer	12
 /* special types */
 #define Type_Defined	13
-#define Type_Variable	14
+#define Type_Ellipsis	14
 
 /* qualifiers */
 #define	Type_Const		0x0100
@@ -50,12 +50,30 @@
 #define Size_Longlong	3
 
 
+/* utilities macros */
+#define IsQual(t)	((t)->_op & (Type_Const|Type_Restrict|Type_Volatile))
+#define UnQual(t)	(IsQual(t) ? (t)->_type : (t))
+#define IsVolatile(t)	((t)->_op & Type_Volatile)
+#define IsConst(t)		((t)->_op & Type_Const)
+#define IsArray(t)	(UnQual(t)->_op == Type_Array)
+#define IsStruct(t)	(UnQual(t)->_op == Type_Struct) || UnQual(t)->_op == Type_Union)
+#define IsUnion(t)	(UnQual(t)->_op == Type_Union)
+#define IsFunction(t)	(UnQual(t)->_op == Type_Function)
+#define IsPtr(t)	(UnQual(t)->_op == Type_Pointer)
+#define IsEnum(t)	(UnQual(t)->_op == Type_Enum)
+#define IsChar(t)	(UnQual(t)->_op == Type_Char && (t)->_size == 1)
+#define IsWideChar(t)	(UnQual(t)->_op == Type_Char && (t)->_size == 2)
+#define IsInt(t)	(UnQual(t)->_op == Type_SInteger || UnQual(t)->_op == Type_UInteger)
+#define IsFloat(t)	(UnQual(t)->_op == Type_Float)
+#define IsDouble(t)	(UnQual(t)->_op == Type_Double)
+
+
 /* cc type */
 typedef struct tagCCType
 {
 	int16_t	_op;
 	int16_t _align;		/* align in bytes */
-	int16_t	_size;		/* size in bytes */
+	int32_t	_size;		/* size in bytes */
 	
 	struct tagCCType   *_type;	/* pointer to successor type */
 
@@ -64,12 +82,12 @@ typedef struct tagCCType
 		struct
 		{
 			struct tagCCType** _protos; /* params type array, end with NULL */
-		} f; /* function proto */
-	} u;
+		} _f; /* function proto */
+	} _u;
 	
 } FCCType;
 
-typedef struct tagStructField
+typedef struct tagCCStructField
 {
 	const char* _name;
 	FLocation   _loc;
@@ -94,6 +112,7 @@ typedef struct tagCCMetrics
 typedef struct tagCCTypeMetrics
 {
 	FCCMetrics _charmetric;
+	FCCMetrics _wcharmetric;
 	FCCMetrics _shortmetric;
 	FCCMetrics _intmetric;
 	FCCMetrics _longmetric;
@@ -110,6 +129,7 @@ typedef struct tagCCBuiltinTypes
 {
 	/* build-in or common types */
 	FCCType* _chartype;
+	FCCType* _wchartype;
 	FCCType* _schartype;
 	FCCType* _uchartype;
 	FCCType* _sshorttype;
@@ -127,12 +147,12 @@ typedef struct tagCCBuiltinTypes
 	FCCType* _ellipsistype; /* ... */
 } FCCBuiltinTypes;
 
+extern FCCBuiltinTypes gBuiltinTypes;
+
 void cc_type_init(const FCCTypeMetrics* m);
 
 /* qualify a type */
-FCCType* cc_type_qual(FCCType* ty);
-/* get unqualified type */
-FCCType* cc_type_unqual(FCCType* ty);
+FCCType* cc_type_qual(FCCType* ty, int16_t	op);
 
 /* new a pointer to type */
 FCCType* cc_type_ptr(FCCType* ty);

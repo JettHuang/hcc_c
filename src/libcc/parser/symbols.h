@@ -9,7 +9,6 @@
 #include "hstring.h"
 #include "mm.h"
 
-
 /* storage classes */
 #define SC_Unknown		0
 #define SC_Auto			1
@@ -42,7 +41,7 @@ typedef struct tagCCSymbol
 	int32_t	_scope;
 	int32_t _sclass;
 
-	struct tagType *_type;
+	struct tagCCType* _type;
 	
 	/* flags */
 	uint16_t _addressed : 1;
@@ -53,29 +52,41 @@ typedef struct tagCCSymbol
 	uint16_t _isparameter : 1;
 
 	union {
-		struct tagSymbolListNode* _enumids; /* for enum */
+		struct tagCCSymbol** _enumids; /* for enum identifiers, end with NULL */
 		struct
 		{
-			struct tagStructField* _fields;
+			struct tagCCStructField* _fields;
 			uint8_t	_cfields : 1; /* has const field? */
 			uint8_t	_vfields : 1; /* has volatile field? */
-		} s; /* for struct(union) */
+		} _s; /* for struct(union) */
 
 		struct {
-			FValue min, max;
-		} limits; /* for built-in type */
+			FValue _min, _max;
+		} _limits; /* for built-in type */
 
 		FValue	_value; /* for normal ids */
-	} u;
+	} _u;
 
+	struct tagCCSymbol* _up; /* link to previous symbol in symbol table */
 } FCCSymbol;
 
-typedef struct tagSymbolListNode
-{
-	FCCSymbol _symbol;
-	struct tagSymbolListNode *_next;
-} FSymbolListNode;
 
+extern struct tagCCSymbolTable* gConstants;
+extern struct tagCCSymbolTable* gExternals;
+extern struct tagCCSymbolTable* gGlobals;
+extern struct tagCCSymbolTable* gIdentifiers;
+extern struct tagCCSymbolTable* gLabels;
+extern struct tagCCSymbolTable* gTypes;
+extern int gCurrentLevel;
 
+void cc_symbol_init();
+void cc_symbol_enterscope();
+void cc_symbol_exitscope();
+
+FCCSymbol* cc_symbol_install(const char* name, struct tagCCSymbolTable** tpp, int level, enum EMMArea where);
+FCCSymbol* cc_symbol_relocate(const char* name, struct tagCCSymbolTable* src, struct tagCCSymbolTable* dst);
+FCCSymbol* cc_symbol_lookup(const char* name, struct tagCCSymbolTable* tp);
+/* new a constant symbol */
+FCCSymbol* cc_symbol_constant(struct tagCCType* ty, FValue val);
 
 #endif /* __CC_SYMBOLS_H__ */

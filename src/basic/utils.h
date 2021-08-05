@@ -39,6 +39,7 @@ typedef union tagValue {
 	} _wstr;
 } FValue;
 
+#define ones(n) ((n)>=8*sizeof (unsigned long) ? ~0UL : ~((~0UL)<<(n))) /* n bits */
 
 unsigned int util_str_hash(const char* str, unsigned int len);
 unsigned int util_str_hash2(const char* str, unsigned int len);
