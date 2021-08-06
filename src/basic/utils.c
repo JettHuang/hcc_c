@@ -46,6 +46,11 @@ char util_char_upper(char c)
 	return (unsigned short)c + ((((unsigned short)c - 'A') < 26u) << 5);
 }
 
+const char* util_itoa(int i)
+{
+	static char str[32];
+	return itoa(i, str, 0);
+}
 
 const char* util_convert_abs_pathname(const char* pathname)
 {
@@ -205,7 +210,7 @@ void array_make_cap_enough(FArray* array, int count)
 	}
 }
 
-void array_append(FArray* array, void* ptritem)
+void array_append(FArray* array, const void* ptritem)
 {
 	void* data;
 

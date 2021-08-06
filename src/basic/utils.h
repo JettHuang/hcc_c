@@ -56,6 +56,8 @@ const char* util_process_working_dir();
 const char* util_getpath_from_pathname(const char* pathname);
 const char* util_make_pathname(const char* path, const char* filename);
 
+/* integer to string */
+const char* util_itoa(int i);
 
 typedef struct tagArray
 {
@@ -68,7 +70,7 @@ typedef struct tagArray
 
 void array_init(FArray* array, int cap, int elesize, enum EMMArea where);
 void array_make_cap_enough(FArray* array, int count);
-void array_append(FArray* array, void* ptritem);
+void array_append(FArray* array, const void* ptritem);
 void array_append_zeroed(FArray* array);
 void array_copy(FArray* dst, FArray* src);
 /* return pointer to item */

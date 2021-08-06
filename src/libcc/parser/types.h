@@ -87,7 +87,7 @@ typedef struct tagCCType
 	
 } FCCType;
 
-typedef struct tagCCStructField
+typedef struct tagStructField
 {
 	const char* _name;
 	FLocation   _loc;
@@ -97,7 +97,7 @@ typedef struct tagCCStructField
 	int16_t		_bitsize;
 	int16_t		_lsb; /* least significant bit */
 
-	struct tagStructField* _next; /* pointer to sibling field */
+	struct tagStructField* _next; /* pointer to next sibling field */
 } FCCField;
 
 
@@ -165,10 +165,11 @@ FCCType* cc_type_newarray(FCCType*ty, int elecnt, int align);
 FCCType* cc_type_arraytoptr(FCCType* ty);
 
 /* new a struct type (STRUCT, UNION, ENUM)*/
-FCCType* cc_type_newstruct(int op, const char* name, int level);
+FCCType* cc_type_newstruct(int op, const char* name, const FLocation *loc, int level);
 /* add a field (type: fty) to struct(sty) */
-FCCField* cc_type_newfield(const char* name, FCCType* sty, FCCType* fty);
+FCCField* cc_type_newfield(const char* name, const FLocation* loc, FCCType* sty, FCCType* fty);
 FCCField* cc_type_findfield(const char* name, FCCType* sty);
+/* get fields list */
 FCCField* cc_type_fields(FCCType* sty);
 
 /* new a function type */
@@ -177,8 +178,8 @@ FCCType* cc_type_rettype(FCCType* fn);
 /* check a function has variance parameter */
 BOOL cc_type_isvariance(FCCType* fn);
 
-BOOL cc_type_isequal(FCCType* ty1, FCCType* ty2);
+BOOL cc_type_isequal(FCCType* ty1, FCCType* ty2, BOOL option);
 FCCType* cc_type_promote(FCCType* ty);
-FCCType* cc_type_remove(int level);
+void cc_type_remove(int level);
 
 #endif /* __CC_TYPES_H__ */

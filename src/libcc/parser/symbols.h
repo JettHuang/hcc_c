@@ -32,6 +32,7 @@
 #define SCOPE_LOCAL		5
 
 
+struct tagStructField;
 /* symbol */
 typedef struct tagCCSymbol
 {
@@ -55,7 +56,7 @@ typedef struct tagCCSymbol
 		struct tagCCSymbol** _enumids; /* for enum identifiers, end with NULL */
 		struct
 		{
-			struct tagCCStructField* _fields;
+			struct tagStructField* _fields;
 			uint8_t	_cfields : 1; /* has const field? */
 			uint8_t	_vfields : 1; /* has volatile field? */
 		} _s; /* for struct(union) */
@@ -82,6 +83,9 @@ extern int gCurrentLevel;
 void cc_symbol_init();
 void cc_symbol_enterscope();
 void cc_symbol_exitscope();
+
+/* generate n-labels, return the start number */
+int cc_symbol_genlabel(int cnt);
 
 FCCSymbol* cc_symbol_install(const char* name, struct tagCCSymbolTable** tpp, int level, enum EMMArea where);
 FCCSymbol* cc_symbol_relocate(const char* name, struct tagCCSymbolTable* src, struct tagCCSymbolTable* dst);

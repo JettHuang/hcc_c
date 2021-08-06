@@ -5,6 +5,8 @@
 #include "cc.h"
 #include "symbols.h"
 #include "types.h"
+#include "logger.h"
+
 #include <string.h>
 
 
@@ -35,7 +37,8 @@ struct tagCCSymbolTable* gLabels = &sLabels;
 struct tagCCSymbolTable* gTypes = &sTypes;
 
 int gCurrentLevel = SCOPE_GLOBAL;
-static int tempid = 0;
+static int slabelId = 0;
+static int stempId = 0;
 
 
 static void cc_init_table(FCCSymbolTable* tp, int level)
@@ -73,13 +76,20 @@ void cc_symbol_init()
 	cc_init_table(&sIdentifiers, SCOPE_GLOBAL);
 	cc_init_table(&sTypes, SCOPE_GLOBAL);
 	gCurrentLevel = SCOPE_GLOBAL;
+	slabelId = 1;
+}
+
+int cc_symbol_genlabel(int cnt)
+{
+	slabelId += cnt;
+	return slabelId - cnt;
 }
 
 void cc_symbol_enterscope()
 {
 	if (++gCurrentLevel == SCOPE_LOCAL)
 	{
-		tempid = 0;
+		stempId = 0;
 	}
 }
 
