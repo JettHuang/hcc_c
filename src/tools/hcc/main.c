@@ -26,7 +26,7 @@ int main(int argc, char* argv[])
 	localename = setlocale(LC_ALL, "");
 	logger_output_s("LOCAL %s\n", localename);
 
-	cc_lexer_init();
+	cc_init();
 	cc_contex_init(&cc);
 
 	optparse_init(&options, argv);
@@ -57,7 +57,7 @@ int main(int argc, char* argv[])
 	
 	bsuccess = cc_process(&cc, srcfilename, outfilename);
 	cc_contex_release(&cc);
-	cc_lexer_uninit();
+	cc_uninit();
 
 	return bsuccess ? 0 : -1;
 }

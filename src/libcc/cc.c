@@ -10,6 +10,23 @@
 #include "lexer/lexer.h"
 
 
+extern void cc_logger_outc(int c);
+extern void cc_logger_outs(const char* format, va_list arg);
+
+void cc_init()
+{
+	logger_set(cc_logger_outc, cc_logger_outs);
+
+	cc_lexer_init();
+	cc_symbol_init();
+	cc_type_init();
+}
+
+void cc_uninit()
+{
+	cc_lexer_uninit();
+}
+
 void cc_contex_init(FCCContext* ctx)
 {
 	ctx->_outfilename = NULL;

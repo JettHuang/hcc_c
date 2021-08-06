@@ -44,6 +44,9 @@ typedef struct tagCCContext {
 /* public interface                                                     */
 /************************************************************************/
 
+void cc_init();
+void cc_uninit();
+
 void cc_contex_init(FCCContext* ctx);
 void cc_contex_release(FCCContext* ctx);
 BOOL cc_process(FCCContext* ctx, const char* srcfilename, const char* outfilename);
