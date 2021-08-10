@@ -17,12 +17,6 @@
 #define CC_MM_TEMPPOOL_MAXCNT		4	/* free temporary memory when temp pools exceed this count */
 
 
-/* token list node */
-typedef struct tagTokenListNode {
-	FCCToken	_tk;
-	struct tagTokenListNode* _next;
-} FTKListNode;
-
 #define CHECK_IS_EOFLINE(ty)	((ty) == TK_EOF || (ty) == TK_NEWLINE)
 
 /* runtime context of cc */
@@ -37,6 +31,7 @@ typedef struct tagCCContext {
 		int16_t	_valid : 1;
 		FCCToken _tk;
 	} _lookaheadtk;
+	int16_t _bnewline : 1; /* next token is in the newline */
 } FCCContext;
 
 
@@ -53,8 +48,6 @@ BOOL cc_process(FCCContext* ctx, const char* srcfilename, const char* outfilenam
 
 BOOL cc_read_token(FCCContext* ctx, FCharStream* cs, FCCToken* tk);
 BOOL cc_lookahead_token(FCCContext* ctx, FCharStream* cs, FCCToken* tk);
-BOOL cc_read_tokentolist(FCCContext* ctx, FCharStream* cs, FTKListNode** tail);
-BOOL cc_read_rowtokens(FCCContext* ctx, FCharStream* cs, FTKListNode** tail);
 
 void cc_print_token(FCCToken* tk);
 

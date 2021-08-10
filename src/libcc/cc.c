@@ -8,10 +8,38 @@
 #include "charstream.h"
 #include "logger.h"
 #include "lexer/lexer.h"
+#include "parser/types.h"
+#include "parser/symbols.h"
+
+#include <string.h>
 
 
 extern void cc_logger_outc(int c);
 extern void cc_logger_outs(const char* format, va_list arg);
+
+/* token list node */
+typedef struct tagTokenListNode {
+	FCCToken	_tk;
+	struct tagTokenListNode* _next;
+} FTKListNode;
+
+static BOOL cc_read_token_with_handlectrl(FCCContext* ctx, FCharStream* cs, FCCToken* tk);
+static BOOL cc_read_rowtokens(FCharStream* cs, FTKListNode** tail);
+
+static FCCTypeMetrics defaultmetrics = 
+{
+	{ 1, 1 }, /* _charmetric */
+	{ 2, 2 }, /* _wcharmetric */
+	{ 2, 2 }, /* _shortmetric */
+	{ 4, 4 }, /* _intmetric */
+	{ 4, 4 }, /* _longmetric */
+	{ 8, 4 }, /* _longlongmetric */
+	{ 4, 4 }, /* _floatmetric */
+	{ 8, 4 }, /* _doublemetric */
+	{ 8, 4 }, /* _longdoublemetric */
+	{ 4, 4 }, /* _ptrmetric */
+	{ 0, 4 }, /* _structmetric */
+};
 
 void cc_init()
 {
@@ -19,7 +47,7 @@ void cc_init()
 
 	cc_lexer_init();
 	cc_symbol_init();
-	cc_type_init();
+	cc_type_init(&defaultmetrics);
 }
 
 void cc_uninit()
@@ -33,6 +61,7 @@ void cc_contex_init(FCCContext* ctx)
 	ctx->_outfp = NULL;
 	ctx->_cs = NULL;
 	ctx->_lookaheadtk._valid = 0;
+	ctx->_bnewline = 1;
 }
 
 void cc_contex_release(FCCContext* ctx)
@@ -48,6 +77,7 @@ void cc_contex_release(FCCContext* ctx)
 	ctx->_outfp = NULL;
 	ctx->_cs = NULL;
 	ctx->_lookaheadtk._valid = 0;
+	ctx->_bnewline = 0;
 }
 
 BOOL cc_process(FCCContext* ctx, const char* srcfilename, const char* outfilename)
@@ -89,47 +119,97 @@ BOOL cc_read_token(FCCContext* ctx, FCharStream* cs, FCCToken* tk)
 		return TRUE;
 	}
 
-	return cc_lexer_read_token(cs, tk);
+	return cc_read_token_with_handlectrl(ctx, cs, tk);
 }
 
 BOOL cc_lookahead_token(FCCContext* ctx, FCharStream* cs, FCCToken* tk)
 {
+	int result;
+
 	if (ctx->_lookaheadtk._valid) {
 		*tk = ctx->_lookaheadtk._tk;
 		return TRUE;
 	}
 
-	int result = cc_lexer_read_token(cs, &(ctx->_lookaheadtk._tk));
+	result = cc_read_token_with_handlectrl(ctx, cs, &(ctx->_lookaheadtk._tk));
 	ctx->_lookaheadtk._valid = 1;
 	*tk = ctx->_lookaheadtk._tk;
 	return result;
 }
 
-BOOL cc_read_tokentolist(FCCContext* ctx, FCharStream* cs, FTKListNode** tail)
+static BOOL cc_read_token_with_handlectrl1(FCCContext* ctx, FCharStream* cs, FCCToken* tk, BOOL *bfoundctrl)
 {
-	FTKListNode* tknode = NULL;
+	*bfoundctrl = FALSE;
 
-	tknode = mm_alloc_area(sizeof(FTKListNode), CC_MM_TEMPPOOL);
-	if (!tknode) {
-		logger_output_s("error: out of memory, at %s:%d\n", __FILE__, __LINE__);
-		return FALSE;
-	}
-
-	tknode->_next = NULL;
-
-	if (!cc_read_token(ctx, cs, &tknode->_tk))
+	if (!cc_lexer_read_token(cs, tk))
 	{
 		return FALSE;
 	}
 
-	*tail = tknode;
+	if (ctx->_bnewline && tk->_type == TK_POUND) /* '#' */
+	{
+		FTKListNode* tklist = NULL;
+		
+		*bfoundctrl = TRUE;
+		if (!cc_read_rowtokens(cs, &tklist))
+		{
+			return FALSE;
+		}
+
+		if (tklist->_tk._type == TK_ID && !strcmp(tklist->_tk._val._astr, "line"))
+		{
+			const char* filename = NULL;
+			int linenum = 0;
+			FTKListNode* expr = tklist->_next;
+
+			/* #line number filename */
+			if (expr->_tk._type == TK_CONSTANT_INT && CHECK_IS_EOFLINE(expr->_next->_tk._type))
+			{
+				linenum = expr->_tk._val._int;
+			}
+			else if (expr->_tk._type == TK_CONSTANT_INT && expr->_next->_tk._type == TK_CONSTANT_STR && CHECK_IS_EOFLINE(expr->_next->_next->_tk._type))
+			{
+				const char* cnststr = expr->_next->_tk._val._astr;
+				linenum = expr->_tk._val._int;
+				filename = hs_hashnstr2(cnststr + 1, strlen(cnststr) - 2); /* omit 2 " */
+				filename = util_normalize_pathname(filename);
+			}
+			else
+			{
+				logger_output_s("error syntax: #line number filename(opt), at %s:%d\n", tklist->_tk._loc._filename, tklist->_tk._loc._line);
+				return TRUE;
+			}
+
+			cs->_line = linenum;
+			cs->_srcfilename = filename;
+		}
+	}
+
 	return TRUE;
 }
 
-BOOL cc_read_rowtokens(FCCContext* ctx, FCharStream* cs, FTKListNode** tail)
+static BOOL cc_read_token_with_handlectrl(FCCContext* ctx, FCharStream* cs, FCCToken* tk)
+{
+	BOOL bfoundctrl, result;
+
+	do 
+	{
+		result = cc_read_token_with_handlectrl1(ctx, cs, tk, &bfoundctrl);
+	} while (result && bfoundctrl);
+
+	if (result && tk->_type == TK_NEWLINE)
+	{
+		ctx->_bnewline = 1;
+	}
+
+	return result;
+}
+
+static BOOL cc_read_rowtokens(FCharStream* cs, FTKListNode** tail)
 {
 	enum EPPToken tktype = TK_UNCLASS;
 	FTKListNode* tknode = NULL;
+	
 	do
 	{
 		tknode = mm_alloc_area(sizeof(FTKListNode), CC_MM_TEMPPOOL);
@@ -140,7 +220,7 @@ BOOL cc_read_rowtokens(FCCContext* ctx, FCharStream* cs, FTKListNode** tail)
 
 		tknode->_next = NULL;
 
-		if (!cc_read_token(ctx, cs, &tknode->_tk))
+		if (!cc_lexer_read_token(cs, &tknode->_tk))
 		{
 			return FALSE;
 		}
@@ -150,6 +230,7 @@ BOOL cc_read_rowtokens(FCCContext* ctx, FCharStream* cs, FTKListNode** tail)
 		tail = &tknode->_next;
 		tktype = tknode->_tk._type;
 	} while (tktype != TK_EOF && tktype != TK_NEWLINE);
+
 	return TRUE;
 }
 
