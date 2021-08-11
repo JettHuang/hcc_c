@@ -56,7 +56,7 @@
 #define IsVolatile(t)	((t)->_op & Type_Volatile)
 #define IsConst(t)		((t)->_op & Type_Const)
 #define IsArray(t)	(UnQual(t)->_op == Type_Array)
-#define IsStruct(t)	(UnQual(t)->_op == Type_Struct) || UnQual(t)->_op == Type_Union)
+#define IsStruct(t)	(UnQual(t)->_op == Type_Struct || UnQual(t)->_op == Type_Union)
 #define IsUnion(t)	(UnQual(t)->_op == Type_Union)
 #define IsFunction(t)	(UnQual(t)->_op == Type_Function)
 #define IsPtr(t)	(UnQual(t)->_op == Type_Pointer)

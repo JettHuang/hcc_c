@@ -197,7 +197,7 @@ void array_make_cap_enough(FArray* array, int count)
 {
 	if (array->_capacity < count)
 	{
-		int newcap = count * 2;
+		int newcap = count + 16;
 		void* data = mm_alloc_area(newcap * array->_elesize, array->_marea);
 		if (data)
 		{

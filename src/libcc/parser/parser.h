@@ -26,7 +26,13 @@ FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, con
 BOOL cc_parser_is_specifier(enum ECCToken tk);
 FCCType* cc_parser_declspecifier(FCCContext* ctx, int *storage);
 
-FCCType* cc_parser_declarator(FCCContext* ctx, FCCType* basety, const char** id, FLocation* loc);
+FCCType* cc_parser_declarator(FCCContext* ctx, FCCType* basety, const char** id, FLocation* loc, FArray* params);
 FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc);
+
+BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FCCType* ty, const FLocation* loc, FArray* params);
+FCCType* cc_parser_declenum(FCCContext* ctx);
+FCCType* cc_parser_declstruct(FCCContext* ctx, int op);
+
+BOOL cc_parser_expect(FCCContext* ctx, enum ECCToken tk);
 
 #endif /* __CC_PARSER_H__ */

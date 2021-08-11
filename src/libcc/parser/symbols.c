@@ -85,6 +85,11 @@ int cc_symbol_genlabel(int cnt)
 	return slabelId - cnt;
 }
 
+BOOL cc_symbol_isgenlabel(const char* name)
+{
+	return (*name >= '1' && *name <= '9');
+}
+
 void cc_symbol_enterscope()
 {
 	if (++gCurrentLevel == SCOPE_LOCAL)

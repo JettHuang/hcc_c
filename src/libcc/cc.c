@@ -10,6 +10,7 @@
 #include "lexer/lexer.h"
 #include "parser/types.h"
 #include "parser/symbols.h"
+#include "parser/parser.h"
 
 #include <string.h>
 
@@ -23,7 +24,7 @@ typedef struct tagTokenListNode {
 	struct tagTokenListNode* _next;
 } FTKListNode;
 
-static BOOL cc_read_token_with_handlectrl(FCCContext* ctx, FCharStream* cs, FCCToken* tk);
+static BOOL cc_read_token_with_handlectrl(FCCContext* ctx, FCCToken* tk);
 static BOOL cc_read_rowtokens(FCharStream* cs, FTKListNode** tail);
 
 static FCCTypeMetrics defaultmetrics = 
@@ -92,26 +93,15 @@ BOOL cc_process(FCCContext* ctx, const char* srcfilename, const char* outfilenam
 	if (outfilename) {
 		ctx->_outfp = fopen(outfilename, "wt");
 	}
-
-	{
-		FCCToken tk;
-		do
-		{
-			if (!cc_read_token(ctx, ctx->_cs, &tk))
-			{
-				logger_output_s("cc_process failed when read token...\n");
-				return FALSE;
-			}
-
-			cc_print_token(&tk);
-
-		} while (tk._type != TK_EOF);
+	if (!ctx->_outfp) {
+		logger_output_s("failed to open file %s\n", outfilename);
+		return FALSE;
 	}
-
-	return TRUE;
+	
+	return cc_parser_program(ctx);
 }
 
-BOOL cc_read_token(FCCContext* ctx, FCharStream* cs, FCCToken* tk)
+BOOL cc_read_token(FCCContext* ctx, FCCToken* tk)
 {
 	if (ctx->_lookaheadtk._valid) {
 		ctx->_lookaheadtk._valid = 0;
@@ -119,10 +109,10 @@ BOOL cc_read_token(FCCContext* ctx, FCharStream* cs, FCCToken* tk)
 		return TRUE;
 	}
 
-	return cc_read_token_with_handlectrl(ctx, cs, tk);
+	return cc_read_token_with_handlectrl(ctx, tk);
 }
 
-BOOL cc_lookahead_token(FCCContext* ctx, FCharStream* cs, FCCToken* tk)
+BOOL cc_lookahead_token(FCCContext* ctx, FCCToken* tk)
 {
 	int result;
 
@@ -131,17 +121,17 @@ BOOL cc_lookahead_token(FCCContext* ctx, FCharStream* cs, FCCToken* tk)
 		return TRUE;
 	}
 
-	result = cc_read_token_with_handlectrl(ctx, cs, &(ctx->_lookaheadtk._tk));
+	result = cc_read_token_with_handlectrl(ctx, &(ctx->_lookaheadtk._tk));
 	ctx->_lookaheadtk._valid = 1;
 	*tk = ctx->_lookaheadtk._tk;
 	return result;
 }
 
-static BOOL cc_read_token_with_handlectrl1(FCCContext* ctx, FCharStream* cs, FCCToken* tk, BOOL *bfoundctrl)
+static BOOL cc_read_token_with_handlectrl1(FCCContext* ctx, FCCToken* tk, BOOL *bfoundctrl)
 {
 	*bfoundctrl = FALSE;
 
-	if (!cc_lexer_read_token(cs, tk))
+	if (!cc_lexer_read_token(ctx->_cs, tk))
 	{
 		return FALSE;
 	}
@@ -151,7 +141,7 @@ static BOOL cc_read_token_with_handlectrl1(FCCContext* ctx, FCharStream* cs, FCC
 		FTKListNode* tklist = NULL;
 		
 		*bfoundctrl = TRUE;
-		if (!cc_read_rowtokens(cs, &tklist))
+		if (!cc_read_rowtokens(ctx->_cs, &tklist))
 		{
 			return FALSE;
 		}
@@ -180,29 +170,30 @@ static BOOL cc_read_token_with_handlectrl1(FCCContext* ctx, FCharStream* cs, FCC
 				return TRUE;
 			}
 
-			cs->_line = linenum;
-			cs->_srcfilename = filename;
+			ctx->_cs->_line = linenum;
+			ctx->_cs->_srcfilename = filename;
 		}
 	}
 
 	return TRUE;
 }
 
-static BOOL cc_read_token_with_handlectrl(FCCContext* ctx, FCharStream* cs, FCCToken* tk)
+static BOOL cc_read_token_with_handlectrl(FCCContext* ctx, FCCToken* tk)
 {
-	BOOL bfoundctrl, result;
+	BOOL bfoundctrl;
 
-	do 
+	do
 	{
-		result = cc_read_token_with_handlectrl1(ctx, cs, tk, &bfoundctrl);
-	} while (result && bfoundctrl);
+		if (!cc_read_token_with_handlectrl1(ctx, tk, &bfoundctrl))
+		{
+			logger_output_s("read token failed.\n");
+			return FALSE;
+		}
 
-	if (result && tk->_type == TK_NEWLINE)
-	{
-		ctx->_bnewline = 1;
-	}
+		ctx->_bnewline = bfoundctrl || (tk->_type == TK_NEWLINE);
+	} while (ctx->_bnewline);
 
-	return result;
+	return TRUE;
 }
 
 static BOOL cc_read_rowtokens(FCharStream* cs, FTKListNode** tail)

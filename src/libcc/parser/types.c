@@ -213,7 +213,7 @@ FCCType* cc_type_deref(FCCType* ty)
 	if (IsPtr(ty)) {
 		return UnQual(ty)->_type;
 	} else {
-		logger_output_s("error: pointer expected!\n");
+		logger_output_s("error: pointer expected! but is %t\n", ty);
 	}
 
 	return IsEnum(ty) ? ty->_type : ty;
@@ -248,7 +248,7 @@ FCCType* cc_type_arraytoptr(FCCType* ty)
 		return cc_type_ptr(ty->_type);
 	}
 
-	logger_output_s("error: array expected.\n");
+	logger_output_s("error: array expected. %t\n", ty);
 	return cc_type_ptr(ty);
 }
 
@@ -268,7 +268,7 @@ FCCType* cc_type_newstruct(int op, const char* name, const FLocation* loc, int l
 				return p->_type;
 			}
 
-			logger_output_s("redefinition of type '' \n");
+			logger_output_s("redefinition of type '%s', at %w, previous is at %w \n", name, loc, &p->_loc);
 		}
 	}
 
@@ -293,7 +293,7 @@ FCCField* cc_type_newfield(const char* name, const FLocation* loc, FCCType* sty,
 	for (p = *q; p; q = &p->_next, p = *q)
 	{
 		if (p->_name == name) {
-			logger_output_s("error: duplicated structure field.\n");
+			logger_output_s("error: duplicated structure field. %s, at %w\n", name, loc);
 			return NULL;
 		}
 	} /* end for */
@@ -338,7 +338,7 @@ FCCType* cc_type_func(FCCType* ret, FCCType** proto)
 
 	if (ret && (IsArray(ret) || IsFunction(ret)))
 	{
-		logger_output_s("illegal return type \n", ret);
+		logger_output_s("illegal return type: %t \n", ret);
 	}
 
 	ty = cc_type_new(Type_Function, ret, 0, 0, NULL);
@@ -353,7 +353,7 @@ FCCType* cc_type_rettype(FCCType* fn)
 		return fn->_type;
 	}
 
-	logger_output_s("error: function expected.\n");
+	logger_output_s("error: function expected. but current is %t\n", fn);
 	return NULL;
 }
 

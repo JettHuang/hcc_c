@@ -27,6 +27,7 @@ typedef struct tagCCContext {
 	/* source code stream */
 	FCharStream* _cs;
 
+	FCCToken _currtk;
 	struct {
 		int16_t	_valid : 1;
 		FCCToken _tk;
@@ -46,8 +47,8 @@ void cc_contex_init(FCCContext* ctx);
 void cc_contex_release(FCCContext* ctx);
 BOOL cc_process(FCCContext* ctx, const char* srcfilename, const char* outfilename);
 
-BOOL cc_read_token(FCCContext* ctx, FCharStream* cs, FCCToken* tk);
-BOOL cc_lookahead_token(FCCContext* ctx, FCharStream* cs, FCCToken* tk);
+BOOL cc_read_token(FCCContext* ctx, FCCToken* tk);
+BOOL cc_lookahead_token(FCCContext* ctx, FCCToken* tk);
 
 void cc_print_token(FCCToken* tk);
 
