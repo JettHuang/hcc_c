@@ -180,6 +180,21 @@ void cc_type_init(const FCCTypeMetrics* m)
 	sPointersym = cc_symbol_install("T*", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
 }
 
+FCCType* cc_type_tmp(int16_t op, FCCType* ty)
+{
+	FCCType* tmp;
+
+	tmp = (FCCType*)mm_alloc_area(sizeof(FCCType), CC_MM_TEMPPOOL);
+	if (!tmp) {
+		logger_output_s("out of memory at %s:%d\n", __FILE__, __LINE__);
+		return NULL;
+	}
+
+	tmp->_op = ty;
+	tmp->_type = ty;
+	return tmp;
+}
+
 FCCType* cc_type_qual(FCCType* ty, int16_t	op)
 {
 	if (IsArray(ty)) {

@@ -154,6 +154,11 @@ BOOL cc_parser_is_specifier(enum ECCToken tk)
 	return gCCTokenMetas[tk]._flags & TK_IS_DECL_SPECIFIER;
 }
 
+BOOL cc_parser_is_constant(enum ECCToken tk)
+{
+	return gCCTokenMetas[tk]._flags & TK_IS_CONSTEXPR;
+}
+
 BOOL cc_parser_expect(FCCContext* ctx, enum ECCToken tk)
 {
 	if (ctx->_currtk._type == tk)
@@ -478,12 +483,122 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 
 FCCType* cc_parser_declarator(FCCContext* ctx, FCCType* basety, const char** id, FLocation* loc, FArray* params)
 {
+
+
 	return NULL;
 }
 
-FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc)
+FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FArray* params)
 {
-	return NULL;
+	FCCType* ty = NULL;
+
+	switch (ctx->_currtk._type)
+	{
+	case TK_ID:
+	{
+		if (!id) {
+			logger_output_s("error: extraneous identifier '%k' at %w.\n", &ctx->_currtk, &ctx->_currtk._loc);
+			return NULL;
+		}
+
+		*id = ctx->_currtk._val._astr;
+		cc_read_token(ctx, &ctx->_currtk);
+	}
+	break;
+	case TK_MUL: /* '*' */
+	{
+		int qual = 0;
+
+		ty = cc_type_tmp(Type_Pointer, NULL);
+		cc_read_token(ctx, &ctx->_currtk);
+		while (ctx->_currtk._type == TK_CONST || ctx->_currtk._type == TK_VOLATILE || ctx->_currtk._type == TK_RESTRICT)
+		{
+			switch (ctx->_currtk._type)
+			{
+			case TK_CONST: qual |= Type_Const; break;
+			case TK_VOLATILE: qual |= Type_Volatile; break;
+			default: qual |= Type_Restrict; break;
+			}
+
+			cc_read_token(ctx, &ctx->_currtk);
+		} /* end while */
+
+		if (qual) {
+			ty->_type = cc_type_tmp(qual, NULL);
+			ty = ty->_type;
+		}
+		
+		ty->_type = cc_parser_declarator1(ctx, id, loc, params);
+	}
+	break;
+	case TK_LPAREN: /* '(' */
+	{
+		cc_read_token(ctx, &ctx->_currtk);
+		ty = cc_parser_declarator1(ctx, id, loc, params);
+		cc_parser_expect(ctx, TK_RPAREN); /* ')' */
+	}
+	break;
+	case TK_LBRACKET: /* '[' */
+		break;
+	default:
+		return ty;
+	}
+
+	BOOL bgetparams = TRUE;
+	while (ctx->_currtk._type == TK_LPAREN || ctx->_currtk._type == TK_LBRACKET) /* '(' ']' */
+	{
+		if (ctx->_currtk._type == TK_LPAREN) /* ( */
+		{
+			FArray* names = NULL;
+			if (bgetparams) {
+				names = params;
+				bgetparams = FALSE;
+			}
+
+			cc_read_token(ctx, &ctx->_currtk);
+			ty = cc_type_tmp(Type_Function, ty);
+			cc_symbol_enterscope();
+			if (!cc_parser_parameters(ctx, ty, names))
+			{
+				return NULL;
+			}
+			cc_symbol_exitscope();
+		}
+		else if (ctx->_currtk._type == TK_LBRACKET) /* '[' */
+		{
+			int cnt = 0;
+
+			cc_read_token(ctx, &ctx->_currtk);
+			if (cc_parser_is_constant(ctx->_currtk._type))
+			{
+				if (!cc_parser_intexpression(ctx, &cnt))
+				{
+					logger_output_s("error: need integer constant. at %w.\n", &ctx->_currtk._loc);
+					return NULL;
+				}
+				if (cnt <= 0)
+				{
+					logger_output_s("error: illegal array size %d. at %w.\n", cnt, &ctx->_currtk._loc);
+					return NULL;
+				}
+			}
+
+			if (!cc_parser_expect(ctx, TK_RBRACKET)) /* ']' */
+			{
+				return NULL;
+			}
+
+			ty = cc_type_tmp(Type_Array, ty);
+			ty->_size = cnt;
+		}
+	} /* end while */
+
+	return ty;
+}
+
+BOOL cc_parser_parameters(FCCContext* ctx, FCCType* fn, FArray* params)
+{
+	return FALSE;
 }
 
 FCCSymbol* cc_parser_declglobal(FCCContext* ctx, int storage, const char* id, const FLocation* loc, FCCType* ty)
@@ -509,4 +624,10 @@ FCCType* cc_parser_declenum(FCCContext* ctx)
 FCCType* cc_parser_declstruct(FCCContext* ctx, int op)
 {
 	return NULL;
+}
+
+BOOL cc_parser_intexpression(FCCContext* ctx, int* val)
+{
+	*val = 1;
+	return FALSE;
 }

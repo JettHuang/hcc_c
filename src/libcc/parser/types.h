@@ -151,6 +151,9 @@ extern FCCBuiltinTypes gBuiltinTypes;
 
 void cc_type_init(const FCCTypeMetrics* m);
 
+/* create a type for temporary use */
+FCCType* cc_type_tmp(int16_t op, FCCType* ty);
+
 /* qualify a type */
 FCCType* cc_type_qual(FCCType* ty, int16_t	op);
 
