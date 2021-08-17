@@ -62,12 +62,12 @@ BOOL cc_parser_declaration(FCCContext* ctx, FDeclCallback callback)
 	{
 		const char* id = NULL;
 		FCCType* ty = NULL;
-		FLocation loc;
+		FLocation loc = { NULL, 0, 0 };
 
 		if (gCurrentLevel == SCOPE_GLOBAL)
 		{
 			FArray params;
-			array_init(&params, 32, sizeof(const char*), CC_MM_TEMPPOOL);
+			array_init(&params, 32, sizeof(struct tagCCParam), CC_MM_TEMPPOOL);
 			ty = cc_parser_declarator(ctx, basety, &id, &loc, &params);
 			if (!ty) {
 				logger_output_s("error: parser declarator failed. at %s:%d:%d\n", ctx->_cs->_srcfilename, ctx->_cs->_line, ctx->_cs->_col);
@@ -134,6 +134,7 @@ BOOL cc_parser_declaration(FCCContext* ctx, FDeclCallback callback)
 				return FALSE;
 			}
 
+			id = NULL;
 			ty = cc_parser_declarator(ctx, basety, &id, &loc, NULL);
 		} /* end for ;; */
 	}
@@ -533,12 +534,14 @@ FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc,
 	{
 	case TK_ID:
 	{
-		if (!id) {
+		if (*id) {
 			logger_output_s("error: extraneous identifier '%k' at %w.\n", &ctx->_currtk, &ctx->_currtk._loc);
+			cc_error_occurred(ctx);
 			return NULL;
 		}
 
 		*id = ctx->_currtk._val._astr;
+		*loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 	}
 	break;
@@ -584,6 +587,8 @@ FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc,
 			cc_symbol_enterscope();
 			if (!cc_parser_parameters(ctx, ty, names))
 			{
+				logger_output_s("error: parsing parameter failed. %w\n", &ctx->_currtk);
+				cc_error_occurred(ctx);
 				cc_symbol_exitscope();
 				return NULL;
 			}
@@ -617,6 +622,8 @@ FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc,
 			cc_symbol_enterscope();
 			if (!cc_parser_parameters(ctx, ty, names))
 			{
+				logger_output_s("error: parsing parameter failed. %w\n", &ctx->_currtk);
+				cc_error_occurred(ctx);
 				cc_symbol_exitscope();
 				return NULL;
 			}
@@ -632,17 +639,20 @@ FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc,
 				if (!cc_parser_intexpression(ctx, &cnt))
 				{
 					logger_output_s("error: need integer constant. at %w.\n", &ctx->_currtk._loc);
+					cc_error_occurred(ctx);
 					return NULL;
 				}
 				if (cnt <= 0)
 				{
 					logger_output_s("error: illegal array size %d. at %w.\n", cnt, &ctx->_currtk._loc);
+					cc_error_occurred(ctx);
 					return NULL;
 				}
 			}
 
 			if (!cc_parser_expect(ctx, TK_RBRACKET)) /* ']' */
 			{
+				cc_error_occurred(ctx);
 				return NULL;
 			}
 
@@ -656,7 +666,86 @@ FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc,
 
 BOOL cc_parser_parameters(FCCContext* ctx, FCCType* fn, FArray* params)
 {
-	return FALSE;
+	FArray protos;
+	
+	array_init(&protos, 32, sizeof(FCCType*), CC_MM_TEMPPOOL);
+	if (cc_parser_is_typename(&ctx->_currtk))
+	{
+		BOOL hasvoid, hasunvoid;
+
+		hasvoid = hasunvoid = FALSE;
+		for (;;)
+		{
+			FCCParam param = { NULL, 0, { NULL, 0, 0 } };
+			FCCType* ty, *basety;
+
+			if (ctx->_currtk._type == TK_ELLIPSIS) /* ... */
+			{
+				if (!hasunvoid)
+				{
+					logger_output_s("error: illegal formal parameter '...' at %w\n", &ctx->_currtk._loc);
+					return FALSE;
+				}
+
+				array_append(&protos, &gBuiltinTypes._ellipsistype);
+				cc_read_token(ctx, &ctx->_currtk);
+				break;
+			}
+
+			basety = cc_parser_declspecifier(ctx, &param._sclass);
+			if (!basety || !(ty = cc_parser_declarator(ctx, basety, &param._name, &param._loc, NULL))) {
+				logger_output_s("error: illegal formal parameter, expect type at '%w'\n", &ctx->_currtk._loc);
+				return FALSE;
+			}
+
+			if ((hasunvoid || hasvoid) && UnQual(ty)->_op == Type_Void)
+			{
+				logger_output_s("error: illegal formal parameter, 'void' is unexpected at '%w'\n", &ctx->_currtk._loc);
+				return FALSE;
+			}
+
+			if (UnQual(ty)->_op != Type_Void) {
+				hasunvoid = TRUE;
+			}
+			else {
+				hasvoid = TRUE;
+				break;
+			}
+
+			array_append(&protos, &ty);
+			if (!cc_parser_declparam(ctx, param._sclass, param._name, &param._loc, ty))
+			{
+				return FALSE;
+			}
+
+			/* save param */
+			if (params) {
+				array_append(params, &param);
+			}
+
+			if (ctx->_currtk._type != TK_COMMA) /* ',' */
+			{
+				break;
+			}
+
+			cc_read_token(ctx, &ctx->_currtk);
+		} /* end for ;; */
+	}
+
+	/* save protos */
+	{
+		int i;
+		FCCType** p = (FCCType**)mm_alloc_area(sizeof(FCCType*) * (protos._elecount + 1), CC_MM_PERMPOOL);
+		for (i = 0; i < protos._elecount; i++)
+		{
+			p[i] = *(FCCType**)array_element(&protos, i);
+		}
+		p[i] = NULL;
+
+		fn->_u._f._protos = p;
+	}
+
+	return cc_parser_expect(ctx, TK_RPAREN); /* ')' */
 }
 
 FCCSymbol* cc_parser_declglobal(FCCContext* ctx, int storage, const char* id, const FLocation* loc, FCCType* ty)
@@ -665,6 +754,11 @@ FCCSymbol* cc_parser_declglobal(FCCContext* ctx, int storage, const char* id, co
 }
 
 FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, const FLocation* loc, FCCType* ty)
+{
+	return NULL;
+}
+
+FCCSymbol* cc_parser_declparam(FCCContext* ctx, int storage, const char* id, const FLocation* loc, FCCType* ty)
 {
 	return NULL;
 }

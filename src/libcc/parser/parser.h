@@ -18,10 +18,17 @@ typedef FCCSymbol* (*FDeclCallback)(FCCContext* ctx, int storage, const char* id
 BOOL cc_parser_program(FCCContext* ctx);
 
 /* internal apis */
+typedef struct tagCCParam {
+	const char* _name;
+	int32_t     _sclass;
+	FLocation   _loc;
+} FCCParam;
+
 
 BOOL cc_parser_declaration(FCCContext* ctx, FDeclCallback callback);
 FCCSymbol* cc_parser_declglobal(FCCContext* ctx, int storage, const char* id, const FLocation* loc, FCCType* ty);
 FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, const FLocation* loc, FCCType* ty);
+FCCSymbol* cc_parser_declparam(FCCContext* ctx, int storage, const char* id, const FLocation* loc, FCCType* ty);
 
 BOOL cc_parser_is_specifier(enum ECCToken tk);
 BOOL cc_parser_is_constant(enum ECCToken tk);
