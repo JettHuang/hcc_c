@@ -25,10 +25,11 @@ FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, con
 
 BOOL cc_parser_is_specifier(enum ECCToken tk);
 BOOL cc_parser_is_constant(enum ECCToken tk);
+BOOL cc_parser_is_typename(FCCToken *tk);
 FCCType* cc_parser_declspecifier(FCCContext* ctx, int *storage);
 
 FCCType* cc_parser_declarator(FCCContext* ctx, FCCType* basety, const char** id, FLocation* loc, FArray* params);
-FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FArray* params);
+FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FArray* params, BOOL* bgetparams);
 BOOL cc_parser_parameters(FCCContext* ctx, FCCType* fn, FArray* params);
 
 BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FCCType* ty, const FLocation* loc, FArray* params);

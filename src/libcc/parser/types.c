@@ -190,7 +190,7 @@ FCCType* cc_type_tmp(int16_t op, FCCType* ty)
 		return NULL;
 	}
 
-	tmp->_op = ty;
+	tmp->_op = op;
 	tmp->_type = ty;
 	return tmp;
 }

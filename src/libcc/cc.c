@@ -63,6 +63,7 @@ void cc_contex_init(FCCContext* ctx)
 	ctx->_cs = NULL;
 	ctx->_lookaheadtk._valid = 0;
 	ctx->_bnewline = 1;
+	ctx->_errors = 0;
 }
 
 void cc_contex_release(FCCContext* ctx)
@@ -275,4 +276,14 @@ void cc_print_token(FCCToken* tk)
 		logger_output_s("%s\n", gCCTokenMetas[tk->_type]._text);
 		break;
 	}
+}
+
+void cc_error_occurred(FCCContext* ctx)
+{
+	ctx->_errors++;
+}
+
+BOOL cc_has_errors(FCCContext* ctx)
+{
+	return ctx->_errors > 0;
 }

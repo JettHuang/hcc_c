@@ -33,6 +33,7 @@ typedef struct tagCCContext {
 		FCCToken _tk;
 	} _lookaheadtk;
 	int16_t _bnewline : 1; /* next token is in the newline */
+	int16_t _errors;
 } FCCContext;
 
 
@@ -51,5 +52,8 @@ BOOL cc_read_token(FCCContext* ctx, FCCToken* tk);
 BOOL cc_lookahead_token(FCCContext* ctx, FCCToken* tk);
 
 void cc_print_token(FCCToken* tk);
+
+void cc_error_occurred(FCCContext* ctx);
+BOOL cc_has_errors(FCCContext* ctx);
 
 #endif /* __CC_H__ */

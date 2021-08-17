@@ -159,6 +159,14 @@ BOOL cc_parser_is_constant(enum ECCToken tk)
 	return gCCTokenMetas[tk]._flags & TK_IS_CONSTEXPR;
 }
 
+BOOL cc_parser_is_typename(FCCToken* tk)
+{
+	FCCSymbol* p;
+
+	return (gCCTokenMetas[tk->_type]._flags & TK_IS_DECL_SPECIFIER)
+		|| (tk->_type == TK_ID && (p = cc_symbol_lookup(tk->_val._astr, gIdentifiers)) && p->_sclass == SC_Typedef);
+}
+
 BOOL cc_parser_expect(FCCContext* ctx, enum ECCToken tk)
 {
 	if (ctx->_currtk._type == tk)
@@ -483,12 +491,41 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 
 FCCType* cc_parser_declarator(FCCContext* ctx, FCCType* basety, const char** id, FLocation* loc, FArray* params)
 {
+	BOOL bgetparams = TRUE;
+	FCCType* ty = cc_parser_declarator1(ctx, id, loc, params, &bgetparams);
 
+	for (; ty; ty = ty->_type)
+	{
+		switch (ty->_op)
+		{
+		case Type_Array:
+			basety = cc_type_newarray(basety, ty->_size, 0);
+			break;
+		case Type_Function:
+			basety = cc_type_func(basety, ty->_u._f._protos);
+			break;
+		case Type_Pointer:
+			basety = cc_type_ptr(basety);
+			break;
+		default:
+			if (IsQual(ty)) {
+				basety = cc_type_qual(basety, ty->_op);
+			}
+			else {
+				assert(0);
+			}
+			break;
+		}
+	} /* end for */
 
-	return NULL;
+	if (basety->_size > 32767) {
+		logger_output_s("warning: more than 32767 bytes in `%t'\n", basety);
+	}
+	
+	return basety;
 }
 
-FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FArray* params)
+FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FArray* params, BOOL* bgetparams)
 {
 	FCCType* ty = NULL;
 
@@ -528,14 +565,35 @@ FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc,
 			ty = ty->_type;
 		}
 		
-		ty->_type = cc_parser_declarator1(ctx, id, loc, params);
+		ty->_type = cc_parser_declarator1(ctx, id, loc, params, bgetparams);
 	}
 	break;
 	case TK_LPAREN: /* '(' */
 	{
 		cc_read_token(ctx, &ctx->_currtk);
-		ty = cc_parser_declarator1(ctx, id, loc, params);
-		cc_parser_expect(ctx, TK_RPAREN); /* ')' */
+		if (ctx->_currtk._type == TK_RPAREN || cc_parser_is_typename(&ctx->_currtk))  /* ie. int (int),  int () */
+		{
+			FArray* names = NULL;
+			if (*bgetparams) {
+				names = params;
+				*bgetparams = FALSE;
+			}
+
+			cc_read_token(ctx, &ctx->_currtk);
+			ty = cc_type_tmp(Type_Function, ty);
+			cc_symbol_enterscope();
+			if (!cc_parser_parameters(ctx, ty, names))
+			{
+				cc_symbol_exitscope();
+				return NULL;
+			}
+			cc_symbol_exitscope();
+		}
+		else 
+		{
+			ty = cc_parser_declarator1(ctx, id, loc, params, bgetparams);
+			cc_parser_expect(ctx, TK_RPAREN); /* ')' */
+		}
 	}
 	break;
 	case TK_LBRACKET: /* '[' */
@@ -544,15 +602,14 @@ FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc,
 		return ty;
 	}
 
-	BOOL bgetparams = TRUE;
 	while (ctx->_currtk._type == TK_LPAREN || ctx->_currtk._type == TK_LBRACKET) /* '(' ']' */
 	{
 		if (ctx->_currtk._type == TK_LPAREN) /* ( */
 		{
 			FArray* names = NULL;
-			if (bgetparams) {
+			if (*bgetparams) {
 				names = params;
-				bgetparams = FALSE;
+				*bgetparams = FALSE;
 			}
 
 			cc_read_token(ctx, &ctx->_currtk);
@@ -560,6 +617,7 @@ FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc,
 			cc_symbol_enterscope();
 			if (!cc_parser_parameters(ctx, ty, names))
 			{
+				cc_symbol_exitscope();
 				return NULL;
 			}
 			cc_symbol_exitscope();
