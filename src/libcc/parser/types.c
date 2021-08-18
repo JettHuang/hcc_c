@@ -282,8 +282,9 @@ FCCType* cc_type_newstruct(int op, const char* name, const FLocation* loc, int l
 			if (p->_type->_op == op && !p->_defined) {
 				return p->_type;
 			}
-
-			logger_output_s("redefinition of type '%s', at %w, previous is at %w \n", name, loc, &p->_loc);
+		
+			logger_output_s("error: redefinition of type '%s', at %w, previous is at %w \n", name, loc, &p->_loc);
+			return NULL;
 		}
 	}
 

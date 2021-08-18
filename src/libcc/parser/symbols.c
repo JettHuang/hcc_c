@@ -109,7 +109,7 @@ void cc_symbol_exitscope()
 		gIdentifiers = gIdentifiers->_previous;
 	}
 
-	assert(gCurrentLevel >= SCOPE_GLOBAL);
+	assert(gCurrentLevel > SCOPE_GLOBAL);
 	--gCurrentLevel;
 }
 

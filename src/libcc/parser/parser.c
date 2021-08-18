@@ -67,14 +67,14 @@ BOOL cc_parser_declaration(FCCContext* ctx, FDeclCallback callback)
 		if (gCurrentLevel == SCOPE_GLOBAL)
 		{
 			FArray params;
-			array_init(&params, 32, sizeof(struct tagCCParam), CC_MM_TEMPPOOL);
-			ty = cc_parser_declarator(ctx, basety, &id, &loc, &params);
-			if (!ty) {
+			array_init(&params, 32, sizeof(FCCSymbol*), CC_MM_TEMPPOOL);
+			if (!cc_parser_declarator(ctx, basety, &id, &loc, &params, &ty)) {
 				logger_output_s("error: parser declarator failed. at %s:%d:%d\n", ctx->_cs->_srcfilename, ctx->_cs->_line, ctx->_cs->_col);
 				return FALSE;
 			}
 
-			if (ctx->_currtk._type == TK_LBRACE) /* { check if a function definition */
+			
+			if (IsFunction(ty) && ctx->_currtk._type == TK_LBRACE) /* '{' check if a function definition */
 			{
 				if (storage == SC_Typedef)
 				{
@@ -84,11 +84,15 @@ BOOL cc_parser_declaration(FCCContext* ctx, FDeclCallback callback)
 
 				return cc_parser_funcdefinition(ctx, storage, id, ty, &loc, &params);
 			}
+
+			if (gCurrentLevel != SCOPE_GLOBAL) {
+				cc_symbol_exitscope();
+			}
+			assert(gCurrentLevel == SCOPE_GLOBAL);
 		}
 		else
 		{
-			ty = cc_parser_declarator(ctx, basety, &id, &loc, NULL);
-			if (!ty) {
+			if (!cc_parser_declarator(ctx, basety, &id, &loc, NULL, &ty)) {
 				logger_output_s("error: parser declarator failed. at %s:%d:%d\n", ctx->_cs->_srcfilename, ctx->_cs->_line, ctx->_cs->_col);
 				return FALSE;
 			}
@@ -135,7 +139,11 @@ BOOL cc_parser_declaration(FCCContext* ctx, FDeclCallback callback)
 			}
 
 			id = NULL;
-			ty = cc_parser_declarator(ctx, basety, &id, &loc, NULL);
+			if (!cc_parser_declarator(ctx, basety, &id, &loc, NULL, &ty))
+			{
+				logger_output_s("error: parser declarator failed. at %s:%d:%d\n", ctx->_cs->_srcfilename, ctx->_cs->_line, ctx->_cs->_col);
+				return FALSE;
+			}
 		} /* end for ;; */
 	}
 	else
@@ -143,7 +151,7 @@ BOOL cc_parser_declaration(FCCContext* ctx, FDeclCallback callback)
 		BOOL bStructDecl = IsStruct(basety) && !cc_symbol_isgenlabel(UnQual(basety)->_u._symbol->_name);
 		if (!IsEnum(basety) && !bStructDecl)
 		{
-			logger_output_s("empty declaration. at %s:%d:%d\n", ctx->_cs->_srcfilename, ctx->_cs->_line, ctx->_cs->_col);
+			logger_output_s("warning: empty declaration. at %s:%d:%d\n", ctx->_cs->_srcfilename, ctx->_cs->_line, ctx->_cs->_col);
 		}
 	}
 
@@ -490,11 +498,15 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 	return ty;
 }
 
-FCCType* cc_parser_declarator(FCCContext* ctx, FCCType* basety, const char** id, FLocation* loc, FArray* params)
+BOOL cc_parser_declarator(FCCContext* ctx, FCCType* basety, const char** id, FLocation* loc, FArray* params, FCCType** outty)
 {
 	BOOL bgetparams = TRUE;
-	FCCType* ty = cc_parser_declarator1(ctx, id, loc, params, &bgetparams);
+	FCCType* ty = NULL;
 
+	if (!cc_parser_declarator1(ctx, id, loc, params, &bgetparams, &ty))
+	{
+		return FALSE;
+	}
 	for (; ty; ty = ty->_type)
 	{
 		switch (ty->_op)
@@ -523,10 +535,11 @@ FCCType* cc_parser_declarator(FCCContext* ctx, FCCType* basety, const char** id,
 		logger_output_s("warning: more than 32767 bytes in `%t'\n", basety);
 	}
 	
-	return basety;
+	*outty = basety;
+	return TRUE;
 }
 
-FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FArray* params, BOOL* bgetparams)
+BOOL cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FArray* params, BOOL* bgetparams, FCCType** outty)
 {
 	FCCType* ty = NULL;
 
@@ -536,8 +549,7 @@ FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc,
 	{
 		if (*id) {
 			logger_output_s("error: extraneous identifier '%k' at %w.\n", &ctx->_currtk, &ctx->_currtk._loc);
-			cc_error_occurred(ctx);
-			return NULL;
+			return FALSE;
 		}
 
 		*id = ctx->_currtk._val._astr;
@@ -568,7 +580,10 @@ FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc,
 			ty = ty->_type;
 		}
 		
-		ty->_type = cc_parser_declarator1(ctx, id, loc, params, bgetparams);
+		if (!cc_parser_declarator1(ctx, id, loc, params, bgetparams, &ty->_type))
+		{
+			return FALSE;
+		}
 	}
 	break;
 	case TK_LPAREN: /* '(' */
@@ -588,15 +603,19 @@ FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc,
 			if (!cc_parser_parameters(ctx, ty, names))
 			{
 				logger_output_s("error: parsing parameter failed. %w\n", &ctx->_currtk);
-				cc_error_occurred(ctx);
-				cc_symbol_exitscope();
-				return NULL;
+				return FALSE;
 			}
-			cc_symbol_exitscope();
+			if (gCurrentLevel > SCOPE_PARAM)
+			{
+				cc_symbol_exitscope(); 
+			}
 		}
 		else 
 		{
-			ty = cc_parser_declarator1(ctx, id, loc, params, bgetparams);
+			if (!cc_parser_declarator1(ctx, id, loc, params, bgetparams, &ty))
+			{
+				return FALSE;
+			}
 			cc_parser_expect(ctx, TK_RPAREN); /* ')' */
 		}
 	}
@@ -604,7 +623,8 @@ FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc,
 	case TK_LBRACKET: /* '[' */
 		break;
 	default:
-		return ty;
+		*outty = ty;
+		return TRUE;
 	}
 
 	while (ctx->_currtk._type == TK_LPAREN || ctx->_currtk._type == TK_LBRACKET) /* '(' ']' */
@@ -623,11 +643,12 @@ FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc,
 			if (!cc_parser_parameters(ctx, ty, names))
 			{
 				logger_output_s("error: parsing parameter failed. %w\n", &ctx->_currtk);
-				cc_error_occurred(ctx);
-				cc_symbol_exitscope();
-				return NULL;
+				return FALSE;
 			}
-			cc_symbol_exitscope();
+			if (gCurrentLevel > SCOPE_PARAM)
+			{
+				cc_symbol_exitscope();
+			}
 		}
 		else if (ctx->_currtk._type == TK_LBRACKET) /* '[' */
 		{
@@ -639,21 +660,18 @@ FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc,
 				if (!cc_parser_intexpression(ctx, &cnt))
 				{
 					logger_output_s("error: need integer constant. at %w.\n", &ctx->_currtk._loc);
-					cc_error_occurred(ctx);
-					return NULL;
+					return FALSE;
 				}
 				if (cnt <= 0)
 				{
 					logger_output_s("error: illegal array size %d. at %w.\n", cnt, &ctx->_currtk._loc);
-					cc_error_occurred(ctx);
-					return NULL;
+					return FALSE;
 				}
 			}
 
 			if (!cc_parser_expect(ctx, TK_RBRACKET)) /* ']' */
 			{
-				cc_error_occurred(ctx);
-				return NULL;
+				return FALSE;
 			}
 
 			ty = cc_type_tmp(Type_Array, ty);
@@ -661,14 +679,15 @@ FCCType* cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc,
 		}
 	} /* end while */
 
-	return ty;
+	*outty = ty;
+	return TRUE;
 }
 
 BOOL cc_parser_parameters(FCCContext* ctx, FCCType* fn, FArray* params)
 {
 	FArray protos;
 	
-	array_init(&protos, 32, sizeof(FCCType*), CC_MM_TEMPPOOL);
+	array_init(&protos, 32, sizeof(FCCType*), CC_MM_PERMPOOL);
 	if (cc_parser_is_typename(&ctx->_currtk))
 	{
 		BOOL hasvoid, hasunvoid;
@@ -676,8 +695,13 @@ BOOL cc_parser_parameters(FCCContext* ctx, FCCType* fn, FArray* params)
 		hasvoid = hasunvoid = FALSE;
 		for (;;)
 		{
-			FCCParam param = { NULL, 0, { NULL, 0, 0 } };
-			FCCType* ty, *basety;
+			FCCType* ty, * basety;
+			FCCSymbol* p;
+
+			const char* paramname = NULL;
+			int storage = 0;
+			FLocation loc = { NULL, 0, 0 };
+			
 
 			if (ctx->_currtk._type == TK_ELLIPSIS) /* ... */
 			{
@@ -692,8 +716,8 @@ BOOL cc_parser_parameters(FCCContext* ctx, FCCType* fn, FArray* params)
 				break;
 			}
 
-			basety = cc_parser_declspecifier(ctx, &param._sclass);
-			if (!basety || !(ty = cc_parser_declarator(ctx, basety, &param._name, &param._loc, NULL))) {
+			basety = cc_parser_declspecifier(ctx, &storage);
+			if (!basety || !cc_parser_declarator(ctx, basety, &paramname, &loc, NULL, &ty)) {
 				logger_output_s("error: illegal formal parameter, expect type at '%w'\n", &ctx->_currtk._loc);
 				return FALSE;
 			}
@@ -713,14 +737,14 @@ BOOL cc_parser_parameters(FCCContext* ctx, FCCType* fn, FArray* params)
 			}
 
 			array_append(&protos, &ty);
-			if (!cc_parser_declparam(ctx, param._sclass, param._name, &param._loc, ty))
+			if (!(p = cc_parser_declparam(ctx, storage, paramname, &loc, ty)))
 			{
 				return FALSE;
 			}
 
 			/* save param */
 			if (params) {
-				array_append(params, &param);
+				array_append(params, &p);
 			}
 
 			if (ctx->_currtk._type != TK_COMMA) /* ',' */
@@ -734,15 +758,10 @@ BOOL cc_parser_parameters(FCCContext* ctx, FCCType* fn, FArray* params)
 
 	/* save protos */
 	{
-		int i;
-		FCCType** p = (FCCType**)mm_alloc_area(sizeof(FCCType*) * (protos._elecount + 1), CC_MM_PERMPOOL);
-		for (i = 0; i < protos._elecount; i++)
-		{
-			p[i] = *(FCCType**)array_element(&protos, i);
-		}
-		p[i] = NULL;
+		FCCType* ty = NULL;
 
-		fn->_u._f._protos = p;
+		array_append(&protos, &ty); /* append end null */
+		fn->_u._f._protos = (FCCType**)protos._data;
 	}
 
 	return cc_parser_expect(ctx, TK_RPAREN); /* ')' */
@@ -770,7 +789,118 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 
 FCCType* cc_parser_declenum(FCCContext* ctx)
 {
-	return NULL;
+	const char* tag = NULL;
+	FCCType* ty = NULL;
+	FCCSymbol* p = NULL;
+	FLocation loc = { NULL, 0, 0 };
+
+	cc_read_token(ctx, &ctx->_currtk);
+	if (ctx->_currtk._type == TK_ID)
+	{
+		tag = ctx->_currtk._val._astr;
+		cc_read_token(ctx, &ctx->_currtk);
+	}
+	loc = ctx->_currtk._loc;
+
+	if (ctx->_currtk._type == TK_LBRACE) /* '{' */
+	{
+		FArray enumerators;
+		int ek = -1;
+
+		ty = cc_type_newstruct(Type_Enum, tag, &loc, gCurrentLevel);
+		if (!ty) {
+			return NULL;
+		}
+
+		cc_read_token(ctx, &ctx->_currtk);
+		if (ctx->_currtk._type != TK_ID)
+		{
+			logger_output_s("error: expecting an enumerator identifier. at %w\n", &ctx->_currtk._loc);
+			return NULL;
+		}
+
+		array_init(&enumerators, 64, sizeof(FCCSymbol*), CC_MM_PERMPOOL);
+		while (ctx->_currtk._type == TK_ID)
+		{
+			const char* id = ctx->_currtk._val._astr;
+			
+			p = cc_symbol_lookup(id, gIdentifiers);
+			if (p && p->_scope == gCurrentLevel) {
+				logger_output_s("error: redeclaration of '%s' previously declared at %w\n", id, &p->_loc);
+				return NULL;
+			}
+			loc = ctx->_currtk._loc;
+
+			cc_read_token(ctx, &ctx->_currtk);
+			if (ctx->_currtk._type == TK_ASSIGN) /* '=' */
+			{
+				cc_read_token(ctx, &ctx->_currtk);
+				if (!cc_parser_intexpression(ctx, &ek))
+				{
+					return FALSE;
+				}
+			}
+			else
+			{
+				if (ek == gBuiltinTypes._sinttype->_u._symbol->_u._limits._max._int) {
+					logger_output_s("error: overflow in value for enumeration constant '%s' at %w\n", id, &loc);
+					return NULL;
+				}
+
+				ek++;
+			}
+
+			p = cc_symbol_install(id, &gIdentifiers, gCurrentLevel, gCurrentLevel <= SCOPE_GLOBAL ? CC_MM_PERMPOOL : CC_MM_TEMPPOOL);
+			p->_loc = loc;
+			p->_type = ty;
+			p->_sclass = SC_Enum;
+			p->_u._value._int = ek;
+			array_append(&enumerators, &p);
+			
+			if (ctx->_currtk._type != TK_COMMA) /* ',' */
+			{
+				break;
+			}
+
+			cc_read_token(ctx, &ctx->_currtk);
+		} /* end while */
+
+		if (!cc_parser_expect(ctx, TK_LBRACE)) /* '}' */
+		{
+			return NULL;
+		}
+
+		p = NULL;
+		array_append(&enumerators, &p); /* append end null */
+
+		ty->_type = gBuiltinTypes._sinttype;
+		ty->_size = ty->_type->_size;
+		ty->_align = ty->_type->_align;
+		ty->_u._symbol->_u._enumids = (FCCSymbol**)enumerators._data;
+		ty->_u._symbol->_defined = 1;
+	}
+	else if ((p = cc_symbol_lookup(tag, gTypes)) != NULL && p->_type->_op == Type_Enum)
+	{
+		ty = p->_type;
+		if (ctx->_currtk._type == TK_SEMICOLON) /* ';' */
+		{
+			logger_output_s("warning: empty declaration '%s' at %w\n", tag, &loc);
+		}
+	}
+	else 
+	{
+		logger_output_s("warning: unknown enumeration '%s' at %w\n", tag, &loc);
+		ty = cc_type_newstruct(Type_Enum, tag, &loc, gCurrentLevel);
+		if (!ty) {
+			return NULL;
+		}
+
+		ty->_type = gBuiltinTypes._sinttype;
+		ty->_size = ty->_type->_size;
+		ty->_align = ty->_type->_align;
+	}
+
+	return ty;
 }
 
 FCCType* cc_parser_declstruct(FCCContext* ctx, int op)
