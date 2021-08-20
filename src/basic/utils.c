@@ -52,6 +52,11 @@ const char* util_itoa(int i)
 	return itoa(i, str, 0);
 }
 
+int util_roundup(int val, int align)
+{
+	return (val + align - 1) & (~(align - 1));
+}
+
 const char* util_convert_abs_pathname(const char* pathname)
 {
 	if (util_is_relative_pathname(pathname))

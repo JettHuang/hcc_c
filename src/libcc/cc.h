@@ -34,6 +34,8 @@ typedef struct tagCCContext {
 	} _lookaheadtk;
 	int16_t _bnewline : 1; /* next token is in the newline */
 	int16_t _errors;
+
+	struct tagBackend* _backend;
 } FCCContext;
 
 

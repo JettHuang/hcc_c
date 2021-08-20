@@ -58,6 +58,8 @@ const char* util_make_pathname(const char* path, const char* filename);
 
 /* integer to string */
 const char* util_itoa(int i);
+/* round up (align = 2^n) */
+int util_roundup(int val, int align);
 
 typedef struct tagArray
 {

@@ -6,6 +6,7 @@
 #include "lexer/token.h"
 #include "parser.h"
 #include "logger.h"
+#include "generator/gen.h"
 
 
 BOOL cc_parser_program(FCCContext* ctx)
@@ -865,7 +866,7 @@ FCCType* cc_parser_declenum(FCCContext* ctx)
 			cc_read_token(ctx, &ctx->_currtk);
 		} /* end while */
 
-		if (!cc_parser_expect(ctx, TK_LBRACE)) /* '}' */
+		if (!cc_parser_expect(ctx, TK_RBRACE)) /* '}' */
 		{
 			return NULL;
 		}
@@ -905,7 +906,309 @@ FCCType* cc_parser_declenum(FCCContext* ctx)
 
 FCCType* cc_parser_declstruct(FCCContext* ctx, int op)
 {
-	return NULL;
+	const char* tag = NULL;
+	FCCType* ty = NULL;
+	FCCSymbol* p = NULL;
+	FLocation loc = { NULL, 0, 0 };
+
+	cc_read_token(ctx, &ctx->_currtk);
+	if (ctx->_currtk._type == TK_ID)
+	{
+		tag = ctx->_currtk._val._astr;
+		cc_read_token(ctx, &ctx->_currtk);
+	}
+	loc = ctx->_currtk._loc;
+
+	if (ctx->_currtk._type == TK_LBRACE) /* '{' */
+	{
+		ty = cc_type_newstruct(op, tag, &loc, gCurrentLevel);
+		if (!ty) {
+			return NULL;
+		}
+		ty->_u._symbol->_loc = loc;
+		ty->_u._symbol->_defined = 1;
+
+		cc_read_token(ctx, &ctx->_currtk);
+		if (cc_parser_is_typename(&ctx->_currtk))
+		{
+			if (!cc_parser_structfields(ctx, ty))
+			{
+				return NULL;
+			}
+		}
+		else if (ctx->_currtk._type == TK_RBRACE) /* '}' */
+		{
+			logger_output_s("error: C requires that a struct or union have at least one member. at %w\n", &ctx->_currtk._loc);
+			return NULL;
+		}
+		else {
+			logger_output_s("error: invalid field declarations. at %w\n", &ctx->_currtk._loc);
+			return NULL;
+		}
+
+		if (!cc_parser_expect(ctx, TK_RBRACE)) /* '}' */
+		{
+			return NULL;
+		}
+	}
+	else if ((p = cc_symbol_lookup(tag, gTypes)) != NULL && p->_type->_op == op)
+	{
+		ty = p->_type;
+		if (ctx->_currtk._type == TK_SEMICOLON && p->_scope < gCurrentLevel) /* ';' previous declaration */
+		{
+			if (!(ty = cc_type_newstruct(op, tag, &loc, gCurrentLevel)))
+			{
+				return NULL;
+			}
+		}
+	}
+	else
+	{
+		if (!tag) {
+			logger_output_s("error: missing struct or union tag. at %w\n", &ctx->_currtk._loc);
+			return NULL;
+		}
+
+		ty = cc_type_newstruct(Type_Enum, tag, &loc, gCurrentLevel);
+		if (!ty) {
+			return NULL;
+		}
+	}
+
+	return ty;
+}
+
+static const char* cc_sclass_displayname(int sclass)
+{
+	const char* name;
+	
+	switch (sclass)
+	{
+	case SC_Auto: name = "auto"; break;
+	case SC_Register: name = "register"; break;
+	case SC_Static: name = "static"; break;
+	case SC_External: name = "external"; break;
+	case SC_Typedef: name = "typedef"; break;
+	case SC_Enum: name = "enum"; break;
+	default: name = "unknown"; break;
+	}
+
+	return name;
+}
+
+BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
+{
+	FCCField *field, **where;
+	int cnt = 0;
+
+	where = &(sty->_u._symbol->_u._s._fields);
+	while (cc_parser_is_typename(&ctx->_currtk))
+	{
+		int storage = SC_Unknown;
+		FCCType *basety, *ty;
+		const char* id;
+		FLocation loc;
+
+		basety = cc_parser_declspecifier(ctx, &storage);
+		if (!basety) {
+			return FALSE;
+		}
+
+		if (storage != SC_Unknown) {
+			logger_output_s("error: '%s' is not allowed. at %w.\n", cc_sclass_displayname(storage), &ctx->_currtk._loc);
+			return FALSE;
+		}
+
+		for (;;)
+		{
+			id = NULL;
+			if (!cc_parser_declarator(ctx, basety, &id, &loc, NULL, &ty))
+			{
+				return FALSE;
+			}
+
+			field = cc_type_newfield(id, &loc, sty, ty);
+			if (!field) {
+				return FALSE;
+			}
+
+			if (ctx->_currtk._type == TK_COLON) /* ':' */
+			{
+				int bitsize;
+
+				if (UnQual(ty)->_op != Type_SInteger && UnQual(ty)->_op != Type_UInteger && UnQual(ty)->_op != Type_Char)
+				{
+					logger_output_s("error: illegal bit-field type, expecting integer, at %w.\n", &ctx->_currtk._loc);
+					return FALSE;
+				}
+
+				cc_read_token(ctx, &ctx->_currtk);
+				if (!cc_parser_intexpression(ctx, &bitsize))
+				{
+					return FALSE;
+				}
+				field->_bitsize = (int16_t)bitsize;
+				if (field->_bitsize > field->_type->_size * 8 || field->_bitsize <= 0)
+				{
+					logger_output_s("error: illegal bit-field size %d, at %w.\n", (int)field->_bitsize, &ctx->_currtk._loc);
+					return FALSE;
+				}
+				field->_lsb = 1;
+			}
+			else
+			{
+				if (!id) {
+					logger_output_s("warning: expecting a identifier at %w.\n", &ctx->_currtk._loc);
+				}
+				if (IsFunction(ty)) {
+					logger_output_s("error: illegal field type %t at %w.\n", ty, &ctx->_currtk._loc);
+					return FALSE;
+				}
+				else if (field->_type->_size == 0)
+				{
+					logger_output_s("error: undefined size for '%s' at %w.\n", field->_name, &field->_loc);
+					return FALSE;
+				}
+			}
+
+			if (IsConst(field->_type)) {
+				sty->_u._symbol->_u._s._cfields = 1;
+			}
+			if (IsVolatile(field->_type)) {
+				sty->_u._symbol->_u._s._vfields = 1;
+			}
+
+			cnt++;
+			*where = field;
+			where = &field->_next;
+			if (ctx->_currtk._type != TK_COMMA) /* ',' */
+			{
+				break;
+			}
+
+			cc_read_token(ctx, &ctx->_currtk);
+		} /* end for */
+
+		if (!cc_parser_expect(ctx, TK_SEMICOLON)) /* ';' */
+		{
+			return FALSE;
+		}
+	} /* end while */
+
+	/* calculate field offset & size */
+	{
+		int bitsmax, bitsused, offset;
+
+		bitsmax = bitsused = offset = 0;
+		field = sty->_u._symbol->_u._s._fields;
+		for (; field; field = field->_next)
+		{
+			int align = field->_type->_align ? field->_type->_align : 1; /* align bytes */
+
+			if (align > sty->_align) {
+				sty->_align = align;
+			}
+
+			if (IsUnion(sty)) {
+				bitsmax = bitsused = offset = 0;
+			}
+
+			if (field->_lsb == 0) /* it is not bitfield */
+			{
+				offset = util_roundup(offset + (bitsmax >> 3), align);
+				field->_offset = offset;
+				offset += field->_type->_size; /* update for next field offset */
+				bitsmax = 0;
+			}
+			else
+			{
+				int suboffset, subbitsused;
+
+				suboffset = 0;
+				if (bitsmax != 0) /* check reuse previous bit-field's remained bits */
+				{
+					if (util_roundup(offset, align) != offset)
+					{
+						offset = suboffset = util_roundup(offset + (bitsmax >> 3), align);
+						bitsmax = field->_type->_size * 8;
+						bitsused = 0;
+					}
+					else
+					{
+						int newbitsmax = bitsmax;
+						if (bitsmax < field->_type->_size * 8)
+						{
+							newbitsmax = field->_type->_size * 8;
+						}
+						if ((newbitsmax - bitsused) >= field->_bitsize)
+						{
+							int crossbytes;
+
+							suboffset = offset;
+							/* check across bytes */
+							crossbytes = ((bitsused + field->_bitsize - 1) >> 3) - (bitsused >> 3) + 1;
+							if (crossbytes > field->_type->_size)
+							{
+								bitsused = util_roundup(bitsused, 8);
+								suboffset = offset + (bitsused >> 3);
+							}
+							/* check align */
+							if (((bitsused >> 3) % field->_type->_align) != 0)
+							{
+								bitsused = util_roundup(bitsused, field->_type->_align * 8);
+								suboffset = offset + (bitsused >> 3);
+							}
+
+							/* check space again */
+							if ((newbitsmax - bitsused) >= field->_bitsize)
+							{
+								bitsmax = newbitsmax;
+							}
+							else
+							{
+								offset = suboffset = util_roundup(offset + (bitsmax >> 3), align);
+								bitsmax = field->_type->_size * 8;
+								bitsused = 0;
+							}
+						}
+						else
+						{
+							offset = suboffset = util_roundup(offset + (bitsmax >> 3), align);
+							bitsmax = field->_type->_size * 8;
+							bitsused = 0;
+						}
+					}
+				}
+				else
+				{
+					offset = suboffset = util_roundup(offset, align);
+					bitsmax = field->_type->_size * 8;
+					bitsused = 0;
+				}
+
+				subbitsused = (bitsused - (suboffset - offset) * 8);
+				field->_offset = suboffset;
+				if (ctx->_backend->_is_little_ending)
+				{
+					field->_lsb = subbitsused + 1; /* lsb is one more than real index */
+				}
+				else
+				{
+					field->_lsb = (field->_type->_size - subbitsused - field->_bitsize) + 1;
+				}
+
+				bitsused += field->_bitsize;
+			}
+
+			/* expand structure */
+			if (sty->_size < (offset + (bitsmax >> 3))) {
+				sty->_size = offset + (bitsmax >> 3);
+			}
+		} /* end for */
+	}
+
+	sty->_size = util_roundup(sty->_size, sty->_align);
+	return TRUE;
 }
 
 BOOL cc_parser_intexpression(FCCContext* ctx, int* val)

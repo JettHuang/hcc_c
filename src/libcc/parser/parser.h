@@ -36,10 +36,10 @@ BOOL cc_parser_parameters(FCCContext* ctx, FCCType* fn, FArray* params);
 BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FCCType* ty, const FLocation* loc, FArray* params);
 FCCType* cc_parser_declenum(FCCContext* ctx);
 FCCType* cc_parser_declstruct(FCCContext* ctx, int op);
+BOOL cc_parser_structfields(FCCContext* ctx, FCCType* ty);
 
 BOOL cc_parser_expect(FCCContext* ctx, enum ECCToken tk);
 
 BOOL cc_parser_intexpression(FCCContext* ctx, int* val);
-
 
 #endif /* __CC_PARSER_H__ */
