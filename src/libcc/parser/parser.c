@@ -9,6 +9,8 @@
 #include "generator/gen.h"
 
 
+static const char* cc_sclass_displayname(int sclass);
+
 BOOL cc_parser_program(FCCContext* ctx)
 {
 	gCurrentLevel = SCOPE_GLOBAL;
@@ -770,6 +772,20 @@ BOOL cc_parser_parameters(FCCContext* ctx, FCCType* fn, FArray* params)
 
 FCCSymbol* cc_parser_declglobal(FCCContext* ctx, int storage, const char* id, const FLocation* loc, FCCType* ty)
 {
+	FCCSymbol* p;
+
+	if (storage == 0) {
+		storage = SC_Auto;
+	}
+	else if (storage != SC_External && storage != SC_Static) {
+		logger_output_s("error: invalid storage class '%s', at %w\n", cc_sclass_displayname(storage), loc);
+		return NULL;
+	}
+
+	p = cc_symbol_lookup(id, gIdentifiers);
+	if (p )
+	{ }
+
 	return NULL;
 }
 
@@ -785,6 +801,14 @@ FCCSymbol* cc_parser_declparam(FCCContext* ctx, int storage, const char* id, con
 
 BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FCCType* ty, const FLocation* loc, FArray* params)
 {
+	// TODO: 
+
+	cc_parser_expect(ctx, TK_LBRACE);
+	cc_parser_expect(ctx, TK_RBRACE);
+	
+	/* exit param scope */
+	cc_symbol_exitscope();
+	assert(gCurrentLevel == SCOPE_GLOBAL);
 	return FALSE;
 }
 

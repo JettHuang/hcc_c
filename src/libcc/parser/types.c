@@ -30,7 +30,7 @@ static FCCType* cc_type_new(int16_t op, FCCType* ty, int32_t size, int16_t align
 	{
 		for (tn = stypetable[h]; tn; tn = tn->_link)
 		{
-			if (tn->_type._op = op && tn->_type._type == ty
+			if (tn->_type._op == op && tn->_type._type == ty
 				&& tn->_type._size == size && tn->_type._align == align
 				&& tn->_type._u._symbol == sym)
 			{

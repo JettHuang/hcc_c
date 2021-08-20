@@ -3,25 +3,14 @@
    1. parsing types
 */
 
-#define STR(x, y) #x #y
-#define CONCAT(x, y) AB x ## y
 
-#define FUNC(x, y)  x ## y BB
-
-const char* str = STR(, );
-int a CONCAT(FUNC(AA, ), DD);
-
-
-"Hello World!!"
-
-/*
 int a, b, c;
 const int kId;
 
 int display(const char* str);
 
 int (*ptrfunc)(const char* str);
-*/
+
 
 const int* array[100];
 int** grid[10][5];

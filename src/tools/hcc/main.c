@@ -14,9 +14,14 @@
 #define OPTPARSE_API static
 #include "optparse.h"
 
+int A;
+int A;
+
 
 int main(int argc, char* argv[])
 {
+	A = 100;
+
 	const char* arg, *localename;
 	int option, bsuccess;
 	struct optparse options;
