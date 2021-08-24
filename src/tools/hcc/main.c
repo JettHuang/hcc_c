@@ -17,6 +17,15 @@
 int A;
 int A;
 
+int grids[1];
+
+int sayHello()
+{
+	extern int A;
+
+	grids[0] = 100;
+	return 0;
+}
 
 int main(int argc, char* argv[])
 {

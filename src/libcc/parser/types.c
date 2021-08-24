@@ -24,7 +24,7 @@ static int sMaxlevel = 0; /* max level in the type table */
 static FCCType* cc_type_new(int16_t op, FCCType* ty, int32_t size, int16_t align, FCCSymbol* sym)
 {
 	struct tagTypeEntry* tn;
-	int h = op ^ ((int)ty >> 3);
+	int h = (op ^ ((int)ty >> 3)) & (ELEMENTSCNT(stypetable) - 1);
 
 	if (op != Type_Function && (op != Type_Array || size > 0))
 	{
@@ -325,7 +325,10 @@ FCCField* cc_type_newfield(const char* name, const FLocation* loc, FCCType* sty,
 	p->_next = NULL;
 	p->_type = fty;
 	p->_loc = *loc;
-	
+	p->_offset = 0;
+	p->_bitsize = 0;
+	p->_lsb = 0;
+
 	return p;
 }
 
@@ -507,4 +510,42 @@ void cc_type_remove(int level)
 			}
 		}
 	} /* end for */
+}
+
+FCCType* cc_type_compose(FCCType* ty1, FCCType* ty2)
+{
+	if (ty1 == ty2) {
+		return ty1;
+	}
+
+	assert(ty1->_op == ty2->_op);
+	switch (ty1->_op)
+	{
+	case Type_Pointer:
+		return cc_type_ptr(cc_type_compose(ty1->_type, ty2->_type));
+	case Type_Const:
+	case Type_Volatile:
+	case (Type_Const | Type_Volatile):
+		return cc_type_qual(cc_type_compose(ty1->_type, ty2->_type), ty1->_op);
+	case Type_Array:
+	{
+		FCCType* ty = cc_type_compose(ty1->_type, ty2->_type);
+		if (ty1->_size && ((ty1->_type->_size && ty2->_size == 0) || ty1->_size == ty2->_size))
+		{
+			return cc_type_newarray(ty, ty1->_size / ty1->_type->_size, ty1->_align);
+		}
+		if (ty2->_size && ty2->_type->_size && ty1->_size == 0)
+		{
+			return cc_type_newarray(ty, ty2->_size / ty2->_type->_size, ty2->_align);
+		}
+		return cc_type_newarray(ty, 0, 0);
+	}
+	case Type_Function:
+		return ty1;
+	default:
+		break;
+	}
+
+	assert(0);
+	return NULL;
 }

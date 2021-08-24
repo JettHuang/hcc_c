@@ -11,6 +11,7 @@
 #include "parser/types.h"
 #include "parser/symbols.h"
 #include "parser/parser.h"
+#include "generator/gen.h"
 
 #include <string.h>
 
@@ -42,6 +43,10 @@ static FCCTypeMetrics defaultmetrics =
 	{ 0, 4 }, /* _structmetric */
 };
 
+static FCCBackend defaultbackend = {
+	1
+};
+
 void cc_init()
 {
 	logger_set(cc_logger_outc, cc_logger_outs);
@@ -64,6 +69,7 @@ void cc_contex_init(FCCContext* ctx)
 	ctx->_lookaheadtk._valid = 0;
 	ctx->_bnewline = 1;
 	ctx->_errors = 0;
+	ctx->_backend = &defaultbackend;
 }
 
 void cc_contex_release(FCCContext* ctx)

@@ -66,6 +66,8 @@ typedef struct tagCCSymbol
 		} _limits; /* for built-in type */
 
 		FValue	_value; /* for normal ids */
+
+		struct tagCCSymbol* _alias;
 	} _u;
 
 	struct tagCCSymbol* _up; /* link to previous symbol in symbol table */

@@ -9,7 +9,7 @@
 #include "generator/gen.h"
 
 
-static const char* cc_sclass_displayname(int sclass);
+const char* cc_sclass_displayname(int sclass);
 
 BOOL cc_parser_program(FCCContext* ctx)
 {
@@ -130,9 +130,11 @@ BOOL cc_parser_declaration(FCCContext* ctx, FDeclCallback callback)
 				if (!p) {
 					return FALSE;
 				}
+
+				logger_output_s("debug: symbol: %s, %s, %w, %t\n", cc_sclass_displayname(p->_sclass), p->_name, &p->_loc, p->_type);
 			}
 
-			if (ctx->_currtk._type == TK_COMMA) /* ',' */
+			if (ctx->_currtk._type != TK_COMMA) /* ',' */
 			{
 				break;
 			}
@@ -190,7 +192,7 @@ BOOL cc_parser_expect(FCCContext* ctx, enum ECCToken tk)
 		return TRUE;
 	}
 
-	logger_output_s("error: expect %k, at %w\n", tk, &ctx->_currtk._loc);
+	logger_output_s("error: expect '%k' at %w\n", tk, &ctx->_currtk._loc);
 	return FALSE;
 }
 
@@ -532,6 +534,10 @@ BOOL cc_parser_declarator(FCCContext* ctx, FCCType* basety, const char** id, FLo
 			}
 			break;
 		}
+		if (!basety) {
+			return FALSE;
+		}
+
 	} /* end for */
 
 	if (basety->_size > 32767) {
@@ -551,7 +557,7 @@ BOOL cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FAr
 	case TK_ID:
 	{
 		if (*id) {
-			logger_output_s("error: extraneous identifier '%k' at %w.\n", &ctx->_currtk, &ctx->_currtk._loc);
+			logger_output_s("error: extraneous identifier '%s' at %w.\n", &ctx->_currtk._val._astr, &ctx->_currtk._loc);
 			return FALSE;
 		}
 
@@ -783,20 +789,209 @@ FCCSymbol* cc_parser_declglobal(FCCContext* ctx, int storage, const char* id, co
 	}
 
 	p = cc_symbol_lookup(id, gIdentifiers);
-	if (p )
-	{ }
+	if (p && p->_scope == SCOPE_GLOBAL)
+	{ 
+		if (p->_sclass != SC_Typedef && cc_type_isequal(ty, p->_type, TRUE)) {
+			ty = cc_type_compose(ty, p->_type);
+		}
+		else {
+			logger_output_s("error: redeclaration of '%s' previously declared at %w\n", p->_name, &p->_loc);
+			return FALSE;
+		}
 
-	return NULL;
+		if (!IsFunction(ty) && p->_defined && ctx->_currtk._type == TK_ASSIGN) { /* '=' */
+			logger_output_s("error: redefinition of '%s' previously defined at %w\n", p->_name, &p->_loc);
+			return FALSE;
+		}
+
+		if (p->_sclass == SC_External && storage == SC_Static
+			|| p->_sclass == SC_Static && storage == SC_Auto
+			|| p->_sclass == SC_Auto && storage == SC_Static)
+		{
+			logger_output_s("warning: inconsistent linkage for '%s' previously declared at '%w'.\n", p->_name, &p->_loc);
+		}
+	}
+
+	if (p == NULL || p->_scope != SCOPE_GLOBAL)
+	{
+		FCCSymbol* q = cc_symbol_lookup(id, gExternals);
+		if (q) 
+		{
+			if (storage == SC_Static || !cc_type_isequal(ty, q->_type, TRUE)) {
+				logger_output_s("warning: declaration of '%s' does not match previous declaration at %w.\n", id, &q->_loc);
+			}
+
+			p = cc_symbol_relocate(id, gExternals, gGlobals);
+			p->_sclass = storage;
+		}
+		else 
+		{
+			p = cc_symbol_install(id, &gGlobals, SCOPE_GLOBAL, CC_MM_PERMPOOL);
+			p->_sclass = storage;
+		}
+	}
+	else if (p->_sclass == SC_External)
+	{
+		p->_sclass = storage;
+	}
+
+	p->_type = ty;
+	p->_loc = *loc;
+
+	if (ctx->_currtk._type == TK_ASSIGN && IsFunction(p->_type)) {
+		logger_output_s("error: illegal initialization for '%s'\n", p->_name);
+		return NULL;
+	}
+	else if (ctx->_currtk._type == TK_ASSIGN) /* '=' */
+	{
+		// TODO: parsing initializer & init global.
+	}
+	else if (p->_sclass == SC_Static && !IsFunction(p->_type) && p->_type->_size == 0)
+	{
+		logger_output_s("error: undefined size of '%s' at %w\n", p->_name, &p->_loc);
+		return NULL;
+	}
+
+	return p;
 }
 
 FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, const FLocation* loc, FCCType* ty)
 {
-	return NULL;
+	FCCSymbol* p, * q;
+
+	if (storage == SC_Unknown) 
+	{
+		storage = IsFunction(ty) ? SC_External : SC_Auto;
+	}
+	else if (IsFunction(ty) && storage != SC_External) 
+	{
+		logger_output_s("warning: invalid storage class for function '%s' at %w.\n", id, loc);
+		storage = SC_External;
+	}
+	else if (storage == SC_Register && (IsVolatile(ty) || IsStruct(ty) || IsArray(ty))) {
+		logger_output_s("warning: register declaration ignored for '%s' at %w.\n", id, loc);
+		storage = SC_Auto;
+	}
+
+	q = cc_symbol_lookup(id, gIdentifiers);
+	if (q && (q->_scope >= gCurrentLevel || (q->_scope == SCOPE_PARAM && gCurrentLevel == SCOPE_LOCAL)))
+	{
+		if (storage == SC_External && q->_sclass == SC_External && cc_type_isequal(q->_type, ty, TRUE))
+		{
+			ty = cc_type_compose(ty, q->_type);
+		}
+		else
+		{
+			logger_output_s("error: redeclaration of '%s' previously declared at '%w'.\n", q->_name, &q->_loc);
+			return NULL;
+		}
+	}
+
+	assert(gCurrentLevel >= SCOPE_LOCAL);
+
+	p = cc_symbol_install(id, &gIdentifiers, gCurrentLevel, (storage == SC_Static || storage == SC_External) ? CC_MM_PERMPOOL : CC_MM_TEMPPOOL);
+	p->_type = ty;
+	p->_sclass = storage;
+	p->_loc = *loc;
+
+	switch (storage)
+	{
+	case SC_External:
+		q = cc_symbol_lookup(id, gGlobals);
+		if (q == NULL || q->_sclass == SC_Typedef || q->_sclass == SC_Enum)
+		{
+			q = cc_symbol_lookup(id, gExternals);
+			if (q == NULL)
+			{
+				q = cc_symbol_install(id, &gExternals, SCOPE_GLOBAL, CC_MM_PERMPOOL);
+				q->_type = p->_type;
+				q->_sclass = SC_External;
+				q->_loc = *loc;
+			}
+		}
+		if (!cc_type_isequal(p->_type, q->_type, TRUE)) {
+			logger_output_s("error: declaration of '%s' does not match previous declaration at %w.\n", q->_name, &q->_loc);
+			return NULL;
+		}
+
+		p->_u._alias = q;
+		break;
+	case SC_Static:
+		p->_defined = 1;
+		break;
+	case SC_Register:
+		p->_defined = 1;
+		break;
+	case SC_Auto:
+		p->_defined = 1;
+		if (IsArray(ty)) {
+			p->_addressed = 1;
+		}
+		break;
+	default:
+		assert(0); break;
+	}
+
+	if (ctx->_currtk._type == TK_ASSIGN) /* '=' */
+	{
+		if (storage == SC_External) {
+			logger_output_s("error: illegal initialization of 'extern %s' at %w\n", id, loc);
+			return NULL;
+		}
+
+		// TODO: parsing =
+	}
+
+	if (!IsFunction(p->_type) && p->_defined && p->_type->_size <= 0) {
+		logger_output_s("error: undefined size for '%s' at %w\n", id, loc);
+		return NULL;
+	}
+
+	return p;
 }
 
 FCCSymbol* cc_parser_declparam(FCCContext* ctx, int storage, const char* id, const FLocation* loc, FCCType* ty)
 {
-	return NULL;
+	FCCSymbol* p;
+
+	if (IsFunction(ty)) {
+		ty = cc_type_ptr(ty);
+	}
+	else if (IsArray(ty)) {
+		ty = cc_type_arraytoptr(ty);
+	}
+
+	if (storage == SC_Unknown) {
+		storage = SC_Auto;
+	}
+	else if (storage != SC_Register) {
+		logger_output_s("warning: invalid storage class for '%s' at %w\n", id, loc);
+		storage = SC_Auto;
+	}
+	else if (IsVolatile(ty) || IsStruct(ty)) {
+		logger_output_s("warning: register storage class ignored for '%s' at %w\n", id, loc);
+		storage = SC_Auto;
+	}
+
+	p = cc_symbol_lookup(id, gIdentifiers);
+	if (p && p->_scope == gCurrentLevel)
+	{
+		logger_output_s("error: duplicate declaration for '%s' previously declared at %w\n", id, &p->_loc);
+		return NULL;
+	}
+
+	p = cc_symbol_install(id, &gIdentifiers, gCurrentLevel, CC_MM_TEMPPOOL);
+	p->_sclass = storage;
+	p->_loc = *loc;
+	p->_type = ty;
+	p->_defined = 1;
+	if (ctx->_currtk._type == TK_ASSIGN) /* '=' */
+	{
+		logger_output_s("error: illegal initialization for parameter '%s'\n", id);
+		return NULL;
+	}
+
+	return p;
 }
 
 BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FCCType* ty, const FLocation* loc, FArray* params)
@@ -925,6 +1120,7 @@ FCCType* cc_parser_declenum(FCCContext* ctx)
 		ty->_align = ty->_type->_align;
 	}
 
+	logger_output_s("enum decl: %T\n", ty);
 	return ty;
 }
 
@@ -999,25 +1195,8 @@ FCCType* cc_parser_declstruct(FCCContext* ctx, int op)
 		}
 	}
 
+	logger_output_s("struct decl: %T\n", ty);
 	return ty;
-}
-
-static const char* cc_sclass_displayname(int sclass)
-{
-	const char* name;
-	
-	switch (sclass)
-	{
-	case SC_Auto: name = "auto"; break;
-	case SC_Register: name = "register"; break;
-	case SC_Static: name = "static"; break;
-	case SC_External: name = "external"; break;
-	case SC_Typedef: name = "typedef"; break;
-	case SC_Enum: name = "enum"; break;
-	default: name = "unknown"; break;
-	}
-
-	return name;
 }
 
 BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
@@ -1237,6 +1416,15 @@ BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
 
 BOOL cc_parser_intexpression(FCCContext* ctx, int* val)
 {
-	*val = 1;
+	// TODO:
+	*val = 0;
+	if (ctx->_currtk._type == TK_CONSTANT_INT)
+	{
+		*val = ctx->_currtk._val._int;
+		
+		cc_read_token(ctx, &ctx->_currtk);
+		return TRUE;
+	}
+	
 	return FALSE;
 }

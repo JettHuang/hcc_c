@@ -88,8 +88,20 @@ static void outtype(FCCType* ty, FILE* f, char* bp, BOOL bdetail)
 	break;
 	case Type_Enum:
 	{
+		FCCSymbol** enumid;
 		outs("enum ", f, bp);
 		outs(ty->_u._symbol->_name, f, bp);
+		if (bdetail && ty->_u._symbol->_defined) {
+			outs("<", f, bp);
+			for (enumid = ty->_u._symbol->_u._enumids; *enumid; enumid++)
+			{
+				outs((*enumid)->_name, f, bp);
+				outs("=", f, bp);
+				outd((*enumid)->_u._value._int, f, bp);
+				outs(" ", f, bp);
+			}
+			outs(">", f, bp);
+		}
 	}
 	break;
 	case Type_Union:
@@ -218,15 +230,8 @@ static void vfprint(FILE* f, char* bp, const char* fmt, va_list ap) {
 			} break;
 			case 'k':  // token
 			{ 
-				FCCToken *tk = va_arg(ap, FCCToken*);
-				if (tk->_type == TK_ID)
-				{
-					outs(tk->_val._astr, f, bp);
-				}
-				else
-				{
-					outs(gCCTokenMetas[tk->_type]._text, f, bp);
-				}
+				enum ECCToken tk = va_arg(ap, enum ECCToken);
+				outs(gCCTokenMetas[tk]._text, f, bp);
 			} 
 				break;
 			case 't': /* type brief */
@@ -277,4 +282,22 @@ void cc_logger_outc(int c)
 void cc_logger_outs(const char* format, va_list arg)
 {
 	vfprint(stdout, NULL, format, arg);
+}
+
+const char* cc_sclass_displayname(int sclass)
+{
+	const char* name;
+
+	switch (sclass)
+	{
+	case SC_Auto: name = "auto"; break;
+	case SC_Register: name = "register"; break;
+	case SC_Static: name = "static"; break;
+	case SC_External: name = "external"; break;
+	case SC_Typedef: name = "typedef"; break;
+	case SC_Enum: name = "enum"; break;
+	default: name = "unknown"; break;
+	}
+
+	return name;
 }
