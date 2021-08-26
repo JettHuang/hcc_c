@@ -14,22 +14,26 @@
 #define OPTPARSE_API static
 #include "optparse.h"
 
-int A;
-int A;
-
-int grids[1];
+int B;
+/* int A = { {10} }; */ /* only one level of braces is allowed on an initializer for an object of type "int" */
+int grids[10] = { { 10 }, { 0} };
 
 int sayHello()
 {
-	extern int A;
+	char str[] = "huangehsui";
+	char* s = str;
 
-	grids[0] = 100;
+	int a = 100;
+	int b = sizeof (--a);
+
+	*s = *s++ = *s++;
+	printf("a=%d, b=%d\n", a, b);
 	return 0;
 }
 
 int main(int argc, char* argv[])
 {
-	A = 100;
+	sayHello();
 
 	const char* arg, *localename;
 	int option, bsuccess;

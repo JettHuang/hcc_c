@@ -26,6 +26,7 @@ FCCSymbol* cc_parser_declparam(FCCContext* ctx, int storage, const char* id, con
 
 BOOL cc_parser_is_specifier(enum ECCToken tk);
 BOOL cc_parser_is_constant(enum ECCToken tk);
+BOOL cc_parser_is_assign(enum ECCToken tk);
 BOOL cc_parser_is_typename(FCCToken *tk);
 FCCType* cc_parser_declspecifier(FCCContext* ctx, int *storage);
 

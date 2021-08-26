@@ -173,6 +173,11 @@ BOOL cc_parser_is_constant(enum ECCToken tk)
 	return gCCTokenMetas[tk]._flags & TK_IS_CONSTEXPR;
 }
 
+BOOL cc_parser_is_assign(enum ECCToken tk)
+{
+	return gCCTokenMetas[tk]._flags & TK_IS_ASSIGN;
+}
+
 BOOL cc_parser_is_typename(FCCToken* tk)
 {
 	FCCSymbol* p;
