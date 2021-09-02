@@ -26,6 +26,18 @@ int sayHello()
 	int a = 100;
 	int b = sizeof (--a);
 
+	switch (a)
+	{
+	case 0:
+		break;
+	default:
+		break;
+		break;
+	case 101:
+		a = 10;
+		break;
+	}
+
 	*s = *s++ = *s++;
 	printf("a=%d, b=%d\n", a, b);
 	return 0;

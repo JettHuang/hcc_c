@@ -21,7 +21,7 @@ BOOL cc_parser_program(FCCContext* ctx)
 
 	while (ctx->_currtk._type != TK_EOF)
 	{
-		if (ctx->_currtk._type == TK_ID || cc_parser_is_specifier(ctx->_currtk._type))
+		if (cc_parser_is_typename(&ctx->_currtk))
 		{
 			if (!cc_parser_declaration(ctx, &cc_parser_declglobal))
 			{
@@ -176,6 +176,11 @@ BOOL cc_parser_is_constant(enum ECCToken tk)
 BOOL cc_parser_is_assign(enum ECCToken tk)
 {
 	return gCCTokenMetas[tk]._flags & TK_IS_ASSIGN;
+}
+
+BOOL cc_parser_is_stmtspecifier(enum ECCToken tk)
+{
+	return gCCTokenMetas[tk]._flags & (TK_IS_STATEMENT | TK_IS_CONSTEXPR);
 }
 
 BOOL cc_parser_is_typename(FCCToken* tk)
