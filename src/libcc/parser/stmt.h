@@ -40,6 +40,7 @@ enum EStmtType
 
 typedef struct tagCCStatement {
 	enum EStmtType	_kind;
+	FLocation _loc;
 	struct tagCCStatement* _link;
 
 	union
@@ -50,7 +51,7 @@ typedef struct tagCCStatement {
 		} _label;
 
 		struct {
-			struct tagCCExprTree* _constexpr;
+			int _constval;
 			struct tagCCSymbol* _id; /* target */
 		} _case;
 
@@ -78,6 +79,7 @@ typedef struct tagCCStatement {
 		struct {
 			struct tagCCExprTree* _expr;
 			struct tagCCStatement* _stmt;
+			FArray _cases;
 		} _switch;
 
 		/* iteration statement */
@@ -115,7 +117,8 @@ typedef struct tagCCStatement {
 
 /* context of statement parsing */
 typedef struct tagCCStmtContext {
-	int a;
+	struct tagCCStatement* _switch;
+	struct tagCCStatement* _loop;
 } FCCStmtContext;
 
 

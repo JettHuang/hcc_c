@@ -35,6 +35,7 @@ typedef struct tagCCContext {
 	int16_t _bnewline : 1; /* next token is in the newline */
 	int16_t _errors;
 
+	struct tagCCSymbol* _function;
 	struct tagBackend* _backend;
 } FCCContext;
 

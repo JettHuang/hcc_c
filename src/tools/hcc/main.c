@@ -18,7 +18,7 @@ int B;
 /* int A = { {10} }; */ /* only one level of braces is allowed on an initializer for an object of type "int" */
 int grids[10] = { { 10 }, { 0} };
 
-int sayHello()
+void sayHello()
 {
 	char str[] = "huangehsui";
 	char* s = str;
@@ -27,8 +27,18 @@ int sayHello()
 	int b = sizeof (--a);
 
 	switch (a)
+	case 100:
+		a = 200;
+
+	switch (a)
 	{
-	case 0:
+		printf("hello, world!");
+	case 100:
+		if (a > 100)
+		{
+	case 10:
+		break;
+		}
 		break;
 	default:
 		break;
@@ -40,7 +50,6 @@ int sayHello()
 
 	*s = *s++ = *s++;
 	printf("a=%d, b=%d\n", a, b);
-	return 0;
 }
 
 int main(int argc, char* argv[])

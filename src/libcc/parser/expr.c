@@ -113,6 +113,7 @@ static BOOL cc_expr_primary(struct tagCCContext* ctx, FCCExprTree** outexpr)
 	}
 
 	*outexpr = tree;
+	return TRUE;
 }
 
 static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr)
