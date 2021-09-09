@@ -51,6 +51,7 @@ static BOOL cc_expr_primary(struct tagCCContext* ctx, FCCExprTree** outexpr)
 			return FALSE;
 		}
 		tree->_op = EXPR_ID;
+		tree->_loc = ctx->_currtk._loc;
 		tree->_ty = p->_type;
 		tree->_u._symbol = p;
 	}
@@ -108,6 +109,7 @@ static BOOL cc_expr_primary(struct tagCCContext* ctx, FCCExprTree** outexpr)
 			return FALSE;
 		}
 		tree->_op = EXPR_CONSTANT;
+		tree->_loc = ctx->_currtk._loc;
 		tree->_ty = p->_type;
 		tree->_u._symbol = p;
 	}
@@ -119,6 +121,7 @@ static BOOL cc_expr_primary(struct tagCCContext* ctx, FCCExprTree** outexpr)
 static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr)
 {
 	FCCExprTree* expr, * tree;
+	FLocation loc;
 
 	if (!cc_expr_expression(ctx, &expr)) {
 		return FALSE;
@@ -130,6 +133,7 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr)
 		{
 			FCCExprTree* subscript;
 
+			loc = ctx->_currtk._loc;
 			cc_read_token(ctx, &ctx->_currtk);
 			if (!cc_expr_expression(ctx, &subscript))
 			{
@@ -146,6 +150,7 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr)
 			}
 
 			tree->_op = EXPR_ARRAYSUB;
+			tree->_loc = loc;
 			tree->_u._kids[0] = expr;
 			tree->_u._kids[1] = subscript;
 			expr = tree;
@@ -154,6 +159,7 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr)
 		{
 			FArray args;
 
+			loc = ctx->_currtk._loc;
 			cc_read_token(ctx, &ctx->_currtk);
 			array_init(&args, 32, sizeof(FCCExprTree*), CC_MM_TEMPPOOL);
 			if (!cc_expr_arguments(ctx, &args)) {
@@ -171,6 +177,7 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr)
 			}
 
 			tree->_op = EXPR_CALL;
+			tree->_loc = loc;
 			tree->_u._f._lhs = expr;
 			tree->_u._f._args = args._data;
 			expr = tree;
@@ -180,6 +187,7 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr)
 			const char* id;
 			FCCField* field;
 
+			loc = ctx->_currtk._loc;
 			cc_read_token(ctx, &ctx->_currtk);
 			if (ctx->_currtk._type != TK_ID)
 			{
@@ -204,6 +212,7 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr)
 			}
 
 			tree->_op = EXPR_DOTFIELD;
+			tree->_loc = loc;
 			tree->_u._s._lhs = expr;
 			tree->_u._s._field = field;
 			expr = tree;
@@ -216,6 +225,7 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr)
 			FCCType* sty;
 			FCCField* field;
 
+			loc = ctx->_currtk._loc;
 			cc_read_token(ctx, &ctx->_currtk);
 			if (ctx->_currtk._type != TK_ID)
 			{
@@ -241,6 +251,7 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr)
 			}
 
 			tree->_op = EXPR_PTRFIELD;
+			tree->_loc = loc;
 			tree->_u._s._lhs = expr;
 			tree->_u._s._field = field;
 			expr = tree;
@@ -249,23 +260,27 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr)
 		}
 		else if (ctx->_currtk._type == TK_INC) /* ++ */
 		{
+			loc = ctx->_currtk._loc;
 			cc_read_token(ctx, &ctx->_currtk);
 			if (!(tree = cc_expr_new())) {
 				return FALSE;
 			}
 
 			tree->_op = EXPR_POSINC;
+			tree->_loc = loc;
 			tree->_u._kids[0] = expr;
 			expr = tree;
 		}
 		else if (ctx->_currtk._type == TK_DEC) /* -- */
 		{
+			loc = ctx->_currtk._loc;
 			cc_read_token(ctx, &ctx->_currtk);
 			if (!(tree = cc_expr_new())) {
 				return FALSE;
 			}
 
 			tree->_op = EXPR_POSDEC;
+			tree->_loc = loc;
 			tree->_u._kids[0] = expr;
 			expr = tree;
 		}
@@ -305,15 +320,18 @@ static BOOL cc_expr_arguments(struct tagCCContext* ctx, FArray* args)
 static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr)
 {
 	FCCExprTree* tree;
+	FLocation loc;
 
 	if (ctx->_currtk._type == TK_INC) /* ++ */
 	{
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!(tree = cc_expr_new())) {
 			return FALSE;
 		}
 
 		tree->_op = EXPR_PREINC;
+		tree->_loc = loc;
 		if (!cc_expr_unary(ctx, &tree->_u._kids[0]))
 		{
 			return FALSE;
@@ -324,12 +342,14 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr)
 	}
 	else if (ctx->_currtk._type == TK_DEC) /* -- */
 	{
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!(tree = cc_expr_new())) {
 			return FALSE;
 		}
 
 		tree->_op = EXPR_PREDEC;
+		tree->_loc = loc;
 		if (!cc_expr_unary(ctx, &tree->_u._kids[0]))
 		{
 			return FALSE;
@@ -340,12 +360,14 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr)
 	}
 	else if (ctx->_currtk._type == TK_BITAND) /* '&' */
 	{
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!(tree = cc_expr_new())) {
 			return FALSE;
 		}
 
 		tree->_op = EXPR_ADDR;
+		tree->_loc = loc;
 		if (!cc_expr_cast(ctx, &tree->_u._kids[0]))
 		{
 			return FALSE;
@@ -356,12 +378,14 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr)
 	}
 	else if (ctx->_currtk._type == TK_MUL) /* '*' */
 	{
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!(tree = cc_expr_new())) {
 			return FALSE;
 		}
 
 		tree->_op = EXPR_DEREF;
+		tree->_loc = loc;
 		if (!cc_expr_cast(ctx, &tree->_u._kids[0]))
 		{
 			return FALSE;
@@ -372,12 +396,14 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr)
 	}
 	else if (ctx->_currtk._type == TK_ADD) /* '+' */
 	{
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!(tree = cc_expr_new())) {
 			return FALSE;
 		}
 
 		tree->_op = EXPR_POS;
+		tree->_loc = loc;
 		if (!cc_expr_cast(ctx, &tree->_u._kids[0]))
 		{
 			return FALSE;
@@ -388,12 +414,14 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr)
 	}
 	else if (ctx->_currtk._type == TK_SUB) /* '-' */
 	{
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!(tree = cc_expr_new())) {
 			return FALSE;
 		}
 
 		tree->_op = EXPR_NEG;
+		tree->_loc = loc;
 		if (!cc_expr_cast(ctx, &tree->_u._kids[0]))
 		{
 			return FALSE;
@@ -404,12 +432,14 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr)
 	}
 	else if (ctx->_currtk._type == TK_COMP) /* '~' */
 	{
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!(tree = cc_expr_new())) {
 			return FALSE;
 		}
 
 		tree->_op = EXPR_COMPLEMENT;
+		tree->_loc = loc;
 		if (!cc_expr_cast(ctx, &tree->_u._kids[0]))
 		{
 			return FALSE;
@@ -420,12 +450,14 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr)
 	}
 	else if (ctx->_currtk._type == TK_NOT) /* '!' */
 	{
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!(tree = cc_expr_new())) {
 			return FALSE;
 		}
 
 		tree->_op = EXPR_NOT;
+		tree->_loc = loc;
 		if (!cc_expr_cast(ctx, &tree->_u._kids[0]))
 		{
 			return FALSE;
@@ -436,12 +468,14 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr)
 	}
 	else if (ctx->_currtk._type == TK_SIZEOF)
 	{
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!(tree = cc_expr_new())) {
 			return FALSE;
 		}
 
 		tree->_op = EXPR_SIZEOF;
+		tree->_loc = loc;
 		if (ctx->_currtk._type == TK_LPAREN) /* '(' */
 		{
 			FCCToken aheadtk;
@@ -477,7 +511,7 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr)
 			}
 		}
 
-		// go through
+		/* go through */
 		tree->_ty = NULL;
 		if (!cc_expr_unary(ctx, &tree->_u._kids[0]))
 		{
@@ -513,7 +547,7 @@ static BOOL cc_expr_cast(struct tagCCContext* ctx, FCCExprTree** outexpr)
 
 			cc_read_token(ctx, &ctx->_currtk);
 			if (!cc_parser_declarator(ctx, cc_parser_declspecifier(ctx, &sclass), &id, &loc, NULL, &ty) || sclass || id) {
-				logger_output_s("error: illegal sizeof(type) at %w.\n", &ctx->_currtk._loc);
+				logger_output_s("error: illegal type-cast at %w.\n", &ctx->_currtk._loc);
 				return FALSE;
 			}
 
@@ -531,6 +565,7 @@ static BOOL cc_expr_cast(struct tagCCContext* ctx, FCCExprTree** outexpr)
 				return FALSE;
 			}
 			tree->_op = EXPR_TYPECAST;
+			tree->_loc = ctx->_currtk._loc;
 			tree->_ty = ty;
 			if (!cc_expr_cast(ctx, &tree->_u._kids[0])) {
 				return FALSE;
@@ -547,6 +582,8 @@ static BOOL cc_expr_cast(struct tagCCContext* ctx, FCCExprTree** outexpr)
 static BOOL cc_expr_multiplicative(struct tagCCContext* ctx, FCCExprTree** outexpr)
 {
 	FCCExprTree* lhs, *rhs, *tree;
+	FLocation loc;
+
 
 	if (!cc_expr_cast(ctx, &lhs))
 	{
@@ -556,9 +593,9 @@ static BOOL cc_expr_multiplicative(struct tagCCContext* ctx, FCCExprTree** outex
 	tree = lhs;
 	while (ctx->_currtk._type == TK_MUL || ctx->_currtk._type == TK_DIV || ctx->_currtk._type == TK_MOD)
 	{
-
 		enum ECCToken tktype = ctx->_currtk._type;
 
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!cc_expr_cast(ctx, &rhs)) {
 			return FALSE;
@@ -569,6 +606,7 @@ static BOOL cc_expr_multiplicative(struct tagCCContext* ctx, FCCExprTree** outex
 		}
 
 		tree->_op = (tktype == TK_MUL) ? EXPR_MUL : (tktype == TK_DIV ? EXPR_DIV : EXPR_MOD);
+		tree->_loc = loc;
 		tree->_u._kids[0] = lhs;
 		tree->_u._kids[1] = rhs;
 		
@@ -582,6 +620,8 @@ static BOOL cc_expr_multiplicative(struct tagCCContext* ctx, FCCExprTree** outex
 static BOOL cc_expr_additive(struct tagCCContext* ctx, FCCExprTree** outexpr)
 {
 	FCCExprTree* lhs, * rhs, * tree;
+	FLocation loc;
+
 
 	if (!cc_expr_multiplicative(ctx, &lhs))
 	{
@@ -591,9 +631,9 @@ static BOOL cc_expr_additive(struct tagCCContext* ctx, FCCExprTree** outexpr)
 	tree = lhs;
 	while (ctx->_currtk._type == TK_ADD || ctx->_currtk._type == TK_SUB)
 	{
-
 		enum ECCToken tktype = ctx->_currtk._type;
 
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!cc_expr_multiplicative(ctx, &rhs)) {
 			return FALSE;
@@ -604,6 +644,7 @@ static BOOL cc_expr_additive(struct tagCCContext* ctx, FCCExprTree** outexpr)
 		}
 
 		tree->_op = (tktype == TK_ADD) ? EXPR_ADD : EXPR_SUB;
+		tree->_loc = loc;
 		tree->_u._kids[0] = lhs;
 		tree->_u._kids[1] = rhs;
 
@@ -617,6 +658,8 @@ static BOOL cc_expr_additive(struct tagCCContext* ctx, FCCExprTree** outexpr)
 static BOOL cc_expr_shift(struct tagCCContext* ctx, FCCExprTree** outexpr)
 {
 	FCCExprTree* lhs, * rhs, * tree;
+	FLocation loc;
+
 
 	if (!cc_expr_additive(ctx, &lhs))
 	{
@@ -629,6 +672,7 @@ static BOOL cc_expr_shift(struct tagCCContext* ctx, FCCExprTree** outexpr)
 
 		enum ECCToken tktype = ctx->_currtk._type;
 
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!cc_expr_additive(ctx, &rhs)) {
 			return FALSE;
@@ -639,6 +683,7 @@ static BOOL cc_expr_shift(struct tagCCContext* ctx, FCCExprTree** outexpr)
 		}
 
 		tree->_op = (tktype == TK_LSHIFT) ? EXPR_LSHFIT : EXPR_RSHFIT;
+		tree->_loc = loc;
 		tree->_u._kids[0] = lhs;
 		tree->_u._kids[1] = rhs;
 
@@ -652,6 +697,7 @@ static BOOL cc_expr_shift(struct tagCCContext* ctx, FCCExprTree** outexpr)
 static BOOL cc_expr_relational(struct tagCCContext* ctx, FCCExprTree** outexpr)
 {
 	FCCExprTree* lhs, * rhs, * tree;
+	FLocation loc;
 
 	if (!cc_expr_shift(ctx, &lhs))
 	{
@@ -665,6 +711,7 @@ static BOOL cc_expr_relational(struct tagCCContext* ctx, FCCExprTree** outexpr)
 		enum ECCToken tktype = ctx->_currtk._type;
 		enum EExprOp op;
 
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!cc_expr_shift(ctx, &rhs)) {
 			return FALSE;
@@ -683,6 +730,7 @@ static BOOL cc_expr_relational(struct tagCCContext* ctx, FCCExprTree** outexpr)
 		}
 
 		tree->_op = op;
+		tree->_loc = loc;
 		tree->_u._kids[0] = lhs;
 		tree->_u._kids[1] = rhs;
 
@@ -696,6 +744,8 @@ static BOOL cc_expr_relational(struct tagCCContext* ctx, FCCExprTree** outexpr)
 static BOOL cc_expr_equality(struct tagCCContext* ctx, FCCExprTree** outexpr)
 {
 	FCCExprTree* lhs, * rhs, * tree;
+	FLocation loc;
+
 
 	if (!cc_expr_relational(ctx, &lhs))
 	{
@@ -708,6 +758,7 @@ static BOOL cc_expr_equality(struct tagCCContext* ctx, FCCExprTree** outexpr)
 
 		enum ECCToken tktype = ctx->_currtk._type;
 
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!cc_expr_relational(ctx, &rhs)) {
 			return FALSE;
@@ -718,6 +769,7 @@ static BOOL cc_expr_equality(struct tagCCContext* ctx, FCCExprTree** outexpr)
 		}
 
 		tree->_op = (tktype == TK_EQUAL) ? EXPR_EQ : EXPR_UNEQ;
+		tree->_loc = loc;
 		tree->_u._kids[0] = lhs;
 		tree->_u._kids[1] = rhs;
 
@@ -731,6 +783,7 @@ static BOOL cc_expr_equality(struct tagCCContext* ctx, FCCExprTree** outexpr)
 static BOOL cc_expr_bitand(struct tagCCContext* ctx, FCCExprTree** outexpr)
 {
 	FCCExprTree* lhs, * rhs, * tree;
+	FLocation loc;
 
 	if (!cc_expr_equality(ctx, &lhs))
 	{
@@ -740,6 +793,7 @@ static BOOL cc_expr_bitand(struct tagCCContext* ctx, FCCExprTree** outexpr)
 	tree = lhs;
 	while (ctx->_currtk._type == TK_BITAND)
 	{
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!cc_expr_equality(ctx, &rhs)) {
 			return FALSE;
@@ -750,6 +804,7 @@ static BOOL cc_expr_bitand(struct tagCCContext* ctx, FCCExprTree** outexpr)
 		}
 
 		tree->_op = EXPR_BITAND;
+		tree->_loc = loc;
 		tree->_u._kids[0] = lhs;
 		tree->_u._kids[1] = rhs;
 
@@ -763,6 +818,7 @@ static BOOL cc_expr_bitand(struct tagCCContext* ctx, FCCExprTree** outexpr)
 static BOOL cc_expr_bitxor(struct tagCCContext* ctx, FCCExprTree** outexpr)
 {
 	FCCExprTree* lhs, * rhs, * tree;
+	FLocation loc;
 
 	if (!cc_expr_bitand(ctx, &lhs))
 	{
@@ -772,6 +828,7 @@ static BOOL cc_expr_bitxor(struct tagCCContext* ctx, FCCExprTree** outexpr)
 	tree = lhs;
 	while (ctx->_currtk._type == TK_BITXOR)
 	{
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!cc_expr_bitand(ctx, &rhs)) {
 			return FALSE;
@@ -782,6 +839,7 @@ static BOOL cc_expr_bitxor(struct tagCCContext* ctx, FCCExprTree** outexpr)
 		}
 
 		tree->_op = EXPR_BITXOR;
+		tree->_loc = loc;
 		tree->_u._kids[0] = lhs;
 		tree->_u._kids[1] = rhs;
 
@@ -795,6 +853,7 @@ static BOOL cc_expr_bitxor(struct tagCCContext* ctx, FCCExprTree** outexpr)
 static BOOL cc_expr_bitor(struct tagCCContext* ctx, FCCExprTree** outexpr)
 {
 	FCCExprTree* lhs, * rhs, * tree;
+	FLocation loc;
 
 	if (!cc_expr_bitxor(ctx, &lhs))
 	{
@@ -804,6 +863,7 @@ static BOOL cc_expr_bitor(struct tagCCContext* ctx, FCCExprTree** outexpr)
 	tree = lhs;
 	while (ctx->_currtk._type == TK_BITOR)
 	{
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!cc_expr_bitxor(ctx, &rhs)) {
 			return FALSE;
@@ -814,6 +874,7 @@ static BOOL cc_expr_bitor(struct tagCCContext* ctx, FCCExprTree** outexpr)
 		}
 
 		tree->_op = EXPR_BITOR;
+		tree->_loc = loc;
 		tree->_u._kids[0] = lhs;
 		tree->_u._kids[1] = rhs;
 
@@ -827,6 +888,7 @@ static BOOL cc_expr_bitor(struct tagCCContext* ctx, FCCExprTree** outexpr)
 static BOOL cc_expr_logicand(struct tagCCContext* ctx, FCCExprTree** outexpr)
 {
 	FCCExprTree* lhs, * rhs, * tree;
+	FLocation loc;
 
 	if (!cc_expr_bitor(ctx, &lhs))
 	{
@@ -836,6 +898,7 @@ static BOOL cc_expr_logicand(struct tagCCContext* ctx, FCCExprTree** outexpr)
 	tree = lhs;
 	while (ctx->_currtk._type == TK_AND)
 	{
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!cc_expr_bitor(ctx, &rhs)) {
 			return FALSE;
@@ -846,6 +909,7 @@ static BOOL cc_expr_logicand(struct tagCCContext* ctx, FCCExprTree** outexpr)
 		}
 
 		tree->_op = EXPR_LOGAND;
+		tree->_loc = loc;
 		tree->_u._kids[0] = lhs;
 		tree->_u._kids[1] = rhs;
 
@@ -859,6 +923,7 @@ static BOOL cc_expr_logicand(struct tagCCContext* ctx, FCCExprTree** outexpr)
 static BOOL cc_expr_logicor(struct tagCCContext* ctx, FCCExprTree** outexpr)
 {
 	FCCExprTree* lhs, * rhs, * tree;
+	FLocation loc;
 
 	if (!cc_expr_logicand(ctx, &lhs))
 	{
@@ -868,6 +933,7 @@ static BOOL cc_expr_logicor(struct tagCCContext* ctx, FCCExprTree** outexpr)
 	tree = lhs;
 	while (ctx->_currtk._type == TK_OR)
 	{
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!cc_expr_logicand(ctx, &rhs)) {
 			return FALSE;
@@ -878,6 +944,7 @@ static BOOL cc_expr_logicor(struct tagCCContext* ctx, FCCExprTree** outexpr)
 		}
 
 		tree->_op = EXPR_LOGOR;
+		tree->_loc = loc;
 		tree->_u._kids[0] = lhs;
 		tree->_u._kids[1] = rhs;
 
@@ -891,6 +958,7 @@ static BOOL cc_expr_logicor(struct tagCCContext* ctx, FCCExprTree** outexpr)
 static BOOL cc_expr_conditional(struct tagCCContext* ctx, FCCExprTree** outexpr)
 {
 	FCCExprTree* tree, *expr0, * expr1, * expr2;
+	FLocation loc;
 
 	if (!cc_expr_logicor(ctx, &expr0))
 	{
@@ -900,6 +968,7 @@ static BOOL cc_expr_conditional(struct tagCCContext* ctx, FCCExprTree** outexpr)
 
 	if (ctx->_currtk._type == TK_QUESTION) /* '?' */
 	{
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 
 		if (!cc_expr_expression(ctx, &expr1))
@@ -922,6 +991,7 @@ static BOOL cc_expr_conditional(struct tagCCContext* ctx, FCCExprTree** outexpr)
 		}
 
 		tree->_op = EXPR_COND;
+		tree->_loc = loc;
 		tree->_u._kids[0] = expr0;
 		tree->_u._kids[1] = expr1;
 		tree->_u._kids[2] = expr2;
@@ -934,6 +1004,7 @@ static BOOL cc_expr_conditional(struct tagCCContext* ctx, FCCExprTree** outexpr)
 static BOOL cc_expr_assignment(struct tagCCContext* ctx, FCCExprTree** outexpr)
 {
 	FCCExprTree *tree, *lhs, *rhs;
+	FLocation loc;
 
 	if (!cc_expr_conditional(ctx, &lhs)) {
 		return FALSE;
@@ -944,6 +1015,7 @@ static BOOL cc_expr_assignment(struct tagCCContext* ctx, FCCExprTree** outexpr)
 	{
 		enum EExprOp op;
 
+		loc = ctx->_currtk._loc;
 		switch (ctx->_currtk._type)
 		{
 		case TK_ASSIGN: op = EXPR_ASSIGN; break;
@@ -970,6 +1042,7 @@ static BOOL cc_expr_assignment(struct tagCCContext* ctx, FCCExprTree** outexpr)
 		}
 
 		tree->_op = op;
+		tree->_loc = loc;
 		tree->_u._kids[0] = lhs;
 		tree->_u._kids[1] = rhs;
 	}
@@ -981,6 +1054,7 @@ static BOOL cc_expr_assignment(struct tagCCContext* ctx, FCCExprTree** outexpr)
 BOOL cc_expr_expression(struct tagCCContext* ctx, FCCExprTree** outexpr)
 {
 	FCCExprTree* lhs, * rhs, * tree;
+	FLocation loc;
 
 	if (!cc_expr_assignment(ctx, &lhs))
 	{
@@ -990,6 +1064,7 @@ BOOL cc_expr_expression(struct tagCCContext* ctx, FCCExprTree** outexpr)
 	tree = lhs;
 	while (ctx->_currtk._type == TK_COMMA) /* ',' */
 	{
+		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!cc_expr_assignment(ctx, &rhs)) {
 			return FALSE;
@@ -1000,6 +1075,7 @@ BOOL cc_expr_expression(struct tagCCContext* ctx, FCCExprTree** outexpr)
 		}
 
 		tree->_op = EXPR_COMMA;
+		tree->_loc = loc;
 		tree->_u._kids[0] = lhs;
 		tree->_u._kids[1] = rhs;
 

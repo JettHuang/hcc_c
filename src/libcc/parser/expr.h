@@ -78,6 +78,7 @@ enum EExprOp
 /* expression tree */
 typedef struct tagCCExprTree {
 	int _op;
+	FLocation _loc;
 	struct tagCCType* _ty; /* the derivational type of this expression */
 
 	union {
