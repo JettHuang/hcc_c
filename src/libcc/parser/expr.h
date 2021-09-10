@@ -97,6 +97,7 @@ typedef struct tagCCExprTree {
 
 
 FCCExprTree* cc_expr_new();
+BOOL cc_expr_assignment(struct tagCCContext* ctx, FCCExprTree** outexpr);
 BOOL cc_expr_expression(struct tagCCContext* ctx, FCCExprTree** outexpr);
 BOOL cc_expr_constant_expression(struct tagCCContext* ctx, FCCExprTree** outexpr);
 

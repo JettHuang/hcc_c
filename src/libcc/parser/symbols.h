@@ -65,7 +65,8 @@ typedef struct tagCCSymbol
 			FValue _min, _max;
 		} _limits; /* for built-in type */
 
-		FValue	_value; /* for normal ids */
+		FValue	_value; /* for constant or enum ids */
+		struct tagVarInitializer* _initializer; /* for variable initialization */
 
 		struct tagCCSymbol* _alias;
 	} _u;

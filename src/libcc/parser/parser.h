@@ -15,6 +15,7 @@ typedef struct tagCCContext FCCContext;
 typedef FCCSymbol* (*FDeclCallback)(FCCContext* ctx, int storage, const char* id, const FLocation* loc, FCCType* ty);
 
 
+/* public APIS */
 BOOL cc_parser_program(FCCContext* ctx);
 
 /* internal APIs */

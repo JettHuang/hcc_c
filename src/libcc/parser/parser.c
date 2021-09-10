@@ -6,6 +6,7 @@
 #include "lexer/token.h"
 #include "parser.h"
 #include "logger.h"
+#include "init.h"
 #include "generator/gen.h"
 
 
@@ -854,7 +855,15 @@ FCCSymbol* cc_parser_declglobal(FCCContext* ctx, int storage, const char* id, co
 	}
 	else if (ctx->_currtk._type == TK_ASSIGN) /* '=' */
 	{
-		// TODO: parsing initializer & init global.
+		FVarInitializer* initializer;
+
+		cc_read_token(ctx, &ctx->_currtk);
+		if (!cc_parser_initializer(ctx, &initializer)) {
+			logger_output_s("error: illegal initialization for '%s'\n", p->_name);
+			return FALSE;
+		}
+
+		
 	}
 	else if (p->_sclass == SC_Static && !IsFunction(p->_type) && p->_type->_size == 0)
 	{

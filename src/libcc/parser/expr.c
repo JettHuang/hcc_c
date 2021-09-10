@@ -27,7 +27,6 @@ static BOOL cc_expr_bitor(struct tagCCContext* ctx, FCCExprTree** outexpr);
 static BOOL cc_expr_logicand(struct tagCCContext* ctx, FCCExprTree** outexpr);
 static BOOL cc_expr_logicor(struct tagCCContext* ctx, FCCExprTree** outexpr);
 static BOOL cc_expr_conditional(struct tagCCContext* ctx, FCCExprTree** outexpr);
-static BOOL cc_expr_assignment(struct tagCCContext* ctx, FCCExprTree** outexpr);
 
 /* ------------------------------------------------------------------------------------------ */
 
@@ -1001,7 +1000,7 @@ static BOOL cc_expr_conditional(struct tagCCContext* ctx, FCCExprTree** outexpr)
 	return TRUE;
 }
 
-static BOOL cc_expr_assignment(struct tagCCContext* ctx, FCCExprTree** outexpr)
+BOOL cc_expr_assignment(struct tagCCContext* ctx, FCCExprTree** outexpr)
 {
 	FCCExprTree *tree, *lhs, *rhs;
 	FLocation loc;

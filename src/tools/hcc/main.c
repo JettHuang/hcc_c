@@ -16,7 +16,20 @@
 
 int B;
 /* int A = { {10} }; */ /* only one level of braces is allowed on an initializer for an object of type "int" */
-int grids[10] = { { 10 }, { 0} };
+int grids[10] = { { 10 }, { 1000} };
+
+char str[] = { "jett" };
+
+struct FRectangle {
+	int x, y;
+	struct FSize {
+		int sx, sy;
+	} size;
+
+	int a[10];
+};
+
+struct FRectangle rt = { .x = 10, .y = 20, .size.sx = 100, { 20 }, { 0, [1] = 100 } };
 
 void sayHello()
 {
@@ -25,6 +38,7 @@ void sayHello()
 
 	int a = 100;
 	int b = sizeof (--a);
+	int i;
 
 	switch (a)
 	case 100:
@@ -50,6 +64,11 @@ void sayHello()
 
 	*s = *s++ = *s++;
 	printf("a=%d, b=%d\n", a, b);
+
+	for (i = 0; i < 10; i++)
+	{
+		printf("girds[%d]=%d\n", i, grids[i]);
+	}
 }
 
 int main(int argc, char* argv[])
