@@ -273,7 +273,7 @@ BOOL cc_stmt_expression(struct tagCCContext* ccctx, struct tagCCStmtContext* stm
 	}
 	stmt->_loc = ccctx->_currtk._loc;
 
-	if (!cc_expr_expression(ccctx, &expr)) {
+	if (!cc_expr_expression(ccctx, &expr, CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
 
@@ -303,7 +303,7 @@ BOOL cc_stmt_ifelse(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx
 		return FALSE;
 	}
 
-	if (!cc_expr_expression(ccctx, &(stmt->_u._ifelse._expr))) {
+	if (!cc_expr_expression(ccctx, &(stmt->_u._ifelse._expr), CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
 
@@ -341,7 +341,7 @@ BOOL cc_stmt_switch(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx
 		return FALSE;
 	}
 
-	if (!cc_expr_expression(ccctx, &(stmt->_u._switch._expr))) {
+	if (!cc_expr_expression(ccctx, &(stmt->_u._switch._expr), CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
 
@@ -373,7 +373,7 @@ BOOL cc_stmt_while(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx,
 		return FALSE;
 	}
 
-	if (!cc_expr_expression(ccctx, &(stmt->_u._while._expr))) {
+	if (!cc_expr_expression(ccctx, &(stmt->_u._while._expr), CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
 
@@ -414,7 +414,7 @@ BOOL cc_stmt_dowhile(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtct
 		return FALSE;
 	}
 
-	if (!cc_expr_expression(ccctx, &(stmt->_u._dowhile._expr))) {
+	if (!cc_expr_expression(ccctx, &(stmt->_u._dowhile._expr), CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
 
@@ -450,7 +450,7 @@ BOOL cc_stmt_for(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, s
 	if (ccctx->_currtk._type == TK_SEMICOLON) {
 		stmt->_u._for._expr0 = NULL;
 	}
-	else if (!cc_expr_expression(ccctx, &(stmt->_u._for._expr0))) {
+	else if (!cc_expr_expression(ccctx, &(stmt->_u._for._expr0), CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
 
@@ -461,7 +461,7 @@ BOOL cc_stmt_for(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, s
 	if (ccctx->_currtk._type == TK_SEMICOLON) {
 		stmt->_u._for._expr1 = NULL;
 	}
-	else if (!cc_expr_expression(ccctx, &(stmt->_u._for._expr1))) {
+	else if (!cc_expr_expression(ccctx, &(stmt->_u._for._expr1), CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
 
@@ -472,7 +472,7 @@ BOOL cc_stmt_for(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, s
 	if (ccctx->_currtk._type == TK_SEMICOLON) {
 		stmt->_u._for._expr2 = NULL;
 	}
-	else if (!cc_expr_expression(ccctx, &(stmt->_u._for._expr2))) {
+	else if (!cc_expr_expression(ccctx, &(stmt->_u._for._expr2), CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
 	if (!cc_parser_expect(ccctx, TK_RPAREN)) { /* ')' */
@@ -592,7 +592,7 @@ BOOL cc_stmt_return(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx
 	if (ccctx->_currtk._type == TK_SEMICOLON) { /* ';' */
 		stmt->_u._return._expr = NULL;
 	}
-	else if(!cc_expr_expression(ccctx, &(stmt->_u._return._expr))) {
+	else if(!cc_expr_expression(ccctx, &(stmt->_u._return._expr), CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
 

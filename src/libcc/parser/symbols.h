@@ -72,6 +72,12 @@ typedef struct tagCCSymbol
 	} _u;
 
 	struct tagCCSymbol* _up; /* link to previous symbol in symbol table */
+
+	/* for back-end */
+	struct tagXSymbol {
+		const char* _name;
+		struct tagCCSymbol* _inittag;
+	} _x;
 } FCCSymbol;
 
 

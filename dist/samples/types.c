@@ -8,8 +8,8 @@ int a, b, c;
 const int kId;
 
 int returnfunc(char value)(int error);
-char (*(*x(int index)))(char name);
-
+/* char (*(*x(int index)))(char name); */
+ 
 int display(const char* str);
 
 int (*ptrfunc)(const char* str);

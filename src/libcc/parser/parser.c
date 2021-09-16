@@ -20,6 +20,7 @@ BOOL cc_parser_program(FCCContext* ctx)
 		return FALSE;
 	}
 
+	ctx->_backend->_program_begin(ctx);
 	while (ctx->_currtk._type != TK_EOF)
 	{
 		if (cc_parser_is_typename(&ctx->_currtk))
@@ -47,6 +48,7 @@ BOOL cc_parser_program(FCCContext* ctx)
 		}
 	} /* end while */
 
+	ctx->_backend->_program_end(ctx);
 	return TRUE;
 }
 
@@ -849,6 +851,9 @@ FCCSymbol* cc_parser_declglobal(FCCContext* ctx, int storage, const char* id, co
 	p->_type = ty;
 	p->_loc = *loc;
 
+	/* back-end def symbol */
+	ctx->_backend->_defsymbol(ctx, p);
+
 	if (ctx->_currtk._type == TK_ASSIGN && IsFunction(p->_type)) {
 		logger_output_s("error: illegal initialization for '%s'\n", p->_name);
 		return NULL;
@@ -858,7 +863,7 @@ FCCSymbol* cc_parser_declglobal(FCCContext* ctx, int storage, const char* id, co
 		FVarInitializer* initializer;
 
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_parser_initializer(ctx, &initializer)) {
+		if (!cc_parser_initializer(ctx, &initializer, CC_MM_PERMPOOL)) {
 			logger_output_s("error: illegal initialization for '%s'\n", p->_name);
 			return FALSE;
 		}

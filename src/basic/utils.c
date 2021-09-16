@@ -7,6 +7,7 @@
 
 #include <string.h>
 #include <ctype.h>
+#include <stdio.h>
 #include <assert.h>
 #ifdef _WIN32
 #include <windows.h>
@@ -44,6 +45,17 @@ char util_char_lower(char c)
 char util_char_upper(char c)
 {
 	return (unsigned short)c + ((((unsigned short)c - 'A') < 26u) << 5);
+}
+
+/* formatted output to a saved string */
+const char* util_stringf(const char* fmt, ...) {
+	static char buf[1024];
+	va_list ap;
+
+	va_start(ap, fmt);
+	vsprintf(buf, fmt, ap);
+	va_end(ap);
+	return buf;
 }
 
 const char* util_itoa(int i)

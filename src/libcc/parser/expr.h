@@ -96,10 +96,10 @@ typedef struct tagCCExprTree {
 } FCCExprTree;
 
 
-FCCExprTree* cc_expr_new();
-BOOL cc_expr_assignment(struct tagCCContext* ctx, FCCExprTree** outexpr);
-BOOL cc_expr_expression(struct tagCCContext* ctx, FCCExprTree** outexpr);
-BOOL cc_expr_constant_expression(struct tagCCContext* ctx, FCCExprTree** outexpr);
+FCCExprTree* cc_expr_new(enum EMMArea where);
+BOOL cc_expr_assignment(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
+BOOL cc_expr_expression(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
+BOOL cc_expr_constant_expression(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
 
 
 #endif /* _CC_EXPR_H__ */

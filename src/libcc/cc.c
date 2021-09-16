@@ -43,10 +43,6 @@ static FCCTypeMetrics defaultmetrics =
 	{ 0, 4 }, /* _structmetric */
 };
 
-static FCCBackend defaultbackend = {
-	1
-};
-
 void cc_init()
 {
 	logger_set(cc_logger_outc, cc_logger_outs);
@@ -69,7 +65,7 @@ void cc_contex_init(FCCContext* ctx)
 	ctx->_lookaheadtk._valid = 0;
 	ctx->_bnewline = 1;
 	ctx->_errors = 0;
-	ctx->_backend = &defaultbackend;
+	ctx->_backend = cc_new_backend();
 }
 
 void cc_contex_release(FCCContext* ctx)
@@ -97,6 +93,8 @@ BOOL cc_process(FCCContext* ctx, const char* srcfilename, const char* outfilenam
 	if (!cs) { return FALSE; }
 	ctx->_cs = cs;
 
+	ctx->_srcfilename = absfilename;
+	ctx->_outfilename = outfilename;
 	if (outfilename) {
 		ctx->_outfp = fopen(outfilename, "wt");
 	}

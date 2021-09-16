@@ -57,6 +57,7 @@ const char* util_process_working_dir();
 const char* util_getpath_from_pathname(const char* pathname);
 const char* util_make_pathname(const char* path, const char* filename);
 
+const char* util_stringf(const char* format, ...);
 /* integer to string */
 const char* util_itoa(int i);
 /* round up (align = 2^n) */

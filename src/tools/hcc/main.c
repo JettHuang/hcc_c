@@ -29,7 +29,13 @@ struct FRectangle {
 	int a[10];
 };
 
-struct FRectangle rt = { .x = 10, .y = 20, .size.sx = 100, { 20 }, { 0, [1] = 100 } };
+union U {
+	struct A { int a, b; } _s;
+	struct B { int a, b; } _d;
+
+} u = { 1000, 200 };
+
+struct FRectangle rt = { .y = 20, .x = 10,  .size.sx = 100, { 20 }, { 0,[1] = 100 } };
 
 void sayHello()
 {

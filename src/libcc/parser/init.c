@@ -9,11 +9,11 @@
 #include "parser.h"
 
 
-FVarInitializer* cc_varinit_new()
+FVarInitializer* cc_varinit_new(enum EMMArea where)
 {
 	FVarInitializer* p;
 
-	if ((p = mm_alloc_area(sizeof(FVarInitializer), CC_MM_TEMPPOOL))) {
+	if ((p = mm_alloc_area(sizeof(FVarInitializer), where))) {
 		p->_isblock = 0;
 		p->_u._expr = NULL;
 	}
@@ -25,11 +25,11 @@ FVarInitializer* cc_varinit_new()
 }
 
 
-BOOL cc_parser_initializer(struct tagCCContext* ctx, FVarInitializer** outinit)
+BOOL cc_parser_initializer(struct tagCCContext* ctx, FVarInitializer** outinit, enum EMMArea where)
 {
 	FVarInitializer* initializer, *kidinit;
 
-	if (!(initializer = cc_varinit_new())) {
+	if (!(initializer = cc_varinit_new(where))) {
 		return FALSE;
 	}
 
@@ -39,11 +39,11 @@ BOOL cc_parser_initializer(struct tagCCContext* ctx, FVarInitializer** outinit)
 		FArray kids;
 
 		initializer->_isblock = 1;
-		array_init(&kids, 32, sizeof(FVarInitializer*), CC_MM_TEMPPOOL);
+		array_init(&kids, 32, sizeof(FVarInitializer*), where);
 
 		for (;;)
 		{
-			if (!cc_parser_initializer(ctx, &kidinit)) {
+			if (!cc_parser_initializer(ctx, &kidinit, where)) {
 				return FALSE;
 			}
 
@@ -64,7 +64,7 @@ BOOL cc_parser_initializer(struct tagCCContext* ctx, FVarInitializer** outinit)
 	}
 	else {
 		initializer->_isblock = 0;
-		if (!cc_expr_assignment(ctx, &initializer->_u._expr)) {
+		if (!cc_expr_assignment(ctx, &initializer->_u._expr, where)) {
 			return FALSE;
 		}
 	}

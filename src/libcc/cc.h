@@ -21,6 +21,7 @@
 
 /* runtime context of cc */
 typedef struct tagCCContext {
+	const char* _srcfilename;
 	const char* _outfilename;
 	FILE* _outfp;
 
@@ -36,7 +37,7 @@ typedef struct tagCCContext {
 	int16_t _errors;
 
 	struct tagCCSymbol* _function;
-	struct tagBackend* _backend;
+	struct tagCCBackend* _backend;
 } FCCContext;
 
 
