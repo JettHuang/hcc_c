@@ -1133,3 +1133,29 @@ FCCExprTree* cc_expr_new(enum EMMArea where)
 
 	return tree;
 }
+
+BOOL cc_expr_constant_int(struct tagCCContext* ctx, int* val)
+{
+	FCCExprTree* expr;
+
+	*val = 0;
+	if (!cc_expr_constant_expression(ctx, &expr, CC_MM_TEMPPOOL) || expr==NULL) {
+		return FALSE;
+	}
+
+	if (expr->_op == EXPR_CONSTANT)
+	{
+		if (expr->_ty->_op == Type_SInteger)
+		{
+			*val = (int)expr->_u._symbol->_u._cnstval._sint;
+			return TRUE;
+		}
+		if (expr->_ty->_op == Type_UInteger)
+		{
+			*val = (int)expr->_u._symbol->_u._cnstval._uint;
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}

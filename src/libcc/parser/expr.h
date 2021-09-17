@@ -101,5 +101,8 @@ BOOL cc_expr_assignment(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EM
 BOOL cc_expr_expression(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
 BOOL cc_expr_constant_expression(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
 
+BOOL cc_expr_constant_int(struct tagCCContext* ctx, int* val);
+
+
 
 #endif /* _CC_EXPR_H__ */

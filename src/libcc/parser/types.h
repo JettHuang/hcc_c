@@ -22,12 +22,13 @@
 #define Type_Float		3  /* float, double ,long double */
 #define Type_Enum		4
 #define Type_Void		5
+#define Type_Pointer	6
 /* aggregate types */
-#define Type_Array		6
-#define Type_Union		7
-#define	Type_Struct		8
-#define Type_Function	9
-#define Type_Pointer	10
+#define Type_Array		7
+#define Type_Union		8
+#define	Type_Struct		9
+#define Type_Function	10
+
 /* special types */
 #define Type_Defined	11
 #define Type_Ellipsis	12
@@ -64,6 +65,7 @@
 #define IsInt(t)	(UnQual(t)->_op == Type_SInteger || UnQual(t)->_op == Type_UInteger)
 #define IsFloat(t)	(UnQual(t)->_op == Type_Float)
 #define IsDouble(t)	(UnQual(t)->_op == Type_Double)
+#define IsScalar(t) (UnQual(t)->_op <= Type_Pointer)
 
 
 /* cc type */

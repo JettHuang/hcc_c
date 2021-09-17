@@ -15,18 +15,32 @@
 #include "optparse.h"
 
 int B;
+
+int* ptr = &B + 1 + 1;
+
 /* int A = { {10} }; */ /* only one level of braces is allowed on an initializer for an object of type "int" */
 int grids[10] = { { 10 }, { 1000} };
 
+int a[][3] = {0, 1, 2};
+
 char str[] = { "jett" };
 
+enum Color {
+	RED,
+	GREEN,
+	BLUE
+};
+
+enum Color clr = (enum Color)100;
+
 struct FRectangle {
+	int bits : 3;
 	int x, y;
 	struct FSize {
 		int sx, sy;
 	} size;
 
-	int a[10];
+	int a[1 > 0 ? 10 : 200];
 };
 
 union U {
@@ -34,6 +48,9 @@ union U {
 	struct B { int a, b; } _d;
 
 } u = { 1000, 200 };
+
+int x = 100 + (int)100.f;
+// int y = sizeof(((struct FRectangle*)0)->bits);
 
 struct FRectangle rt = { .y = 20, .x = 10,  .size.sx = 100, { 20 }, { 0,[1] = 100 } };
 

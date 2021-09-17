@@ -7,6 +7,7 @@
 #include "parser.h"
 #include "logger.h"
 #include "init.h"
+#include "expr.h"
 #include "generator/gen.h"
 
 
@@ -679,7 +680,7 @@ BOOL cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FAr
 			cc_read_token(ctx, &ctx->_currtk);
 			if (cc_parser_is_constant(ctx->_currtk._type))
 			{
-				if (!cc_parser_intexpression(ctx, &cnt))
+				if (!cc_expr_constant_int(ctx, &cnt))
 				{
 					logger_output_s("error: need integer constant. at %w.\n", &ctx->_currtk._loc);
 					return FALSE;
@@ -1079,7 +1080,7 @@ FCCType* cc_parser_declenum(FCCContext* ctx)
 			if (ctx->_currtk._type == TK_ASSIGN) /* '=' */
 			{
 				cc_read_token(ctx, &ctx->_currtk);
-				if (!cc_parser_intexpression(ctx, &ek))
+				if (!cc_expr_constant_int(ctx, &ek))
 				{
 					return FALSE;
 				}
@@ -1270,7 +1271,7 @@ BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
 				}
 
 				cc_read_token(ctx, &ctx->_currtk);
-				if (!cc_parser_intexpression(ctx, &bitsize))
+				if (!cc_expr_constant_int(ctx, &bitsize))
 				{
 					return FALSE;
 				}
@@ -1438,17 +1439,3 @@ BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
 	return TRUE;
 }
 
-BOOL cc_parser_intexpression(FCCContext* ctx, int* val)
-{
-	// TODO:
-	*val = 0;
-	if (ctx->_currtk._type == TK_CONSTANT_INT)
-	{
-		*val = ctx->_currtk._val._int;
-		
-		cc_read_token(ctx, &ctx->_currtk);
-		return TRUE;
-	}
-	
-	return FALSE;
-}

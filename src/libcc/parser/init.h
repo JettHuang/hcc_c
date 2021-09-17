@@ -24,6 +24,7 @@ typedef struct tagVarInitializer {
 
 FVarInitializer* cc_varinit_new(enum EMMArea where);
 BOOL cc_parser_initializer(struct tagCCContext* ctx, FVarInitializer** outinit, enum EMMArea where);
+BOOL cc_varinit_check(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init);
 
 
 #endif /* __CC_INITIALIZER_H__ */

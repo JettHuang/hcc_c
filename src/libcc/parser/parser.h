@@ -43,6 +43,4 @@ BOOL cc_parser_structfields(FCCContext* ctx, FCCType* ty);
 
 BOOL cc_parser_expect(FCCContext* ctx, enum ECCToken tk);
 
-BOOL cc_parser_intexpression(FCCContext* ctx, int* val);
-
 #endif /* __CC_PARSER_H__ */

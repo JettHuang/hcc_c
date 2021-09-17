@@ -213,7 +213,7 @@ BOOL cc_stmt_case(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, 
 		return FALSE;
 	}
 
-	if (!cc_parser_intexpression(ccctx, &constval))
+	if (!cc_expr_constant_int(ccctx, &constval))
 	{
 		logger_output_s("error: case label must be a constant value, at %w.\n", &stmt->_loc);
 		return FALSE;

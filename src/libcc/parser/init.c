@@ -73,3 +73,9 @@ BOOL cc_parser_initializer(struct tagCCContext* ctx, FVarInitializer** outinit, 
 	*outinit = initializer;
 	return TRUE;
 }
+
+BOOL cc_varinit_check(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init)
+{
+
+	return FALSE;
+}
