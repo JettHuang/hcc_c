@@ -151,7 +151,7 @@ static BOOL cc_read_token_with_handlectrl1(FCCContext* ctx, FCCToken* tk, BOOL *
 			return FALSE;
 		}
 
-		if (tklist->_tk._type == TK_ID && !strcmp(tklist->_tk._val._astr, "line"))
+		if (tklist->_tk._type == TK_ID && !strcmp(tklist->_tk._val._astr._str, "line"))
 		{
 			const char* filename = NULL;
 			int linenum = 0;
@@ -164,7 +164,7 @@ static BOOL cc_read_token_with_handlectrl1(FCCContext* ctx, FCCToken* tk, BOOL *
 			}
 			else if (expr->_tk._type == TK_CONSTANT_INT && expr->_next->_tk._type == TK_CONSTANT_STR && CHECK_IS_EOFLINE(expr->_next->_next->_tk._type))
 			{
-				const char* cnststr = expr->_next->_tk._val._astr;
+				const char* cnststr = expr->_next->_tk._val._astr._str;
 				linenum = expr->_tk._val._int;
 				filename = hs_hashnstr2(cnststr + 1, strlen(cnststr) - 2); /* omit 2 " */
 				filename = util_normalize_pathname(filename);

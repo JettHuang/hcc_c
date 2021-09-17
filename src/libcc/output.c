@@ -59,22 +59,30 @@ static void outtype(FCCType* ty, FILE* f, char* bp, BOOL bdetail)
 	{
 	case Type_Unknown:
 		outs("unknown", f, bp); break;
-	case Type_Char:
+	case Type_SInteger:
 		if (ty->_size == 1) {
 			outs("char", f, bp);
 		}
 		else {
-			outs("wchar", f, bp);
+			outs("sint", f, bp);
 		}
 		break;
-	case Type_SInteger:
-		outs("sint", f, bp); break;
 	case Type_UInteger:
-		outs("uint", f, bp); break;
+		if (ty->_size == 1) {
+			outs("unsigned char", f, bp);
+		}
+		else {
+			outs("uint", f, bp);
+		}
+		break;
 	case Type_Float:
-		outs("float", f, bp); break;
-	case Type_Double:
-		outs("double", f, bp); break;
+		if (ty->_size == sizeof(float)) {
+			outs("float", f, bp);
+		}
+		else {
+			outs("double", f, bp);
+		}
+		break;
 	case Type_Void:
 		outs("void", f, bp); break;
 	case Type_Array:
@@ -97,7 +105,7 @@ static void outtype(FCCType* ty, FILE* f, char* bp, BOOL bdetail)
 			{
 				outs((*enumid)->_name, f, bp);
 				outs("=", f, bp);
-				outd((*enumid)->_u._value._int, f, bp);
+				outd((long)(*enumid)->_u._cnstval._sint, f, bp);
 				outs(" ", f, bp);
 			}
 			outs(">", f, bp);

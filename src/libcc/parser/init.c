@@ -41,6 +41,7 @@ BOOL cc_parser_initializer(struct tagCCContext* ctx, FVarInitializer** outinit, 
 		initializer->_isblock = 1;
 		array_init(&kids, 32, sizeof(FVarInitializer*), where);
 
+		cc_read_token(ctx, &ctx->_currtk);
 		for (;;)
 		{
 			if (!cc_parser_initializer(ctx, &kidinit, where)) {

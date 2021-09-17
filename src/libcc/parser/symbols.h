@@ -33,6 +33,14 @@
 
 
 struct tagStructField;
+
+typedef union tagCCConstVal {
+	int64_t		_sint;
+	uint64_t	_uint;
+	long double	_float;
+	const void* _ptr;
+} FCCConstVal;
+
 /* symbol */
 typedef struct tagCCSymbol
 {
@@ -62,10 +70,10 @@ typedef struct tagCCSymbol
 		} _s; /* for struct(union) */
 
 		struct {
-			FValue _min, _max;
+			FCCConstVal _min, _max;
 		} _limits; /* for built-in type */
 
-		FValue	_value; /* for constant or enum ids */
+		FCCConstVal	_cnstval; /* for constant or enum ids */
 		struct tagVarInitializer* _initializer; /* for variable initialization */
 
 		struct tagCCSymbol* _alias;
@@ -102,6 +110,6 @@ FCCSymbol* cc_symbol_relocate(const char* name, struct tagCCSymbolTable* src, st
 FCCSymbol* cc_symbol_lookup(const char* name, struct tagCCSymbolTable* tp);
 
 /* new a constant symbol */
-FCCSymbol* cc_symbol_constant(struct tagCCType* ty, FValue val);
+FCCSymbol* cc_symbol_constant(struct tagCCType* ty, FCCConstVal val);
 
 #endif /* __CC_SYMBOLS_H__ */

@@ -65,108 +65,108 @@ void cc_type_init(const FCCTypeMetrics* m)
 
 	{
 		p = cc_symbol_install("char", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
-		gBuiltinTypes._chartype = cc_type_new(Type_Char, NULL, m->_charmetric._size, m->_charmetric._align, p);
+		gBuiltinTypes._chartype = cc_type_new(Type_UInteger, NULL, m->_charmetric._size, m->_charmetric._align, p);
 		p->_type = gBuiltinTypes._chartype;
-		p->_u._limits._max._llong = ones(8 * p->_type->_size) >> 1;
-		p->_u._limits._min._llong = -p->_u._limits._max._llong - 1;
+		p->_u._limits._max._sint = ones(8 * p->_type->_size) >> 1;
+		p->_u._limits._min._sint = -p->_u._limits._max._sint - 1;
 	}
 	{
 		p = cc_symbol_install("wide char", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
-		gBuiltinTypes._wchartype = cc_type_new(Type_Char, NULL, m->_wcharmetric._size, m->_wcharmetric._align, p);
+		gBuiltinTypes._wchartype = cc_type_new(Type_UInteger, NULL, m->_wcharmetric._size, m->_wcharmetric._align, p);
 		p->_type = gBuiltinTypes._wchartype;
-		p->_u._limits._max._llong = ones(8 * p->_type->_size) >> 1;
-		p->_u._limits._min._llong = -p->_u._limits._max._llong - 1;
+		p->_u._limits._max._sint = ones(8 * p->_type->_size) >> 1;
+		p->_u._limits._min._sint = -p->_u._limits._max._sint - 1;
 	}
 	{
 		p = cc_symbol_install("signed char", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
-		gBuiltinTypes._schartype = cc_type_new(Type_Char, NULL, m->_charmetric._size, m->_charmetric._align, p);
+		gBuiltinTypes._schartype = cc_type_new(Type_SInteger, NULL, m->_charmetric._size, m->_charmetric._align, p);
 		p->_type = gBuiltinTypes._schartype;
-		p->_u._limits._max._llong = ones(8 * p->_type->_size) >> 1;
-		p->_u._limits._min._llong = -p->_u._limits._max._llong - 1;
+		p->_u._limits._max._sint = ones(8 * p->_type->_size) >> 1;
+		p->_u._limits._min._sint = -p->_u._limits._max._sint - 1;
 	}
 	{
 		p = cc_symbol_install("unsigned char", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
-		gBuiltinTypes._uchartype = cc_type_new(Type_Char, NULL, m->_charmetric._size, m->_charmetric._align, p);
+		gBuiltinTypes._uchartype = cc_type_new(Type_UInteger, NULL, m->_charmetric._size, m->_charmetric._align, p);
 		p->_type = gBuiltinTypes._uchartype;
-		p->_u._limits._max._llong = ones(8 * p->_type->_size);
-		p->_u._limits._min._llong = 0;
+		p->_u._limits._max._sint = ones(8 * p->_type->_size);
+		p->_u._limits._min._sint = 0;
 	}
 	{
 		p = cc_symbol_install("signed short", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
 		gBuiltinTypes._sshorttype = cc_type_new(Type_SInteger, NULL, m->_shortmetric._size, m->_shortmetric._align, p);
 		p->_type = gBuiltinTypes._sshorttype;
-		p->_u._limits._max._llong = ones(8 * p->_type->_size) >> 1;
-		p->_u._limits._min._llong = -p->_u._limits._max._llong - 1;
+		p->_u._limits._max._sint = ones(8 * p->_type->_size) >> 1;
+		p->_u._limits._min._sint = -p->_u._limits._max._sint - 1;
 	}
 	{
 		p = cc_symbol_install("unsigned short", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
 		gBuiltinTypes._ushorttype = cc_type_new(Type_UInteger, NULL, m->_shortmetric._size, m->_shortmetric._align, p);
 		p->_type = gBuiltinTypes._ushorttype;
-		p->_u._limits._max._llong = ones(8 * p->_type->_size);
-		p->_u._limits._min._llong = 0;
+		p->_u._limits._max._sint = ones(8 * p->_type->_size);
+		p->_u._limits._min._sint = 0;
 	}
 	{
 		p = cc_symbol_install("signed int", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
 		gBuiltinTypes._sinttype = cc_type_new(Type_SInteger, NULL, m->_intmetric._size, m->_intmetric._align, p);
 		p->_type = gBuiltinTypes._sinttype;
-		p->_u._limits._max._llong = ones(8 * p->_type->_size) >> 1;
-		p->_u._limits._min._llong = -p->_u._limits._max._llong - 1;
+		p->_u._limits._max._sint = ones(8 * p->_type->_size) >> 1;
+		p->_u._limits._min._sint = -p->_u._limits._max._sint - 1;
 	}
 	{
 		p = cc_symbol_install("unsigned int", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
 		gBuiltinTypes._uinttype = cc_type_new(Type_UInteger, NULL, m->_intmetric._size, m->_intmetric._align, p);
 		p->_type = gBuiltinTypes._uinttype;
-		p->_u._limits._max._llong = ones(8 * p->_type->_size);
-		p->_u._limits._min._llong = 0;
+		p->_u._limits._max._sint = ones(8 * p->_type->_size);
+		p->_u._limits._min._sint = 0;
 	}
 	{
 		p = cc_symbol_install("signed long", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
 		gBuiltinTypes._slongtype = cc_type_new(Type_SInteger, NULL, m->_longmetric._size, m->_longmetric._align, p);
 		p->_type = gBuiltinTypes._slongtype;
-		p->_u._limits._max._llong = ones(8 * p->_type->_size) >> 1;
-		p->_u._limits._min._llong = -p->_u._limits._max._llong - 1;
+		p->_u._limits._max._sint = ones(8 * p->_type->_size) >> 1;
+		p->_u._limits._min._sint = -p->_u._limits._max._sint - 1;
 	}
 	{
 		p = cc_symbol_install("unsigned long", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
 		gBuiltinTypes._ulongtype = cc_type_new(Type_UInteger, NULL, m->_longmetric._size, m->_longmetric._align, p);
 		p->_type = gBuiltinTypes._ulongtype;
-		p->_u._limits._max._llong = ones(8 * p->_type->_size);
-		p->_u._limits._min._llong = 0;
+		p->_u._limits._max._sint = ones(8 * p->_type->_size);
+		p->_u._limits._min._sint = 0;
 	}
 	{
 		p = cc_symbol_install("signed long long", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
 		gBuiltinTypes._sllongtype = cc_type_new(Type_SInteger, NULL, m->_longlongmetric._size, m->_longlongmetric._align, p);
 		p->_type = gBuiltinTypes._sllongtype;
-		p->_u._limits._max._llong = ones(8 * p->_type->_size) >> 1;
-		p->_u._limits._min._llong = -p->_u._limits._max._llong - 1;
+		p->_u._limits._max._sint = ones(8 * p->_type->_size) >> 1;
+		p->_u._limits._min._sint = -p->_u._limits._max._sint - 1;
 	}
 	{
 		p = cc_symbol_install("unsigned long long", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
 		gBuiltinTypes._ullongtype = cc_type_new(Type_UInteger, NULL, m->_longlongmetric._size, m->_longlongmetric._align, p);
 		p->_type = gBuiltinTypes._ullongtype;
-		p->_u._limits._max._llong = ones(8 * p->_type->_size);
-		p->_u._limits._min._llong = 0;
+		p->_u._limits._max._sint = ones(8 * p->_type->_size);
+		p->_u._limits._min._sint = 0;
 	}
 	{
 		p = cc_symbol_install("float", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
 		gBuiltinTypes._floattype = cc_type_new(Type_Float, NULL, m->_floatmetric._size, m->_floatmetric._align, p);
 		p->_type = gBuiltinTypes._floattype;
-		p->_u._limits._max._ldouble = FLT_MAX;
-		p->_u._limits._min._ldouble = FLT_MIN;
+		p->_u._limits._max._float = FLT_MAX;
+		p->_u._limits._min._float = FLT_MIN;
 	}
 	{
 		p = cc_symbol_install("double", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
-		gBuiltinTypes._doubletype = cc_type_new(Type_Double, NULL, m->_doublemetric._size, m->_doublemetric._align, p);
+		gBuiltinTypes._doubletype = cc_type_new(Type_Float, NULL, m->_doublemetric._size, m->_doublemetric._align, p);
 		p->_type = gBuiltinTypes._doubletype;
-		p->_u._limits._max._ldouble = DBL_MAX;
-		p->_u._limits._min._ldouble = DBL_MIN;
+		p->_u._limits._max._float = DBL_MAX;
+		p->_u._limits._min._float = DBL_MIN;
 	}
 	{
 		p = cc_symbol_install("long double", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
-		gBuiltinTypes._ldoubletype = cc_type_new(Type_Double, NULL, m->_longdoublemetric._size, m->_longdoublemetric._align, p);
+		gBuiltinTypes._ldoubletype = cc_type_new(Type_Float, NULL, m->_longdoublemetric._size, m->_longdoublemetric._align, p);
 		p->_type = gBuiltinTypes._ldoubletype;
-		p->_u._limits._max._ldouble = LDBL_MAX;
-		p->_u._limits._min._ldouble = LDBL_MIN;
+		p->_u._limits._max._float = LDBL_MAX;
+		p->_u._limits._min._float = LDBL_MIN;
 	}
 	{
 		p = cc_symbol_install("void", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
@@ -399,11 +399,9 @@ BOOL cc_type_isequal(FCCType* ty1, FCCType* ty2, BOOL option)
 
 	switch (ty1->_op)
 	{
-	case Type_Char:
 	case Type_SInteger:
 	case Type_UInteger:
 	case Type_Float:
-	case Type_Double:
 	case Type_Enum:
 	case Type_Union:
 	case Type_Struct:

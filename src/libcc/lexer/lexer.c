@@ -768,7 +768,8 @@ static int cc_lexer_postprocess_token(FCCToken* tk, struct tagCharBuffer* charbu
 			}
 		} // end for k
 
-		tk->_val._astr = hs_hashnstr(charbuf->_ptrdata, charbuf->_itemcnt);
+		tk->_val._astr._str = hs_hashnstr(charbuf->_ptrdata, charbuf->_itemcnt);
+		tk->_val._astr._chcnt = charbuf->_itemcnt;
 	}
 	break;
 	case TK_CONSTANT_INT:
@@ -964,7 +965,8 @@ static int cc_lexer_postprocess_token(FCCToken* tk, struct tagCharBuffer* charbu
 				logger_output_s("error: convert to string failed, at line %s:%d:%d\n", tk->_loc._filename, tk->_loc._line, tk->_loc._col);
 				return FALSE;
 			}
-			tk->_val._astr = hs_hashnstr(strarray._data, strarray._elecount);
+			tk->_val._astr._str = hs_hashnstr(strarray._data, strarray._elecount);
+			tk->_val._astr._chcnt = strarray._elecount;
 		}
 	}
 	break;

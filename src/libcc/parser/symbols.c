@@ -192,9 +192,63 @@ FCCSymbol* cc_symbol_lookup(const char* name, struct tagCCSymbolTable* tp)
 	return NULL;
 }
 
-FCCSymbol* cc_symbol_constant(struct tagCCType* ty, FValue val)
+FCCSymbol* cc_symbol_constant(struct tagCCType* ty, FCCConstVal val)
 {
-	/* TODO: */
-	return NULL;
+	struct tagSymEntry* p;
+	int h = (int)val._sint & (SYM_HASHSIZE - 1);
+
+	ty = UnQual(ty);
+	for (p = gConstants->_buckets[h]; p; p = p->_link)
+	{
+		if (cc_type_isequal(ty, p->_sym._type, 1))
+		{
+			switch (ty->_op)
+			{
+			case Type_SInteger:
+				if (p->_sym._u._cnstval._sint == val._sint) {
+					return &p->_sym;
+				}
+				break;
+			case Type_UInteger:
+				if (p->_sym._u._cnstval._uint == val._uint) {
+					return &p->_sym;
+				}
+				break;
+			case Type_Float:
+				if (p->_sym._u._cnstval._float == val._float) {
+					return &p->_sym;
+				}
+				break;
+			case Type_Array:
+			case Type_Pointer:
+				if (p->_sym._u._cnstval._ptr == val._ptr) {
+					return &p->_sym;
+				}
+				break;
+			default:
+				assert(0);
+				break;
+			}
+		}
+	} /* end for */
+
+	p = (struct tagSymEntry*)mm_alloc_area(sizeof(struct tagSymEntry), CC_MM_PERMPOOL);
+	if (!p) {
+		logger_output_s("out of memory: %s:%d\n", __FILE__, __LINE__);
+		return NULL;
+	}
+
+	memset(&p->_sym, 0, sizeof(p->_sym));
+	p->_sym._name = hs_hashstr(util_itoa(cc_symbol_genlabel(1)));
+	p->_sym._type = ty;
+	p->_sym._scope = SCOPE_CONST;
+	p->_sym._sclass = SC_Static;
+	p->_sym._u._cnstval = val;
+	p->_sym._defined = 1;
+	p->_sym._up = gConstants->_all;
+	gConstants->_all = &p->_sym;
+	p->_link = gConstants->_buckets[h];
+	gConstants->_buckets[h] = p;
+	return &p->_sym;
 }
 

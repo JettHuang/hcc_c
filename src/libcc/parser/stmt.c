@@ -167,13 +167,13 @@ BOOL cc_stmt_label(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx,
 	}
 	stmt->_loc = ccctx->_currtk._loc;
 
-	p = cc_symbol_lookup(ccctx->_currtk._val._astr, gLabels);
+	p = cc_symbol_lookup(ccctx->_currtk._val._astr._str, gLabels);
 	if (!p) {
-		p = cc_symbol_install(ccctx->_currtk._val._astr, &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+		p = cc_symbol_install(ccctx->_currtk._val._astr._str, &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
 		p->_loc = ccctx->_currtk._loc;
 	}
 	if (p->_defined) {
-		logger_output_s("error: redefinition of label '%s' at %w, previously defined at %w.\n", ccctx->_currtk._val._astr, &stmt->_loc, &p->_loc);
+		logger_output_s("error: redefinition of label '%s' at %w, previously defined at %w.\n", ccctx->_currtk._val._astr._str, &stmt->_loc, &p->_loc);
 		return FALSE;
 	}
 	p->_defined = 1;
@@ -503,9 +503,9 @@ BOOL cc_stmt_goto(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, 
 		return FALSE;
 	}
 	
-	p = cc_symbol_lookup(ccctx->_currtk._val._astr, gLabels);
+	p = cc_symbol_lookup(ccctx->_currtk._val._astr._str, gLabels);
 	if (!p) {
-		p = cc_symbol_install(ccctx->_currtk._val._astr, &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+		p = cc_symbol_install(ccctx->_currtk._val._astr._str, &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
 	}
 	stmt->_u._goto._id = p;
 

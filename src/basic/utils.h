@@ -31,12 +31,11 @@ typedef union tagValue {
 	float		_float;
 	double		_double;
 	long double	_ldouble;
-	const char* _astr;
 	struct
 	{
 		const char* _str;
 		uint32_t	_chcnt; /* include tail '00' */
-	} _wstr;
+	} _astr, _wstr;
 } FValue;
 
 #define ones(n) ((n)>=8*sizeof (unsigned long) ? ~0UL : ~((~0UL)<<(n))) /* n bits */

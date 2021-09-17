@@ -191,7 +191,7 @@ BOOL cc_parser_is_typename(FCCToken* tk)
 	FCCSymbol* p;
 
 	return (gCCTokenMetas[tk->_type]._flags & TK_IS_DECL_SPECIFIER)
-		|| (tk->_type == TK_ID && (p = cc_symbol_lookup(tk->_val._astr, gIdentifiers)) && p->_sclass == SC_Typedef);
+		|| (tk->_type == TK_ID && (p = cc_symbol_lookup(tk->_val._astr._str, gIdentifiers)) && p->_sclass == SC_Typedef);
 }
 
 BOOL cc_parser_expect(FCCContext* ctx, enum ECCToken tk)
@@ -213,7 +213,7 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 {
 	FCCType* ty = NULL;
 	int sclass = SC_Unknown;
-	int typespec = Type_Unknown;
+	int typespec = TK_NONE;
 	int typequal = Type_Unknown;
 	int funcspec = FS_Unknown;
 	int sign = Sign_Unknown;
@@ -342,77 +342,77 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 			cc_read_token(ctx, &ctx->_currtk);
 			break;
 		case TK_CHAR:
-			if (typespec != Type_Unknown)
+			if (typespec != TK_NONE)
 			{
 				logger_output_s("error: invalid use 'char', at %w\n", &ctx->_currtk._loc);
 				return NULL;
 			}
-			typespec = Type_Char;
+			typespec = TK_CHAR;
 			cc_read_token(ctx, &ctx->_currtk);
 			break;
 		case TK_INT:
-			if (typespec != Type_Unknown)
+			if (typespec != TK_NONE)
 			{
 				logger_output_s("error: invalid use 'int', at %w\n", &ctx->_currtk._loc);
 				return NULL;
 			}
-			typespec = Type_SInteger;
+			typespec = TK_INT;
 			cc_read_token(ctx, &ctx->_currtk);
 			break;
 		case TK_FLOAT:
-			if (typespec != Type_Unknown)
+			if (typespec != TK_NONE)
 			{
 				logger_output_s("error: invalid use 'float', at %w\n", &ctx->_currtk._loc);
 				return NULL;
 			}
-			typespec = Type_Float;
+			typespec = TK_FLOAT;
 			ty = gBuiltinTypes._floattype;
 			cc_read_token(ctx, &ctx->_currtk);
 			break;
 		case TK_DOUBLE:
-			if (typespec != Type_Unknown)
+			if (typespec != TK_NONE)
 			{
 				logger_output_s("error: invalid use 'double', at %w\n", &ctx->_currtk._loc);
 				return NULL;
 			}
-			typespec = Type_Double;
+			typespec = TK_DOUBLE;
 			ty = gBuiltinTypes._doubletype;
 			cc_read_token(ctx, &ctx->_currtk);
 			break;
 		case TK_ENUM:
-			if (typespec != Type_Unknown)
+			if (typespec != TK_NONE)
 			{
 				logger_output_s("error: invalid use 'enum', at %w\n", &ctx->_currtk._loc);
 				return NULL;
 			}
-			typespec = Type_Enum;
+			typespec = TK_ENUM;
 			ty = cc_parser_declenum(ctx);
 			break;
 		case TK_STRUCT:
-			if (typespec != Type_Unknown)
+			if (typespec != TK_NONE)
 			{
 				logger_output_s("error: invalid use 'struct', at %w\n", &ctx->_currtk._loc);
 				return NULL;
 			}
-			typespec = Type_Struct;
+			typespec = TK_STRUCT;
 			ty = cc_parser_declstruct(ctx, Type_Struct);
 			break;
 		case TK_UNION:
-			if (typespec != Type_Unknown)
+			if (typespec != TK_NONE)
 			{
 				logger_output_s("error: invalid use 'union', at %w\n", &ctx->_currtk._loc);
 				return NULL;
 			}
-			typespec = Type_Union;
+			typespec = TK_UNION;
 			ty = cc_parser_declstruct(ctx, Type_Union);
 			break;
 		case TK_ID:
 		{
 			FCCSymbol* p = NULL;
-			if (typespec == Type_Unknown && size == Size_Unknown && sign == Sign_Unknown
-				&& (p = cc_symbol_lookup(ctx->_currtk._val._astr, gIdentifiers)) && p->_sclass == SC_Typedef)
+			if (typespec == TK_NONE && size == Size_Unknown && sign == Sign_Unknown
+				&& (p = cc_symbol_lookup(ctx->_currtk._val._astr._str, gIdentifiers)) && p->_sclass == SC_Typedef)
 			{
-				typespec = Type_Defined;
+				typespec = TK_TYPEDEF;
 				cc_read_token(ctx, &ctx->_currtk);
 			}
 			else
@@ -431,7 +431,7 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 	{
 		if (size != Size_Unknown || sign != Sign_Unknown)
 		{
-			typespec = Type_SInteger;
+			typespec = TK_INT;
 		}
 		else
 		{
@@ -440,7 +440,7 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 		}
 	}
 
-	if (typespec == Type_Char)
+	if (typespec == TK_CHAR)
 	{
 		if (size != Size_Unknown)
 		{
@@ -458,7 +458,7 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 			ty = gBuiltinTypes._uchartype;
 		}
 	}
-	else if (typespec == Type_SInteger)
+	else if (typespec == TK_INT)
 	{
 		if (sign == Sign_Signed || sign == Sign_Unknown)
 		{
@@ -574,7 +574,7 @@ BOOL cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FAr
 			return FALSE;
 		}
 
-		*id = ctx->_currtk._val._astr;
+		*id = ctx->_currtk._val._astr._str;
 		*loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 	}
@@ -1041,7 +1041,7 @@ FCCType* cc_parser_declenum(FCCContext* ctx)
 	cc_read_token(ctx, &ctx->_currtk);
 	if (ctx->_currtk._type == TK_ID)
 	{
-		tag = ctx->_currtk._val._astr;
+		tag = ctx->_currtk._val._astr._str;
 		cc_read_token(ctx, &ctx->_currtk);
 	}
 	loc = ctx->_currtk._loc;
@@ -1066,7 +1066,7 @@ FCCType* cc_parser_declenum(FCCContext* ctx)
 		array_init(&enumerators, 64, sizeof(FCCSymbol*), CC_MM_PERMPOOL);
 		while (ctx->_currtk._type == TK_ID)
 		{
-			const char* id = ctx->_currtk._val._astr;
+			const char* id = ctx->_currtk._val._astr._str;
 			
 			p = cc_symbol_lookup(id, gIdentifiers);
 			if (p && p->_scope == gCurrentLevel) {
@@ -1086,7 +1086,7 @@ FCCType* cc_parser_declenum(FCCContext* ctx)
 			}
 			else
 			{
-				if (ek == gBuiltinTypes._sinttype->_u._symbol->_u._limits._max._int) {
+				if (ek == gBuiltinTypes._sinttype->_u._symbol->_u._limits._max._sint) {
 					logger_output_s("error: overflow in value for enumeration constant '%s' at %w\n", id, &loc);
 					return NULL;
 				}
@@ -1098,7 +1098,7 @@ FCCType* cc_parser_declenum(FCCContext* ctx)
 			p->_loc = loc;
 			p->_type = ty;
 			p->_sclass = SC_Enum;
-			p->_u._value._int = ek;
+			p->_u._cnstval._sint = ek;
 			array_append(&enumerators, &p);
 			
 			if (ctx->_currtk._type != TK_COMMA) /* ',' */
@@ -1144,7 +1144,7 @@ FCCType* cc_parser_declenum(FCCContext* ctx)
 		ty->_align = ty->_type->_align;
 	}
 
-	logger_output_s("enum decl: %T\n", ty);
+	/* logger_output_s("enum decl: %T\n", ty); */
 	return ty;
 }
 
@@ -1158,7 +1158,7 @@ FCCType* cc_parser_declstruct(FCCContext* ctx, int op)
 	cc_read_token(ctx, &ctx->_currtk);
 	if (ctx->_currtk._type == TK_ID)
 	{
-		tag = ctx->_currtk._val._astr;
+		tag = ctx->_currtk._val._astr._str;
 		cc_read_token(ctx, &ctx->_currtk);
 	}
 	loc = ctx->_currtk._loc;
@@ -1219,7 +1219,7 @@ FCCType* cc_parser_declstruct(FCCContext* ctx, int op)
 		}
 	}
 
-	logger_output_s("struct decl: %T\n", ty);
+	/* logger_output_s("struct decl: %T\n", ty); */
 	return ty;
 }
 
@@ -1263,7 +1263,7 @@ BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
 			{
 				int bitsize;
 
-				if (UnQual(ty)->_op != Type_SInteger && UnQual(ty)->_op != Type_UInteger && UnQual(ty)->_op != Type_Char)
+				if (UnQual(ty)->_op != Type_SInteger && UnQual(ty)->_op != Type_UInteger)
 				{
 					logger_output_s("error: illegal bit-field type, expecting integer, at %w.\n", &ctx->_currtk._loc);
 					return FALSE;

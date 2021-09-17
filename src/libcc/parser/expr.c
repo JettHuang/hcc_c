@@ -35,12 +35,13 @@ static BOOL cc_expr_primary(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 	FCCExprTree* tree = NULL;
 	FCCSymbol* p = NULL;
 	FCCType* cnstty = NULL;
+	FCCConstVal cnstval;
 
 	switch (ctx->_currtk._type)
 	{
 	case TK_ID:
 	{
-		const char* id = ctx->_currtk._val._astr;
+		const char* id = ctx->_currtk._val._astr._str;
 		if (!(p = cc_symbol_lookup(id, gIdentifiers))) {
 			logger_output_s("error: undeclared identifier %s at %w\n", id, &ctx->_currtk._loc);
 			return FALSE;
@@ -53,34 +54,62 @@ static BOOL cc_expr_primary(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 		tree->_loc = ctx->_currtk._loc;
 		tree->_ty = p->_type;
 		tree->_u._symbol = p;
+
+		cc_read_token(ctx, &ctx->_currtk);
 	}
 		break;
 	case TK_CONSTANT_INT:
-		cnstty = gBuiltinTypes._sinttype; break;
+		cnstty = gBuiltinTypes._sinttype; 
+		cnstval._sint = ctx->_currtk._val._int; 
+		break;
 	case TK_CONSTANT_UINT:
-		cnstty = gBuiltinTypes._uinttype; break;
+		cnstty = gBuiltinTypes._uinttype; 
+		cnstval._uint = ctx->_currtk._val._uint;
+		break;
 	case TK_CONSTANT_LONG:
-		cnstty = gBuiltinTypes._slongtype; break;
+		cnstty = gBuiltinTypes._slongtype; 
+		cnstval._sint = ctx->_currtk._val._long;
+		break;
 	case TK_CONSTANT_ULONG:
-		cnstty = gBuiltinTypes._ulongtype; break;
+		cnstty = gBuiltinTypes._ulongtype; 
+		cnstval._uint = ctx->_currtk._val._ulong;
+		break;
 	case TK_CONSTANT_LLONG:
-		cnstty = gBuiltinTypes._sllongtype; break;
+		cnstty = gBuiltinTypes._sllongtype; 
+		cnstval._sint = ctx->_currtk._val._llong;
+		break;
 	case TK_CONSTANT_ULLONG:
-		cnstty = gBuiltinTypes._ullongtype; break;
+		cnstty = gBuiltinTypes._ullongtype; 
+		cnstval._uint = ctx->_currtk._val._ullong;
+		break;
 	case TK_CONSTANT_FLOAT:
-		cnstty = gBuiltinTypes._floattype; break;
+		cnstty = gBuiltinTypes._floattype; 
+		cnstval._float = ctx->_currtk._val._float;
+		break;
 	case TK_CONSTANT_DOUBLE:
-		cnstty = gBuiltinTypes._doubletype; break;
+		cnstty = gBuiltinTypes._doubletype; 
+		cnstval._float = ctx->_currtk._val._double;
+		break;
 	case TK_CONSTANT_LDOUBLE:
-		cnstty = gBuiltinTypes._ldoubletype; break;
+		cnstty = gBuiltinTypes._ldoubletype; 
+		cnstval._float = ctx->_currtk._val._ldouble;
+		break;
 	case TK_CONSTANT_CHAR:
-		cnstty = gBuiltinTypes._chartype; break;
+		cnstty = gBuiltinTypes._chartype; 
+		cnstval._sint = ctx->_currtk._val._ch;
+		break;
 	case TK_CONSTANT_WCHAR:
-		cnstty = gBuiltinTypes._wchartype; break;
+		cnstty = gBuiltinTypes._wchartype;
+		cnstval._sint = ctx->_currtk._val._wch;
+		break;
 	case TK_CONSTANT_STR:
-		cnstty = cc_type_ptr(gBuiltinTypes._chartype); break;
+		cnstty = cc_type_newarray(gBuiltinTypes._chartype, ctx->_currtk._val._astr._chcnt, 0); 
+		cnstval._ptr = ctx->_currtk._val._astr._str;
+		break;
 	case TK_CONSTANT_WSTR:
-		cnstty = cc_type_ptr(gBuiltinTypes._wchartype); break;
+		cnstty = cc_type_newarray(gBuiltinTypes._wchartype, ctx->_currtk._val._wstr._chcnt / gBuiltinTypes._wchartype->_size, 0); 
+		cnstval._ptr = ctx->_currtk._val._wstr._str;
+		break;
 	case TK_LPAREN: /* '(' */
 	{
 		cc_read_token(ctx, &ctx->_currtk);
@@ -99,7 +128,9 @@ static BOOL cc_expr_primary(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 
 	if (cnstty != NULL)
 	{
-		if (!(p = cc_symbol_constant(cnstty, ctx->_currtk._val)))
+		cc_read_token(ctx, &ctx->_currtk);
+
+		if (!(p = cc_symbol_constant(cnstty, cnstval)))
 		{
 			logger_output_s("error: install constant failed at %w\n", &ctx->_currtk._loc);
 			return FALSE;
@@ -122,7 +153,7 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 	FCCExprTree* expr, * tree;
 	FLocation loc;
 
-	if (!cc_expr_expression(ctx, &expr, where)) {
+	if (!cc_expr_primary(ctx, &expr, where)) {
 		return FALSE;
 	}
 
@@ -199,7 +230,7 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 				return FALSE;
 			}
 
-			id = ctx->_currtk._val._astr;
+			id = ctx->_currtk._val._astr._str;
 			if (!(field = cc_type_findfield(id, expr->_ty)))
 			{
 				logger_output_s("error: can't find field of %t. at %w\n", expr->_ty, &ctx->_currtk._loc);
@@ -237,7 +268,7 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 				return FALSE;
 			}
 
-			id = ctx->_currtk._val._astr;
+			id = ctx->_currtk._val._astr._str;
 			sty = UnQual(cc_type_deref(expr->_ty));
 			if (!(field = cc_type_findfield(id, sty)))
 			{

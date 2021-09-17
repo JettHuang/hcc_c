@@ -79,7 +79,7 @@ void sayHello()
 
 int main(int argc, char* argv[])
 {
-	sayHello();
+	/* sayHello(); */
 
 	const char* arg, *localename;
 	int option, bsuccess;

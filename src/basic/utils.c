@@ -61,7 +61,7 @@ const char* util_stringf(const char* fmt, ...) {
 const char* util_itoa(int i)
 {
 	static char str[32];
-	return itoa(i, str, 0);
+	return itoa(i, str, 10);
 }
 
 int util_roundup(int val, int align)

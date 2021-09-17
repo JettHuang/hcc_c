@@ -82,7 +82,7 @@ static void block_end(struct tagCCContext* ctx)
 static void defsymbol(struct tagCCContext* ctx, struct tagCCSymbol* sym)
 {
 	if (sym->_generated) {
-		sym->_x._name = hs_hashstr(util_stringf("L%s", sym->_name));
+		sym->_x._name = hs_hashstr(util_stringf("_%s_", sym->_name));
 	}
 	else if (sym->_scope == SCOPE_GLOBAL || sym->_sclass == SC_External){
 		sym->_x._name = hs_hashstr(util_stringf("_%s", sym->_name));

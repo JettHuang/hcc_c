@@ -17,22 +17,20 @@
 
 /* types(& qualifiers) */
 #define Type_Unknown	0
-#define Type_Char		1  /* signed or unsigned depends on platform */
-#define Type_SInteger	2  /* int8 short int long  long-long */
-#define Type_UInteger	3  /* uint8 unsigned integer */
-#define Type_Float		4
-#define Type_Double		5
-#define Type_Enum		6
-#define Type_Void		7
+#define Type_SInteger	1  /* int8 short int long  long-long */
+#define Type_UInteger	2  /* uint8 unsigned integer */
+#define Type_Float		3  /* float, double ,long double */
+#define Type_Enum		4
+#define Type_Void		5
 /* aggregate types */
-#define Type_Array		8
-#define Type_Union		9
-#define	Type_Struct		10
-#define Type_Function	11
-#define Type_Pointer	12
+#define Type_Array		6
+#define Type_Union		7
+#define	Type_Struct		8
+#define Type_Function	9
+#define Type_Pointer	10
 /* special types */
-#define Type_Defined	13
-#define Type_Ellipsis	14
+#define Type_Defined	11
+#define Type_Ellipsis	12
 
 /* qualifiers */
 #define	Type_Const		0x0100
