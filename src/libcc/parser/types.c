@@ -547,3 +547,9 @@ FCCType* cc_type_compose(FCCType* ty1, FCCType* ty2)
 	assert(0);
 	return NULL;
 }
+
+BOOL cc_type_canconvert(FCCType* ty1, FCCType* ty2)
+{
+	// TODO: 
+	return TRUE;
+}

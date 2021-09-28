@@ -186,5 +186,6 @@ FCCType* cc_type_promote(FCCType* ty);
 void cc_type_remove(int level);
 
 FCCType* cc_type_compose(FCCType* ty1, FCCType* ty2);
+BOOL cc_type_canconvert(FCCType* ty1, FCCType* ty2);
 
 #endif /* __CC_TYPES_H__ */

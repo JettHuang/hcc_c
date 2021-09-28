@@ -1157,5 +1157,7 @@ BOOL cc_expr_constant_int(struct tagCCContext* ctx, int* val)
 		}
 	}
 
+	logger_output_s("error: integral constant is expected. at %w.\n", &expr->_loc);
+
 	return FALSE;
 }

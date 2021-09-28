@@ -864,12 +864,17 @@ FCCSymbol* cc_parser_declglobal(FCCContext* ctx, int storage, const char* id, co
 		FVarInitializer* initializer;
 
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_parser_initializer(ctx, &initializer, CC_MM_PERMPOOL)) {
+		if (!cc_parser_initializer(ctx, &initializer, TRUE, CC_MM_PERMPOOL)) {
 			logger_output_s("error: illegal initialization for '%s'\n", p->_name);
 			return FALSE;
 		}
 
-		
+		if (!cc_varinit_check(ctx, p->_type, initializer)) {
+			return FALSE;
+		}
+
+		p->_defined = 1;
+		p->_u._initializer = initializer;
 	}
 	else if (p->_sclass == SC_Static && !IsFunction(p->_type) && p->_type->_size == 0)
 	{

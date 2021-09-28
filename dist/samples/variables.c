@@ -1,33 +1,33 @@
 
+/*
+int a = 100;
+int b[4] = {1, 2, 3, 4};
+char str[] = "abcdefg";
+*/
 
-struct Bits {
-	int a:5;
-	char b:3;
-	char c:5;
-	int d: 28;
-};
+/*
+char str1[] = {"123456"};
+char str2[] = { 'a', 'b', '123' };
+char str3[] = { "abc" };
+char str4[3] = "jet";
+char str5[3] = {"jet"};
+char str6[3] = {'a', 'b', 'c' };
 
-struct Point {
-	float x;
-	float y;
-};
+char *pstr = "123456";
+*/
 
-union Info
-{
+struct Struct {
 	int a;
 	int b;
-	float c;
-	double d;
+	char str[4];
 };
 
-struct Rect {
-	struct Point min;
-	struct Point max;
+struct Struct s = { 1, 2 };
+
+struct Struct gPairs[] = {
+	{1, 2, 'a', 'b'},
+	3, 4,
+	{ 5 },
+	6, 7
 };
-
-
-struct Bits bits = { 1, 2, 3, 4};
-struct Point pt = { 100.f, 200.f };
-union Info info = { 10, 20, 30.f, 40.f};
-struct Rect rect = { { 10, 10}, {20, 20}};
 

@@ -264,7 +264,7 @@ static void vfprint(FILE* f, char* bp, const char* fmt, va_list ap) {
 				bp = outs(loc->_filename ? loc->_filename : "", f, bp);
 				bp = outs(":", f, bp);
 				bp = outd(loc->_line, f, bp);
-				bp = outs(":col ", f, bp);
+				bp = outs(": ", f, bp);
 				bp = outd(loc->_col, f, bp);
 			}
 				break;

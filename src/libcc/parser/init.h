@@ -17,13 +17,16 @@ typedef struct tagVarInitializer {
 	int _isblock : 1;
 	union {
 		struct tagCCExprTree* _expr;
-		struct tagVarInitializer** _kids; /* end with null */
+		struct {
+			struct tagVarInitializer** _kids;
+			int _cnt;
+		} _kids;
 	} _u;
 } FVarInitializer;
 
 
 FVarInitializer* cc_varinit_new(enum EMMArea where);
-BOOL cc_parser_initializer(struct tagCCContext* ctx, FVarInitializer** outinit, enum EMMArea where);
+BOOL cc_parser_initializer(struct tagCCContext* ctx, FVarInitializer** outinit, BOOL bExpectConstant, enum EMMArea where);
 BOOL cc_varinit_check(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init);
 
 

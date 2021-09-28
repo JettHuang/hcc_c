@@ -14,90 +14,26 @@
 #define OPTPARSE_API static
 #include "optparse.h"
 
-int B;
 
-int* ptr = &B + 1 + 1;
-
-/* int A = { {10} }; */ /* only one level of braces is allowed on an initializer for an object of type "int" */
-int grids[10] = { { 10 }, { 1000} };
-
-int a[][3] = {0, 1, 2};
-
-char str[] = { "jett" };
-
-enum Color {
-	RED,
-	GREEN,
-	BLUE
+struct Struct {
+	int a;
+	int b;
+	char str[4];
 };
 
-enum Color clr = (enum Color)100;
+struct Struct s = { 1, 2, 'a', 'b' };
 
-struct FRectangle {
-	int bits : 3;
-	int x, y;
-	struct FSize {
-		int sx, sy;
-	} size;
-
-	int a[1 > 0 ? 10 : 200];
+struct Struct gPairs[] = {
+	{1, 2, 'a', 'b', {1}},
+	3, 4,
+	{ 5 },
+	6, 7
 };
 
-union U {
-	struct A { int a, b; } _s;
-	struct B { int a, b; } _d;
 
-} u = { 1000, 200 };
-
-int x = 100 + (int)100.f;
-// int y = sizeof(((struct FRectangle*)0)->bits);
-
-struct FRectangle rt = { .y = 20, .x = 10,  .size.sx = 100, { 20 }, { 0,[1] = 100 } };
-
-void sayHello()
-{
-	char str[] = "huangehsui";
-	char* s = str;
-
-	int a = 100;
-	int b = sizeof (--a);
-	int i;
-
-	switch (a)
-	case 100:
-		a = 200;
-
-	switch (a)
-	{
-		printf("hello, world!");
-	case 100:
-		if (a > 100)
-		{
-	case 10:
-		break;
-		}
-		break;
-	default:
-		break;
-		break;
-	case 101:
-		a = 10;
-		break;
-	}
-
-	*s = *s++ = *s++;
-	printf("a=%d, b=%d\n", a, b);
-
-	for (i = 0; i < 10; i++)
-	{
-		printf("girds[%d]=%d\n", i, grids[i]);
-	}
-}
 
 int main(int argc, char* argv[])
 {
-	/* sayHello(); */
-
 	const char* arg, *localename;
 	int option, bsuccess;
 	struct optparse options;
