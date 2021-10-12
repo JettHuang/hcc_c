@@ -49,6 +49,9 @@ BOOL cc_parser_program(FCCContext* ctx)
 		}
 	} /* end while */
 
+	/* dump data */
+	cc_gen_dumpsymbols(ctx);
+
 	ctx->_backend->_program_end(ctx);
 	return TRUE;
 }
@@ -852,9 +855,7 @@ FCCSymbol* cc_parser_declglobal(FCCContext* ctx, int storage, const char* id, co
 	p->_type = ty;
 	p->_loc = *loc;
 
-	/* back-end def symbol */
-	ctx->_backend->_defsymbol(ctx, p);
-
+	cc_gen_internalname(p);
 	if (ctx->_currtk._type == TK_ASSIGN && IsFunction(p->_type)) {
 		logger_output_s("error: illegal initialization for '%s'\n", p->_name);
 		return NULL;
@@ -871,6 +872,10 @@ FCCSymbol* cc_parser_declglobal(FCCContext* ctx, int storage, const char* id, co
 
 		if (!cc_varinit_check(ctx, p->_type, initializer)) {
 			return FALSE;
+		}
+
+		if (p->_sclass == SC_External) {
+			p->_sclass = SC_Auto;
 		}
 
 		p->_defined = 1;
@@ -968,8 +973,19 @@ FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, con
 			logger_output_s("error: illegal initialization of 'extern %s' at %w\n", id, loc);
 			return NULL;
 		}
+		FVarInitializer* initializer;
 
-		// TODO: parsing =
+		cc_read_token(ctx, &ctx->_currtk);
+		if (!cc_parser_initializer(ctx, &initializer, FALSE, CC_MM_PERMPOOL)) {
+			logger_output_s("error: illegal initialization for '%s'\n", p->_name);
+			return FALSE;
+		}
+
+		if (!cc_varinit_check(ctx, p->_type, initializer)) {
+			return FALSE;
+		}
+
+		p->_u._initializer = initializer;
 	}
 
 	if (!IsFunction(p->_type) && p->_defined && p->_type->_size <= 0) {

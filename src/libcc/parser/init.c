@@ -379,6 +379,7 @@ static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* t
 
 						struct Struct s = { 1, 2, 'a', 'b', "ABC" };
 					*/
+					(*outerindex)++;
 					break; /* don't continue */
 				}
 				else if (!cc_varinit_check_inner(ctx, elety, thisinit, outerindex, TRUE))

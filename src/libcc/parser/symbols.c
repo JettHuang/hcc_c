@@ -9,6 +9,7 @@
 
 #include <string.h>
 
+extern void cc_gen_internalname(struct tagCCSymbol* sym);
 
 #define SYM_HASHSIZE 256
 
@@ -192,6 +193,23 @@ FCCSymbol* cc_symbol_lookup(const char* name, struct tagCCSymbolTable* tp)
 	return NULL;
 }
 
+void cc_symbol_foreach(struct tagCCContext* ctx, struct tagCCSymbolTable* tp, int level, void (*callbck)(struct tagCCContext* ctx, FCCSymbol* p))
+{
+	FCCSymbol* p;
+
+	for (; tp && tp->_level != level; tp = tp->_previous) 
+	{ /* do nothing */ }
+
+	if (!tp || tp->_level != level) {
+		return;
+	}
+
+	for (p = tp->_all; p; p = p->_up)
+	{
+		(*callbck)(ctx, p);
+	}
+}
+
 FCCSymbol* cc_symbol_constant(struct tagCCType* ty, FCCConstVal val)
 {
 	struct tagSymEntry* p;
@@ -245,10 +263,13 @@ FCCSymbol* cc_symbol_constant(struct tagCCType* ty, FCCConstVal val)
 	p->_sym._sclass = SC_Static;
 	p->_sym._u._cnstval = val;
 	p->_sym._defined = 1;
+	p->_sym._generated = 1;
 	p->_sym._up = gConstants->_all;
 	gConstants->_all = &p->_sym;
 	p->_link = gConstants->_buckets[h];
 	gConstants->_buckets[h] = p;
+
+	cc_gen_internalname(&p->_sym);
 	return &p->_sym;
 }
 

@@ -85,6 +85,7 @@ typedef struct tagCCSymbol
 	struct tagXSymbol {
 		const char* _name;
 		struct tagCCSymbol* _inittag;
+		int _refcnt;
 	} _x;
 } FCCSymbol;
 
@@ -108,6 +109,8 @@ BOOL cc_symbol_isgenlabel(const char* name);
 FCCSymbol* cc_symbol_install(const char* name, struct tagCCSymbolTable** tpp, int level, enum EMMArea where);
 FCCSymbol* cc_symbol_relocate(const char* name, struct tagCCSymbolTable* src, struct tagCCSymbolTable* dst);
 FCCSymbol* cc_symbol_lookup(const char* name, struct tagCCSymbolTable* tp);
+
+void cc_symbol_foreach(struct tagCCContext* ctx, struct tagCCSymbolTable* tp, int level, void (*callbck)(struct tagCCContext* ctx, FCCSymbol* p));
 
 /* new a constant symbol */
 FCCSymbol* cc_symbol_constant(struct tagCCType* ty, FCCConstVal val);

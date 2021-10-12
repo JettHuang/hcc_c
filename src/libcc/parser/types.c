@@ -243,10 +243,12 @@ FCCType* cc_type_newarray(FCCType* ty, int elecnt, int align)
 	}
 	if (IsArray(ty) && ty->_size == 0) {
 		logger_output_s("error: missing array size.\n");
+		return NULL;
 	}
 	if (ty->_size == 0) {
 		if (UnQual(ty) == gBuiltinTypes._voidtype) {
 			logger_output_s("error: illegal type 'array of void'.\n");
+			return NULL;
 		}
 	}
 	else if (elecnt > INT_MAX / ty->_size) {
