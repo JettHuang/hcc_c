@@ -1285,9 +1285,9 @@ BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
 			{
 				int bitsize;
 
-				if (UnQual(ty)->_op != Type_SInteger && UnQual(ty)->_op != Type_UInteger)
+				if (UnQual(ty) != gBuiltinTypes._sinttype && UnQual(ty) != gBuiltinTypes._uinttype)
 				{
-					logger_output_s("error: illegal bit-field type, expecting integer, at %w.\n", &ctx->_currtk._loc);
+					logger_output_s("error: illegal bit-field type, expecting int or unsigned int, at %w.\n", &ctx->_currtk._loc);
 					return FALSE;
 				}
 
@@ -1371,81 +1371,26 @@ BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
 			}
 			else
 			{
-				int suboffset, subbitsused;
-
-				suboffset = 0;
 				if (bitsmax != 0) /* check reuse previous bit-field's remained bits */
 				{
-					if (util_roundup(offset, align) != offset)
+					assert(util_roundup(offset, align) == offset);
+
+					if ((bitsmax - bitsused) < field->_bitsize) /* can't reuse current bits */
 					{
-						offset = suboffset = util_roundup(offset + (bitsmax >> 3), align);
+						offset = util_roundup(offset + (bitsmax >> 3), align);
 						bitsmax = field->_type->_size * 8;
 						bitsused = 0;
-					}
-					else
-					{
-						int newbitsmax = bitsmax;
-						if (bitsmax < field->_type->_size * 8)
-						{
-							newbitsmax = field->_type->_size * 8;
-						}
-						if ((newbitsmax - bitsused) >= field->_bitsize)
-						{
-							int crossbytes;
-
-							suboffset = offset;
-							/* check across bytes */
-							crossbytes = ((bitsused + field->_bitsize - 1) >> 3) - (bitsused >> 3) + 1;
-							if (crossbytes > field->_type->_size)
-							{
-								bitsused = util_roundup(bitsused, 8);
-								suboffset = offset + (bitsused >> 3);
-							}
-							/* check align */
-							if (((bitsused >> 3) % field->_type->_align) != 0)
-							{
-								bitsused = util_roundup(bitsused, field->_type->_align * 8);
-								suboffset = offset + (bitsused >> 3);
-							}
-
-							/* check space again */
-							if ((newbitsmax - bitsused) >= field->_bitsize)
-							{
-								bitsmax = newbitsmax;
-							}
-							else
-							{
-								offset = suboffset = util_roundup(offset + (bitsmax >> 3), align);
-								bitsmax = field->_type->_size * 8;
-								bitsused = 0;
-							}
-						}
-						else
-						{
-							offset = suboffset = util_roundup(offset + (bitsmax >> 3), align);
-							bitsmax = field->_type->_size * 8;
-							bitsused = 0;
-						}
 					}
 				}
 				else
 				{
-					offset = suboffset = util_roundup(offset, align);
+					offset = util_roundup(offset, align);
 					bitsmax = field->_type->_size * 8;
 					bitsused = 0;
 				}
 
-				subbitsused = (bitsused - (suboffset - offset) * 8);
-				field->_offset = suboffset;
-				if (ctx->_backend->_is_little_ending)
-				{
-					field->_lsb = subbitsused + 1; /* lsb is one more than real index */
-				}
-				else
-				{
-					field->_lsb = (field->_type->_size - subbitsused - field->_bitsize) + 1;
-				}
-
+				field->_offset = offset;
+				field->_lsb = bitsused + 1; /* lsb is one more than real index */
 				bitsused += field->_bitsize;
 			}
 

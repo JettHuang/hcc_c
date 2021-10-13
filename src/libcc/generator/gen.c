@@ -224,6 +224,51 @@ static BOOL cc_varinit_dump_scalar(struct tagCCContext* ctx, struct tagCCType* t
 	return TRUE;
 }
 
+static BOOL cc_varinit_get_scalar_int(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock, int *outval)
+{
+	FVarInitializer* thisinit;
+	FCCExprTree* expr;
+
+	assert(!bUsingOuterBlock || init->_isblock);
+	if (bUsingOuterBlock) {
+		thisinit = *(init->_u._kids._kids + *outerindex);
+		(*outerindex)++;
+	}
+	else {
+		thisinit = init;
+	}
+
+	if (thisinit->_isblock) {
+		if (thisinit->_u._kids._cnt > 1) {
+			logger_output_s("error: too many initializers at %w.\n", &init->_loc);
+			return FALSE;
+		}
+
+		thisinit = *(thisinit->_u._kids._kids + 0);
+	}
+
+	assert(!thisinit->_isblock);
+	expr = thisinit->_u._expr;
+
+	if (UnQual(ty)->_op == Type_Enum) {
+		ty = UnQual(ty)->_type;
+	}
+	switch (UnQual(ty)->_op)
+	{
+	case Type_SInteger:
+		*outval = (int32_t)expr->_u._symbol->_u._cnstval._sint;
+		break;
+	case Type_UInteger:
+		*outval = (int32_t)expr->_u._symbol->_u._cnstval._uint;
+		break;
+	default:
+		assert(0);
+		break;
+	}
+
+	return TRUE;
+}
+
 static BOOL cc_varinit_dump_union(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock)
 {
 	FVarInitializer* thisinit, * tmpinit;
@@ -251,9 +296,20 @@ static BOOL cc_varinit_dump_union(struct tagCCContext* ctx, struct tagCCType* ty
 	if (bnewblock) {
 		int innerindex = 0;
 
-		if (!cc_gen_dumpinitvalues_inner(ctx, first->_type, thisinit, &innerindex, TRUE))
-		{
-			return FALSE;
+		if (first->_lsb > 0) {
+			int bitsval;
+			if (!cc_varinit_get_scalar_int(ctx, first->_type, thisinit, &innerindex, TRUE, &bitsval))
+			{
+				return FALSE;
+			}
+
+			bitsval = bitsval << (first->_lsb - 1);
+			ctx->_backend->_defconst_udword(ctx, (uint32_t)bitsval, 1);
+		} else {
+			if (!cc_gen_dumpinitvalues_inner(ctx, first->_type, thisinit, &innerindex, TRUE))
+			{
+				return FALSE;
+			}
 		}
 
 		if (innerindex < thisinit->_u._kids._cnt) {
@@ -262,9 +318,21 @@ static BOOL cc_varinit_dump_union(struct tagCCContext* ctx, struct tagCCType* ty
 		}
 	}
 	else {
-		if (!cc_gen_dumpinitvalues_inner(ctx, first->_type, thisinit, outerindex, TRUE))
-		{
-			return FALSE;
+		if (first->_lsb > 0) {
+			int bitsval;
+			if (!cc_varinit_get_scalar_int(ctx, first->_type, thisinit, outerindex, TRUE, &bitsval))
+			{
+				return FALSE;
+			}
+
+			bitsval = bitsval << (first->_lsb - 1);
+			ctx->_backend->_defconst_udword(ctx, (uint32_t)bitsval, 1);
+		}
+		else {
+			if (!cc_gen_dumpinitvalues_inner(ctx, first->_type, thisinit, outerindex, TRUE))
+			{
+				return FALSE;
+			}
 		}
 	}
 
@@ -295,44 +363,94 @@ static BOOL cc_varinit_dump_struct(struct tagCCContext* ctx, struct tagCCType* t
 	if (bnewblock) {
 		int offset = 0, innerindex = 0;
 
-		for (field = cc_type_fields(ty); field; field = field->_next) {
+		for (field = cc_type_fields(ty); field; ) 
+		{
 			if (offset < field->_offset) {
 				ctx->_backend->_defconst_ubyte(ctx, 0, field->_offset - offset);
 				offset = field->_offset;
 			}
-			offset += field->_type->_size;
 
-			if (innerindex < thisinit->_u._kids._cnt) {
-				if (!cc_gen_dumpinitvalues_inner(ctx, field->_type, thisinit, &innerindex, TRUE))
-				{
-					return FALSE;
+			if (field->_lsb > 0) {
+				int bitsval = 0, val = 0;
+
+				assert(field->_type->_size == 4);
+				for (; field; field = field->_next) {
+					if (field->_offset != offset) {
+						break;
+					}
+					if (innerindex < thisinit->_u._kids._cnt) {
+						if (!cc_varinit_get_scalar_int(ctx, field->_type, thisinit, &innerindex, TRUE, &val))
+						{
+							return FALSE;
+						}
+						bitsval |= val << (field->_lsb - 1);
+					}
 				}
+
+				ctx->_backend->_defconst_udword(ctx, bitsval, 1);
+				offset += 4;
 			}
 			else {
-				ctx->_backend->_defconst_ubyte(ctx, 0, field->_type->_size);
+				if (innerindex < thisinit->_u._kids._cnt) {
+					if (!cc_gen_dumpinitvalues_inner(ctx, field->_type, thisinit, &innerindex, TRUE))
+					{
+						return FALSE;
+					}
+				}
+				else {
+					ctx->_backend->_defconst_ubyte(ctx, 0, field->_type->_size);
+				}
+
+				offset += field->_type->_size;
+				field = field->_next;
 			}
-		}
+		} /* end for */
 	}
 	else {
 		int offset = 0;
 
-		for (field = cc_type_fields(ty); field; field = field->_next) {
+		for (field = cc_type_fields(ty); field; ) 
+		{
 			if (offset < field->_offset) {
 				ctx->_backend->_defconst_ubyte(ctx, 0, field->_offset - offset);
 				offset = field->_offset;
 			}
-			offset += field->_type->_size;
 
-			if (*outerindex < thisinit->_u._kids._cnt) {
-				if (!cc_gen_dumpinitvalues_inner(ctx, field->_type, thisinit, outerindex, TRUE))
-				{
-					return FALSE;
+			if (field->_lsb > 0) {
+				int bitsval = 0, val = 0;
+
+				assert(field->_type->_size == 4);
+				for (; field; field = field->_next) {
+					if (field->_offset != offset) {
+						break;
+					}
+					if (*outerindex < thisinit->_u._kids._cnt) {
+						if (!cc_varinit_get_scalar_int(ctx, field->_type, thisinit, outerindex, TRUE, &val))
+						{
+							return FALSE;
+						}
+						bitsval |= val << (field->_lsb - 1);
+					}
 				}
+
+				ctx->_backend->_defconst_udword(ctx, bitsval, 1);
+				offset += 4;
 			}
 			else {
-				ctx->_backend->_defconst_ubyte(ctx, 0, field->_type->_size);
+				if (*outerindex < thisinit->_u._kids._cnt) {
+					if (!cc_gen_dumpinitvalues_inner(ctx, field->_type, thisinit, outerindex, TRUE))
+					{
+						return FALSE;
+					}
+				}
+				else {
+					ctx->_backend->_defconst_ubyte(ctx, 0, field->_type->_size);
+				}
+
+				offset += field->_type->_size;
+				field = field->_next;
 			}
-		}
+		} /* end for */
 	}
 
 	return TRUE;

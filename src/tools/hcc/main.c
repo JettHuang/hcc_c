@@ -16,7 +16,7 @@
 
 
 struct Struct {
-	int a;
+	int a : 2;
 	int b;
 	char str[4];
 };
@@ -24,7 +24,7 @@ struct Struct {
 struct Struct s = { 1, 2, 'a', 'b' };
 
 struct Struct gPairs[] = {
-	{1, 2, 'a', 'b', {1}},
+	{1.0, 2, 'a', 'b', {1}},
 	3, 4,
 	{ 5 },
 	6, 7

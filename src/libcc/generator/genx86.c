@@ -249,10 +249,10 @@ static void defconst_udword(struct tagCCContext* ctx, uint32_t val, int count)
 	if (ctx->_backend->_curr_seg != SEG_BSS)
 	{
 		if (count > 1) {
-			fprintf(ctx->_outfp, "    dd  %d  dup (%ud)\n", count, val);
+			fprintf(ctx->_outfp, "    dd  %d  dup (%u)\n", count, val);
 		}
 		else {
-			fprintf(ctx->_outfp, "    dd  %ud\n", val);
+			fprintf(ctx->_outfp, "    dd  %u\n", val);
 		}
 	}
 	else

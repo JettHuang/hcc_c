@@ -32,3 +32,16 @@ struct Struct gPairs[] = {
 	6, 7
 };
 
+struct BitFileds {
+	int a : 4;
+	int b : 4;
+	unsigned int c: 4;
+	int d : 28;
+	
+	int x;
+	int y;
+};
+
+struct BitFileds bitfield = { 2, 4, 15,  32,  10, 20 };
+
+
