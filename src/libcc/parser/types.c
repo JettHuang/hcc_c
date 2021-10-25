@@ -550,8 +550,28 @@ FCCType* cc_type_compose(FCCType* ty1, FCCType* ty2)
 	return NULL;
 }
 
-BOOL cc_type_canconvert(FCCType* ty1, FCCType* ty2)
+FCCType* cc_type_select(FCCType* ty1, FCCType* ty2)
 {
-	// TODO: 
-	return TRUE;
+#define XX(t)	if (ty1 == t || ty2 == t) { return t; }
+
+	XX(gBuiltinTypes._ldoubletype);
+	XX(gBuiltinTypes._doubletype);
+	XX(gBuiltinTypes._floattype);
+	XX(gBuiltinTypes._ullongtype);
+	XX(gBuiltinTypes._sllongtype);
+	XX(gBuiltinTypes._slongtype);
+	XX(gBuiltinTypes._ulongtype);
+	if ((ty1 == gBuiltinTypes._slongtype && ty2 == gBuiltinTypes._uinttype)
+		|| (ty1 == gBuiltinTypes._uinttype && ty2 == gBuiltinTypes._slongtype))
+	{
+		if (gBuiltinTypes._slongtype->_size > gBuiltinTypes._uinttype->_size)
+			return gBuiltinTypes._slongtype;
+		else
+			return gBuiltinTypes._ulongtype;
+	}
+
+	XX(gBuiltinTypes._slongtype);
+	XX(gBuiltinTypes._uinttype);
+	return gBuiltinTypes._sinttype;
+#undef XX
 }

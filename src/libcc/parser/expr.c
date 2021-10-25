@@ -27,6 +27,7 @@ static BOOL cc_expr_bitor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum 
 static BOOL cc_expr_logicand(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
 static BOOL cc_expr_logicor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
 static BOOL cc_expr_conditional(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
+static BOOL cc_expr_isnullptr(FCCExprTree* expr);
 
 /* ------------------------------------------------------------------------------------------ */
 
@@ -1160,4 +1161,74 @@ BOOL cc_expr_constant_int(struct tagCCContext* ctx, int* val)
 	logger_output_s("error: integral constant is expected. at %w.\n", &expr->_loc);
 
 	return FALSE;
+}
+
+static BOOL cc_expr_isnullptr(FCCExprTree* expr)
+{
+	FCCType* ty = UnQual(expr->_ty);
+
+	return (expr->_op == EXPR_CONSTANT)
+		&& ((ty->_op == Type_SInteger && expr->_u._symbol->_u._cnstval._sint == 0)
+			|| (ty->_op == Type_UInteger && expr->_u._symbol->_u._cnstval._uint == 0)
+			|| (IsVoidptr(ty) && expr->_u._symbol->_u._cnstval._ptr == NULL));
+}
+
+FCCType* cc_expr_assigntype(FCCType* lhs, struct tagCCExprTree* expr)
+{
+	FCCType* xty, * yty;
+
+	xty = UnQual(lhs);
+	yty = UnQual(expr->_ty);
+
+	if (IsEnum(xty)) {
+		xty = xty->_type;
+	}
+	if (IsEnum(yty)) {
+		yty = yty->_type;
+	}
+
+	if (xty->_size == 0 || yty->_size == 0) {
+		return NULL;
+	}
+
+	if (IsArith(xty) && IsArith(yty) || IsStruct(xty) && xty == yty) {
+		return xty;
+	}
+
+	if (IsPtr(xty) && cc_expr_isnullptr(expr)) {
+		return xty;
+	}
+
+	if ((IsVoidptr(xty) && IsPtr(yty) || IsPtr(xty) && IsVoidptr(yty)) &&
+		((IsConst(xty->_type) || !IsConst(yty->_type)) && (IsVolatile(xty->_type) || !IsVolatile(yty->_type)))
+		)
+	{
+		return xty;
+	}
+
+
+
+	if ((IsPtr(xty) && IsPtr(yty)
+		&& cc_type_isequal(UnQual(xty->_type), UnQual(yty->_type), TRUE))
+		&& ((IsConst(xty->_type) || !IsConst(yty->_type))
+			&& (IsVolatile(xty->_type) || !IsVolatile(yty->_type))))
+	{
+		return xty;
+	}
+
+	if (IsPtr(xty) && IsPtr(yty)
+		&& ((IsConst(xty->_type) || !IsConst(yty->_type))
+			&& (IsVolatile(xty->_type) || !IsVolatile(yty->_type)))) 
+	{
+		FCCType* lty = UnQual(xty->_type);
+		FCCType* rty = UnQual(yty->_type);
+		if (IsEnum(lty) && IsInt(rty)
+			|| IsEnum(rty) && IsInt(lty)) 
+		{
+			logger_output_s("assignment between `%t' and `%t' is compiler-dependent\n", xty, yty);
+			return xty;
+		}
+	}
+
+	return NULL;
 }

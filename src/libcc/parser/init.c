@@ -116,8 +116,8 @@ static BOOL cc_varinit_check_scalar(struct tagCCContext* ctx, struct tagCCType* 
 
 	assert(!thisinit->_isblock);
 	expr = thisinit->_u._expr;
-	if (!cc_type_canconvert(ty, expr->_ty)) {
-		logger_output_s("error: conversion failed at %w.\n", &expr->_loc);
+	if (!cc_expr_assigntype(ty, expr)) {
+		logger_output_s("error: initialize assign failed at %w.\n", &expr->_loc);
 		return FALSE;
 	}
 

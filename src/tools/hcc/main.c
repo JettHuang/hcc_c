@@ -40,6 +40,7 @@ int main(int argc, char* argv[])
 	const char* srcfilename, *outfilename;
 	FCCContext cc;
 
+
 	localename = setlocale(LC_ALL, "");
 	logger_output_s("LOCAL %s\n", localename);
 

@@ -66,6 +66,8 @@
 #define IsFloat(t)	(UnQual(t)->_op == Type_Float)
 #define IsDouble(t)	(UnQual(t)->_op == Type_Double)
 #define IsScalar(t) (UnQual(t)->_op <= Type_Pointer)
+#define IsArith(t)	(UnQual(t)->_op <= Type_Float)
+#define IsVoidptr(t)	(IsPtr(t) && UnQual(t->_type) == gBuiltinTypes._voidtype)
 
 
 /* cc type */
@@ -186,6 +188,7 @@ FCCType* cc_type_promote(FCCType* ty);
 void cc_type_remove(int level);
 
 FCCType* cc_type_compose(FCCType* ty1, FCCType* ty2);
-BOOL cc_type_canconvert(FCCType* ty1, FCCType* ty2);
+FCCType* cc_type_select(FCCType* ty1, FCCType* ty2);
+BOOL cc_type_cancast(FCCType* from, FCCType* to);
 
 #endif /* __CC_TYPES_H__ */
