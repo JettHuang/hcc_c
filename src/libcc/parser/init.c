@@ -85,9 +85,9 @@ BOOL cc_parser_initializer(struct tagCCContext* ctx, FVarInitializer** outinit, 
 /*-------------------------------------------------------------
  *  initializer checker
  *-------------------------------------------------------------*/
-static BOOL cc_varinit_check_inner(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock);
+static BOOL cc_varinit_check_inner(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock, enum EMMArea where);
 
-static BOOL cc_varinit_check_scalar(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock)
+static BOOL cc_varinit_check_scalar(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock, enum EMMArea where)
 {
 	FVarInitializer* thisinit;
 	FCCExprTree* expr;
@@ -116,15 +116,18 @@ static BOOL cc_varinit_check_scalar(struct tagCCContext* ctx, struct tagCCType* 
 
 	assert(!thisinit->_isblock);
 	expr = thisinit->_u._expr;
-	if (!cc_expr_assigntype(ty, expr)) {
+	if (!(ty = cc_expr_assigntype(ty, expr))) {
 		logger_output_s("error: initialize assign failed at %w.\n", &expr->_loc);
 		return FALSE;
 	}
+	
+	expr = cc_expr_makecast(ctx, ty, expr, where);
+	thisinit->_u._expr = expr;
 
 	return TRUE;
 }
 
-static BOOL cc_varinit_check_union(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock)
+static BOOL cc_varinit_check_union(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock, enum EMMArea where)
 {
 	FVarInitializer* thisinit, * tmpinit;
 	FCCField* first;
@@ -151,7 +154,7 @@ static BOOL cc_varinit_check_union(struct tagCCContext* ctx, struct tagCCType* t
 	if (bnewblock) {
 		int innerindex = 0;
 
-		if (!cc_varinit_check_inner(ctx, first->_type, thisinit, &innerindex, TRUE))
+		if (!cc_varinit_check_inner(ctx, first->_type, thisinit, &innerindex, TRUE, where))
 		{
 			return FALSE;
 		}
@@ -162,7 +165,7 @@ static BOOL cc_varinit_check_union(struct tagCCContext* ctx, struct tagCCType* t
 		}
 	}
 	else {
-		if (!cc_varinit_check_inner(ctx, first->_type, thisinit, outerindex, TRUE))
+		if (!cc_varinit_check_inner(ctx, first->_type, thisinit, outerindex, TRUE, where))
 		{
 			return FALSE;
 		}
@@ -171,7 +174,7 @@ static BOOL cc_varinit_check_union(struct tagCCContext* ctx, struct tagCCType* t
 	return TRUE;
 }
 
-static BOOL cc_varinit_check_struct(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock)
+static BOOL cc_varinit_check_struct(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock, enum EMMArea where)
 {
 	FVarInitializer* thisinit, * tmpinit;
 	FCCField* field;
@@ -198,7 +201,7 @@ static BOOL cc_varinit_check_struct(struct tagCCContext* ctx, struct tagCCType* 
 		int innerindex = 0;
 
 		for (field = cc_type_fields(ty); field && innerindex < thisinit->_u._kids._cnt; field = field->_next) {
-			if (!cc_varinit_check_inner(ctx, field->_type, thisinit, &innerindex, TRUE))
+			if (!cc_varinit_check_inner(ctx, field->_type, thisinit, &innerindex, TRUE, where))
 			{
 				return FALSE;
 			}
@@ -211,7 +214,7 @@ static BOOL cc_varinit_check_struct(struct tagCCContext* ctx, struct tagCCType* 
 	}
 	else {
 		for (field = cc_type_fields(ty); field && *outerindex < thisinit->_u._kids._cnt; field = field->_next) {
-			if (!cc_varinit_check_inner(ctx, field->_type, thisinit, outerindex, TRUE))
+			if (!cc_varinit_check_inner(ctx, field->_type, thisinit, outerindex, TRUE, where))
 			{
 				return FALSE;
 			}
@@ -221,7 +224,7 @@ static BOOL cc_varinit_check_struct(struct tagCCContext* ctx, struct tagCCType* 
 	return TRUE;
 }
 
-static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock)
+static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock, enum EMMArea where)
 {
 	FVarInitializer* thisinit, * tmpinit;
 	BOOL bnewblock = TRUE;
@@ -282,7 +285,7 @@ static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* t
 						innerindex++;
 						break; /* don't continue */
 					}
-					else if (!cc_varinit_check_inner(ctx, elety, thisinit, &innerindex, TRUE))
+					else if (!cc_varinit_check_inner(ctx, elety, thisinit, &innerindex, TRUE, where))
 					{
 						return FALSE;
 					}
@@ -311,7 +314,7 @@ static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* t
 						innerindex++;
 						break; /* don't continue */
 					}
-					else if (!cc_varinit_check_inner(ctx, elety, thisinit, &innerindex, TRUE))
+					else if (!cc_varinit_check_inner(ctx, elety, thisinit, &innerindex, TRUE, where))
 					{
 						return FALSE;
 					}
@@ -382,7 +385,7 @@ static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* t
 					(*outerindex)++;
 					break; /* don't continue */
 				}
-				else if (!cc_varinit_check_inner(ctx, elety, thisinit, outerindex, TRUE))
+				else if (!cc_varinit_check_inner(ctx, elety, thisinit, outerindex, TRUE, where))
 				{
 					return FALSE;
 				}
@@ -413,7 +416,7 @@ static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* t
 					(*outerindex)++;
 					break; /* don't continue */
 				}
-				else if (!cc_varinit_check_inner(ctx, elety, thisinit, outerindex, TRUE))
+				else if (!cc_varinit_check_inner(ctx, elety, thisinit, outerindex, TRUE, where))
 				{
 					return FALSE;
 				}
@@ -426,21 +429,21 @@ static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* t
 	return TRUE;
 }
 
-static BOOL cc_varinit_check_inner(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock)
+static BOOL cc_varinit_check_inner(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock, enum EMMArea where)
 {
 	int tmp = 0;
 
 	if (IsScalar(ty)) {
-		return cc_varinit_check_scalar(ctx, ty, init, outerindex, bUsingOuterBlock);
+		return cc_varinit_check_scalar(ctx, ty, init, outerindex, bUsingOuterBlock, where);
 	}
 	else if (IsUnion(ty)) {
-		return cc_varinit_check_union(ctx, ty, init, outerindex, bUsingOuterBlock);
+		return cc_varinit_check_union(ctx, ty, init, outerindex, bUsingOuterBlock, where);
 	}
 	else if (IsStruct(ty)) {
-		return cc_varinit_check_struct(ctx, ty, init, outerindex, bUsingOuterBlock);
+		return cc_varinit_check_struct(ctx, ty, init, outerindex, bUsingOuterBlock, where);
 	}
 	else if (IsArray(ty)) {
-		return cc_varinit_check_array(ctx, ty, init, outerindex, bUsingOuterBlock);
+		return cc_varinit_check_array(ctx, ty, init, outerindex, bUsingOuterBlock, where);
 	}
 	else {
 		assert(0);
@@ -449,7 +452,7 @@ static BOOL cc_varinit_check_inner(struct tagCCContext* ctx, struct tagCCType* t
 	return TRUE;
 }
 
-BOOL cc_varinit_check(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init)
+BOOL cc_varinit_check(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, enum EMMArea where)
 {
-	return cc_varinit_check_inner(ctx, ty, init, NULL, FALSE);
+	return cc_varinit_check_inner(ctx, ty, init, NULL, FALSE, where);
 }

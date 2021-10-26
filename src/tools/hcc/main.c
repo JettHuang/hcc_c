@@ -30,6 +30,7 @@ struct Struct gPairs[] = {
 	6, 7
 };
 
+int a = 100 > 5 ? 10 : 20;
 
 
 int main(int argc, char* argv[])

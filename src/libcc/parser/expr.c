@@ -1173,7 +1173,7 @@ static BOOL cc_expr_isnullptr(FCCExprTree* expr)
 			|| (IsVoidptr(ty) && expr->_u._symbol->_u._cnstval._ptr == NULL));
 }
 
-FCCType* cc_expr_assigntype(FCCType* lhs, struct tagCCExprTree* expr)
+struct tagCCType* cc_expr_assigntype(struct tagCCType* lhs, struct tagCCExprTree* expr)
 {
 	FCCType* xty, * yty;
 
@@ -1231,4 +1231,10 @@ FCCType* cc_expr_assigntype(FCCType* lhs, struct tagCCExprTree* expr)
 	}
 
 	return NULL;
+}
+
+FCCExprTree* cc_expr_makecast(struct tagCCContext* ctx, struct tagCCType* castty, FCCExprTree* expr, enum EMMArea where)
+{
+	// TODO:
+	return expr;
 }

@@ -103,6 +103,6 @@ BOOL cc_expr_constant_expression(struct tagCCContext* ctx, FCCExprTree** outexpr
 
 BOOL cc_expr_constant_int(struct tagCCContext* ctx, int* val);
 struct tagCCType* cc_expr_assigntype(struct tagCCType* lhs, struct tagCCExprTree* expr);
-
+FCCExprTree* cc_expr_makecast(struct tagCCContext* ctx, struct tagCCType* castty, FCCExprTree* expr, enum EMMArea where);
 
 #endif /* _CC_EXPR_H__ */
