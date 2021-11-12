@@ -90,9 +90,14 @@ typedef struct tagCCExprTree {
 		} _s;
 		struct {
 			struct tagCCExprTree* _lhs;
-			struct tagCCExprTree** _args; /* end while null */
+			struct tagCCExprTree** _args; /* end with null */
 		} _f;
 	} _u;
+	
+	/* auxiliary flags */
+	int _blvalue : 1;
+	int _bconstant : 1;
+
 } FCCExprTree;
 
 
@@ -104,5 +109,6 @@ BOOL cc_expr_constant_expression(struct tagCCContext* ctx, FCCExprTree** outexpr
 BOOL cc_expr_constant_int(struct tagCCContext* ctx, int* val);
 struct tagCCType* cc_expr_assigntype(struct tagCCType* lhs, struct tagCCExprTree* expr);
 FCCExprTree* cc_expr_makecast(struct tagCCContext* ctx, struct tagCCType* castty, FCCExprTree* expr, enum EMMArea where);
+BOOL cc_expr_canmodify(FCCExprTree* expr);
 
 #endif /* _CC_EXPR_H__ */

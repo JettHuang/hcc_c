@@ -32,6 +32,11 @@ struct Struct gPairs[] = {
 
 int a = 100 > 5 ? 10 : 20;
 
+enum COLOR {
+	RED,
+	GREEN,
+	BLUE
+};
 
 int main(int argc, char* argv[])
 {
@@ -41,6 +46,8 @@ int main(int argc, char* argv[])
 	const char* srcfilename, *outfilename;
 	FCCContext cc;
 
+	int v0[10][2], v1[10][2];
+	int color = -RED;
 
 	localename = setlocale(LC_ALL, "");
 	logger_output_s("LOCAL %s\n", localename);

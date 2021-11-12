@@ -712,6 +712,7 @@ BOOL cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FAr
 BOOL cc_parser_parameters(FCCContext* ctx, FCCType* fn, FArray* params)
 {
 	FArray protos;
+	BOOL has_ellipsis = FALSE;
 	
 	array_init(&protos, 32, sizeof(FCCType*), CC_MM_PERMPOOL);
 	if (cc_parser_is_typename(&ctx->_currtk))
@@ -737,7 +738,7 @@ BOOL cc_parser_parameters(FCCContext* ctx, FCCType* fn, FArray* params)
 					return FALSE;
 				}
 
-				array_append(&protos, &gBuiltinTypes._ellipsistype);
+				has_ellipsis = TRUE;
 				cc_read_token(ctx, &ctx->_currtk);
 				break;
 			}
@@ -788,6 +789,7 @@ BOOL cc_parser_parameters(FCCContext* ctx, FCCType* fn, FArray* params)
 
 		array_append(&protos, &ty); /* append end null */
 		fn->_u._f._protos = (FCCType**)protos._data;
+		fn->_u._f._has_ellipsis = has_ellipsis;
 	}
 
 	return cc_parser_expect(ctx, TK_RPAREN); /* ')' */
@@ -870,7 +872,7 @@ FCCSymbol* cc_parser_declglobal(FCCContext* ctx, int storage, const char* id, co
 			return FALSE;
 		}
 
-		if (!cc_varinit_check(ctx, p->_type, initializer)) {
+		if (!cc_varinit_check(ctx, p->_type, initializer, CC_MM_PERMPOOL)) {
 			return FALSE;
 		}
 
@@ -981,7 +983,7 @@ FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, con
 			return FALSE;
 		}
 
-		if (!cc_varinit_check(ctx, p->_type, initializer)) {
+		if (!cc_varinit_check(ctx, p->_type, initializer, CC_MM_PERMPOOL)) {
 			return FALSE;
 		}
 

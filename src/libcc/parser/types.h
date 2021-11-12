@@ -68,7 +68,7 @@
 #define IsScalar(t) (UnQual(t)->_op <= Type_Pointer)
 #define IsArith(t)	(UnQual(t)->_op <= Type_Float)
 #define IsVoidptr(t)	(IsPtr(t) && UnQual(t->_type) == gBuiltinTypes._voidtype)
-
+#define IsVoid(t)	(UnQual(t->_type) == gBuiltinTypes._voidtype)
 
 /* cc type */
 typedef struct tagCCType
@@ -84,6 +84,7 @@ typedef struct tagCCType
 		struct
 		{
 			struct tagCCType** _protos; /* params type array, end with NULL */
+			int _has_ellipsis : 1;
 		} _f; /* function proto */
 	} _u;
 	
@@ -158,6 +159,7 @@ FCCType* cc_type_tmp(int16_t op, FCCType* ty);
 
 /* qualify a type */
 FCCType* cc_type_qual(FCCType* ty, int16_t	op);
+int16_t cc_type_getqual(FCCType* ty);
 
 /* new a pointer to type */
 FCCType* cc_type_ptr(FCCType* ty);

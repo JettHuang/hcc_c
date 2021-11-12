@@ -197,6 +197,10 @@ FCCType* cc_type_tmp(int16_t op, FCCType* ty)
 
 FCCType* cc_type_qual(FCCType* ty, int16_t	op)
 {
+	if (!op) {
+		return ty;
+	}
+
 	if (IsArray(ty)) {
 		ty = cc_type_new(Type_Array, cc_type_qual(ty->_type, op), ty->_size, ty->_align, NULL);
 	}
@@ -216,6 +220,19 @@ FCCType* cc_type_qual(FCCType* ty, int16_t	op)
 	}
 
 	return ty;
+}
+
+int16_t cc_type_getqual(FCCType* ty)
+{
+	if (IsArray(ty)) {
+		return cc_type_getqual(ty->_type);
+	}
+
+	if (IsQual(ty)) {
+		return ty->_op;
+	}
+
+	return 0;
 }
 
 FCCType* cc_type_ptr(FCCType* ty)
@@ -381,11 +398,7 @@ FCCType* cc_type_rettype(FCCType* fn)
 BOOL cc_type_isvariance(FCCType* fn)
 {
 	if (IsFunction(fn) && fn->_u._f._protos) {
-		int cnt;
-		for (cnt = 0; fn->_u._f._protos[cnt]; ++cnt)
-		{ /* do nothing */ }
-
-		return cnt > 1 && fn->_u._f._protos[cnt - 1] == gBuiltinTypes._ellipsistype;
+		return fn->_u._f._has_ellipsis;
 	}
 	return FALSE;
 }
@@ -574,4 +587,17 @@ FCCType* cc_type_select(FCCType* ty1, FCCType* ty2)
 	XX(gBuiltinTypes._uinttype);
 	return gBuiltinTypes._sinttype;
 #undef XX
+}
+
+BOOL cc_type_cancast(FCCType* from, FCCType* to)
+{
+	if (from)
+	if (IsVoid(from) || !IsScalar(from)) {
+		return FALSE;
+	}
+	if (IsVoid(to) || !IsScalar(to)) {
+		return FALSE;
+	}
+
+	return TRUE;
 }
