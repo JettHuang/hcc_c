@@ -38,7 +38,8 @@ typedef union tagCCConstVal {
 	int64_t		_sint;
 	uint64_t	_uint;
 	long double	_float;
-	const void* _ptr;
+	uint64_t	_pointer;
+	const void* _payload;
 } FCCConstVal;
 
 /* symbol */

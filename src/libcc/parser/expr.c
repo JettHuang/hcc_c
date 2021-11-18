@@ -114,11 +114,11 @@ static BOOL cc_expr_primary(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 		break;
 	case TK_CONSTANT_STR:
 		cnstty = cc_type_newarray(gBuiltinTypes._chartype, ctx->_currtk._val._astr._chcnt, 0); 
-		cnstval._ptr = ctx->_currtk._val._astr._str;
+		cnstval._payload = ctx->_currtk._val._astr._str;
 		break;
 	case TK_CONSTANT_WSTR:
 		cnstty = cc_type_newarray(gBuiltinTypes._wchartype, ctx->_currtk._val._wstr._chcnt / gBuiltinTypes._wchartype->_size, 0); 
-		cnstval._ptr = ctx->_currtk._val._wstr._str;
+		cnstval._payload = ctx->_currtk._val._wstr._str;
 		break;
 	case TK_LPAREN: /* '(' */
 	{
@@ -138,20 +138,10 @@ static BOOL cc_expr_primary(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 
 	if (cnstty != NULL)
 	{
-		if (!(p = cc_symbol_constant(cnstty, cnstval)))
+		if (!(tree = cc_expr_makeconstant(ctx, cnstty, cnstval, ctx->_currtk._loc, where)))
 		{
-			logger_output_s("error: install constant failed at %w\n", &ctx->_currtk._loc);
 			return FALSE;
 		}
-		if (!(tree = cc_expr_new(where))) {
-			return FALSE;
-		}
-		tree->_op = EXPR_CONSTANT;
-		tree->_loc = ctx->_currtk._loc;
-		tree->_ty = p->_type;
-		tree->_u._symbol = p;
-		tree->_bconstant = 1;
-		tree->_blvalue = IsArray(p->_type);
 
 		cc_read_token(ctx, &ctx->_currtk);
 	}
@@ -190,7 +180,7 @@ static BOOL cc_expr_checkarguments(struct tagCCContext* ctx, FCCType* functy, FC
 		}
 
 		args[k] = cc_expr_makecast(ctx, ty, args[k], where);
-		if ((IsInt(args[k]->_ty) || IsEnum(args[k]->_ty)) 
+		if (IsInt(args[k]->_ty) 
 			&& args[k]->_ty->_size != gBuiltinTypes._sinttype->_size)
 		{
 			args[k] = cc_expr_makecast(ctx, cc_type_promote(args[k]->_ty), args[k], where);
@@ -209,20 +199,21 @@ static FCCExprTree* cc_expr_postfix_subscript_check(struct tagCCContext* ctx, in
 {
 	FCCExprTree* tree;
 
-	if (!(tree = cc_expr_new(where))) {
-		return NULL;
-	}
-
 	/* check semantic */
 	if (!IsPtr(expr->_ty) && !IsArray(expr->_ty)) {
 		logger_output_s("error, pointer or array is expected at %w\n", &expr->_loc);
 		return NULL;
 	}
-	if (!IsInt(subscript->_ty) && !IsEnum(subscript->_ty)) {
+	if (!IsInt(subscript->_ty)) {
 		logger_output_s("error, integer is expected at %w\n", &subscript->_loc);
 		return NULL;
 	}
 
+	subscript = cc_expr_makecast(ctx, gBuiltinTypes._sinttype, subscript, where);
+	if (!(tree = cc_expr_new(where))) {
+		return NULL;
+	}
+	
 	tree->_op = op;
 	tree->_loc = loc;
 	tree->_ty = expr->_ty->_type;
@@ -242,13 +233,13 @@ static FCCExprTree* cc_expr_postfix_call_check(struct tagCCContext* ctx, int op,
 	functy = expr->_ty;
 	if (IsPtr(expr->_ty)) { functy = expr->_ty->_type; }
 	if (!IsFunction(functy)) {
-		logger_output_s("error: function is expected at %w\n", &expr->_loc);
+		logger_output_s("error: function is expected at %w\n", &loc);
 		return NULL;
 	}
 
 	/* check arguments */
 	if (!cc_expr_checkarguments(ctx, functy, args->_data, where)) {
-		logger_output_s("error occurred of function parameters checking at %w\n", &expr->_loc);
+		logger_output_s("error occurred of function parameters checking at %w\n", &loc);
 		return NULL;
 	}
 
@@ -272,13 +263,13 @@ static FCCExprTree* cc_expr_postfix_dotfield_check(struct tagCCContext* ctx, int
 
 
 	if (!IsStruct(expr->_ty)) {
-		logger_output_s("error: l-value is not a structure or union. at %w\n", &loc);
+		logger_output_s("error: l-value is not a structure or union at %w\n", &expr->_loc);
 		return NULL;
 	}
 
 	if (!(field = cc_type_findfield(fieldname, expr->_ty)))
 	{
-		logger_output_s("error: can't find field of %t. at %w\n", expr->_ty, &ctx->_currtk._loc);
+		logger_output_s("error: can't find field '%s' of %t at %w\n", fieldname, expr->_ty, &loc);
 		return NULL;
 	}
 
@@ -311,14 +302,14 @@ static FCCExprTree* cc_expr_postfix_ptrfield_check(struct tagCCContext* ctx, int
 
 
 	if (!IsPtr(expr->_ty) || !IsStruct(cc_type_deref(expr->_ty))) {
-		logger_output_s("error: l-value is not a ptr to structure or union. at %w\n", &ctx->_currtk._loc);
+		logger_output_s("error: l-value is not a ptr to structure or union. at %w\n", &expr->_loc);
 		return NULL;
 	}
 
 	sty = cc_type_deref(expr->_ty);
 	if (!(field = cc_type_findfield(fieldname, UnQual(sty))))
 	{
-		logger_output_s("error: can't find field of %t. at %w\n", UnQual(sty), &ctx->_currtk._loc);
+		logger_output_s("error: can't find field '%s' of %t. at %w\n", fieldname, UnQual(sty), &loc);
 		return NULL;
 	}
 
@@ -340,12 +331,18 @@ static FCCExprTree* cc_expr_postfix_incdec_check(struct tagCCContext* ctx, int o
 {
 	FCCExprTree* tree;
 
-	if (!(tree = cc_expr_new(where))) {
+	if (!cc_expr_canmodify(expr)) {
+		logger_output_s("error modifiable l-value is expected at %w.\n", &expr->_loc);
 		return NULL;
 	}
 
-	if (!cc_expr_canmodify(expr)) {
-		logger_output_s("error modifiable l-value is expected at %w.\n", &expr->_loc);
+	if (IsPtr(expr->_ty) && (expr->_ty->_type->_size == 0))
+	{
+		logger_output_s("error pointer to an incomplete type %t at %w.\n", expr->_ty->_type, &expr->_loc);
+		return NULL;
+	}
+
+	if (!(tree = cc_expr_new(where))) {
 		return NULL;
 	}
 
@@ -511,12 +508,12 @@ static FCCExprTree* cc_expr_unary_incdec_check(struct tagCCContext* ctx, int op,
 {
 	FCCExprTree* tree;
 
-	if (!(tree = cc_expr_new(where))) {
+	if (!cc_expr_canmodify(expr)) {
+		logger_output_s("error modifiable l-value is expected at %w.\n", &loc);
 		return NULL;
 	}
 
-	if (!cc_expr_canmodify(expr)) {
-		logger_output_s("error modifiable l-value is expected at %w.\n", &loc);
+	if (!(tree = cc_expr_new(where))) {
 		return NULL;
 	}
 
@@ -533,13 +530,17 @@ static FCCExprTree* cc_expr_unary_address_check(struct tagCCContext* ctx, int op
 {
 	FCCExprTree* tree;
 
-	if (!(tree = cc_expr_new(where))) {
-		return NULL;
+	if (expr->_op == EXPR_DEREF) { /* &(*ptr) */
+		return expr;
 	}
 
 	if (!(IsFunction(expr->_ty) || expr->_blvalue))
 	{
 		logger_output_s("error l-value or function designator for '&' is expected at %w.\n", &loc);
+		return NULL;
+	}
+
+	if (!(tree = cc_expr_new(where))) {
 		return NULL;
 	}
 
@@ -556,8 +557,8 @@ static FCCExprTree* cc_expr_unary_deref_check(struct tagCCContext* ctx, int op, 
 {
 	FCCExprTree* tree;
 
-	if (!(tree = cc_expr_new(where))) {
-		return NULL;
+	if (expr->_op == EXPR_ADDR) { /* *(&obj) */
+		return expr;
 	}
 
 	if (!IsPtr(expr->_ty)) {
@@ -565,9 +566,14 @@ static FCCExprTree* cc_expr_unary_deref_check(struct tagCCContext* ctx, int op, 
 		return NULL;
 	}
 
+	if (!(tree = cc_expr_new(where))) {
+		return NULL;
+	}
+
 	tree->_op = op;
 	tree->_loc = loc;
 	tree->_ty = cc_type_deref(expr->_ty);
+	tree->_u._kids[0] = expr;
 	tree->_blvalue = !IsFunction(tree->_ty);
 
 	return tree;
@@ -577,13 +583,17 @@ static FCCExprTree* cc_expr_unary_positive_check(struct tagCCContext* ctx, int o
 {
 	FCCExprTree* tree;
 
-	if (!(tree = cc_expr_new(where))) {
+	if (!IsArith(expr->_ty))
+	{
+		logger_output_s("error arithmetic type is expected for '+' at %w.\n", &loc);
 		return NULL;
 	}
 
-	if (!IsArith(expr->_ty) && !IsEnum(expr->_ty))
-	{
-		logger_output_s("error arithmetic type is expected for '+' at %w.\n", &loc);
+	if (expr->_op == EXPR_CONSTANT) {
+		return expr;
+	}
+
+	if (!(tree = cc_expr_new(where))) {
 		return NULL;
 	}
 
@@ -600,13 +610,32 @@ static FCCExprTree* cc_expr_unary_negtive_check(struct tagCCContext* ctx, int op
 {
 	FCCExprTree* tree;
 
-	if (!(tree = cc_expr_new(where))) {
+	if (!IsArith(expr->_ty))
+	{
+		logger_output_s("error arithmetic type is expected for '%s' at %w.\n", cc_expr_name(op), &loc);
 		return NULL;
 	}
 
-	if (!IsArith(expr->_ty) && !IsEnum(expr->_ty))
+	if (expr->_op == EXPR_CONSTANT) 
 	{
-		logger_output_s("error arithmetic type is expected for '-' at %w.\n", &loc);
+		FCCType* cnstty;
+		FCCConstVal cnstval;
+
+		cnstty = cc_type_promote(expr->_ty);
+		if (UnQual(expr->_ty)->_op == Type_SInteger) {
+			cnstval._sint = -expr->_u._symbol->_u._cnstval._sint;
+		}
+		else if (UnQual(expr->_ty)->_op == Type_UInteger) {
+			cnstval._uint = -expr->_u._symbol->_u._cnstval._uint;
+		}
+		else if (UnQual(expr->_ty)->_op == Type_Float) {
+			cnstval._float = -expr->_u._symbol->_u._cnstval._float;
+		}
+		
+		return cc_expr_makeconstant(ctx, cnstty, cnstval, loc, where);
+	}
+
+	if (!(tree = cc_expr_new(where))) {
 		return NULL;
 	}
 
@@ -623,13 +652,29 @@ static FCCExprTree* cc_expr_unary_complement_check(struct tagCCContext* ctx, int
 {
 	FCCExprTree* tree;
 
-	if (!(tree = cc_expr_new(where))) {
+	if (!IsInt(expr->_ty))
+	{
+		logger_output_s("error integer type is expected for '%s' at %w.\n", cc_expr_name(op), &loc);
 		return NULL;
 	}
 
-	if (!IsArith(expr->_ty) && !IsEnum(expr->_ty))
+	if (expr->_op == EXPR_CONSTANT)
 	{
-		logger_output_s("error arithmetic type is expected for '~' at %w.\n", &loc);
+		FCCType* cnstty;
+		FCCConstVal cnstval;
+
+		cnstty = cc_type_promote(expr->_ty);
+		if (UnQual(expr->_ty)->_op == Type_SInteger) {
+			cnstval._sint = ~expr->_u._symbol->_u._cnstval._sint;
+		}
+		else if (UnQual(expr->_ty)->_op == Type_UInteger) {
+			cnstval._uint = ~expr->_u._symbol->_u._cnstval._uint;
+		}
+
+		return cc_expr_makeconstant(ctx, cnstty, cnstval, loc, where);
+	}
+
+	if (!(tree = cc_expr_new(where))) {
 		return NULL;
 	}
 
@@ -646,14 +691,34 @@ static FCCExprTree* cc_expr_unary_not_check(struct tagCCContext* ctx, int op, FC
 {
 	FCCExprTree* tree;
 
-	if (!(tree = cc_expr_new(where))) {
+	if (!IsScalar(expr->_ty))
+	{
+		logger_output_s("error scalar type is expected for '!' at %w.\n", &loc);
 		return NULL;
 	}
 
-	if (!IsScalar(expr->_ty))
+	if (expr->_op == EXPR_CONSTANT)
 	{
-		logger_output_s("error scalar type is expected for '!' at %w.\n", &(tree->_u._kids[0]->_loc));
-		return FALSE;
+		FCCConstVal cnstval;
+
+		if (UnQual(expr->_ty)->_op == Type_SInteger) {
+			cnstval._sint = expr->_u._symbol->_u._cnstval._sint == 0;
+		}
+		else if (UnQual(expr->_ty)->_op == Type_UInteger) {
+			cnstval._sint = expr->_u._symbol->_u._cnstval._uint == 0;
+		}
+		else if (UnQual(expr->_ty)->_op == Type_Float) {
+			cnstval._sint = expr->_u._symbol->_u._cnstval._float == 0.0;
+		}
+		else if (UnQual(expr->_ty)->_op == Type_Pointer) {
+			cnstval._sint = expr->_u._symbol->_u._cnstval._pointer == 0;
+		}
+
+		return cc_expr_makeconstant(ctx, gBuiltinTypes._sinttype, cnstval, loc, where);
+	}
+
+	if (!(tree = cc_expr_new(where))) {
+		return NULL;
 	}
 
 	tree->_op = op;
@@ -801,7 +866,6 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum 
 	else if (ctx->_currtk._type == TK_SIZEOF)
 	{
 		FCCType* exprty;
-		FCCSymbol* p;
 		FCCConstVal cnstval;
 
 		loc = ctx->_currtk._loc;
@@ -853,21 +917,9 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum 
 		}
 
 		cnstval._sint = exprty->_size;
-		if (!(p = cc_symbol_constant(gBuiltinTypes._sinttype, cnstval)))
-		{
-			logger_output_s("error: install constant failed for sizeof() at %w\n", &loc);
+		if (!(tree = cc_expr_makeconstant(ctx, gBuiltinTypes._sinttype, cnstval, loc, where))) {
 			return FALSE;
 		}
-
-		if (!(tree = cc_expr_new(where))) {
-			return FALSE;
-		}
-
-		tree->_op = EXPR_CONSTANT;
-		tree->_loc = loc;
-		tree->_ty = gBuiltinTypes._sinttype;
-		tree->_u._symbol = p;
-		tree->_bconstant = 1;
 
 		*outexpr = tree;
 		return TRUE;
@@ -912,22 +964,16 @@ static BOOL cc_expr_cast(struct tagCCContext* ctx, FCCExprTree** outexpr, enum E
 				return FALSE;
 			}
 
-			if (!(tree = cc_expr_new(where))) {
-				return FALSE;
-			}
-			tree->_op = EXPR_TYPECAST;
-			tree->_loc = ctx->_currtk._loc;
-			tree->_ty = ty;
-			if (!cc_expr_cast(ctx, &tree->_u._kids[0], where)) {
+			loc = ctx->_currtk._loc;
+			if (!cc_expr_cast(ctx, &tree, where)) {
 				return FALSE;
 			}
 
-			/* checking */
-			if (cc_type_cancast(tree->_u._kids[0]->_ty, ty)) {
-				logger_output_s("error: illegal type-cast at %w.\n", &loc);
+			if (!(tree = cc_expr_makecast(ctx, ty, tree, where))) {
 				return FALSE;
 			}
 
+			tree->_loc = loc;
 			*outexpr = tree;
 			return TRUE;
 		}
@@ -941,20 +987,97 @@ static FCCExprTree* cc_expr_multiplicative_check(struct tagCCContext* ctx, int o
 	FCCExprTree* tree;
 	FCCType* ty;
 
-	if (!(IsArith(lhs->_ty) || IsEnum(lhs->_ty)) || !(IsArith(rhs->_ty) || IsEnum(rhs->_ty)))
+	if (!IsArith(lhs->_ty) || !IsArith(rhs->_ty))
 	{
-		logger_output_s("error arithmetic operands is expected for multiplicative, at %w\n", &loc);
-		return FALSE;
+		logger_output_s("error arithmetic operands is expected for '%s', at %w\n", cc_expr_name(op), &loc);
+		return NULL;
 	}
 
 	ty = cc_type_select(lhs->_ty, rhs->_ty);
 	lhs = cc_expr_makecast(ctx, ty, lhs, where);
 	rhs = cc_expr_makecast(ctx, ty, rhs, where);
+
+	if (op == EXPR_MOD && !IsInt(ty))
+	{
+		logger_output_s("error integer operands is expected for '%s', at %w\n", cc_expr_name(op), &loc);
+		return NULL;
+	}
+
+	/* do constant fold */
+	if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
+	{
+		FCCConstVal cnstval;
+
+		if (UnQual(ty)->_op == Type_SInteger) {
+			switch (op)
+			{
+			case EXPR_MUL:
+				cnstval._sint = lhs->_u._symbol->_u._cnstval._sint * rhs->_u._symbol->_u._cnstval._sint; break;
+			case EXPR_DIV:
+				if (rhs->_u._symbol->_u._cnstval._sint == 0) {
+					logger_output_s("error divide zero at %w\n", &loc);
+					return NULL;
+				}
+				cnstval._sint = lhs->_u._symbol->_u._cnstval._sint / rhs->_u._symbol->_u._cnstval._sint; break;
+			case EXPR_MOD:
+				if (rhs->_u._symbol->_u._cnstval._sint == 0) {
+					logger_output_s("error divide zero at %w\n", &loc);
+					return NULL;
+				}
+				cnstval._sint = lhs->_u._symbol->_u._cnstval._sint % rhs->_u._symbol->_u._cnstval._sint; break;
+			default:
+				assert(0);
+				break;
+			}
+		}
+		else if (UnQual(ty)->_op == Type_UInteger) {
+			switch (op)
+			{
+			case EXPR_MUL:
+				cnstval._uint = lhs->_u._symbol->_u._cnstval._uint * rhs->_u._symbol->_u._cnstval._uint; break;
+			case EXPR_DIV:
+				if (rhs->_u._symbol->_u._cnstval._uint == 0) {
+					logger_output_s("error divide zero at %w\n", &loc);
+					return NULL;
+				}
+				cnstval._uint = lhs->_u._symbol->_u._cnstval._uint / rhs->_u._symbol->_u._cnstval._uint; break;
+			case EXPR_MOD:
+				if (rhs->_u._symbol->_u._cnstval._uint == 0) {
+					logger_output_s("error divide zero at %w\n", &loc);
+					return NULL;
+				}
+				cnstval._uint = lhs->_u._symbol->_u._cnstval._uint % rhs->_u._symbol->_u._cnstval._uint; break;
+			default:
+				assert(0);
+				break;
+			}
+		}
+		else if (UnQual(ty)->_op == Type_Float) {
+			switch (op)
+			{
+			case EXPR_MUL:
+				cnstval._float = lhs->_u._symbol->_u._cnstval._float * rhs->_u._symbol->_u._cnstval._float; break;
+			case EXPR_DIV:
+				if (rhs->_u._symbol->_u._cnstval._float == 0.0) {
+					logger_output_s("error divide zero at %w\n", &loc);
+					return NULL;
+				}
+				cnstval._float = lhs->_u._symbol->_u._cnstval._float / rhs->_u._symbol->_u._cnstval._float; break;
+			default:
+				assert(0);
+				break;
+			}
+		}
+
+		return cc_expr_makeconstant(ctx, ty, cnstval, loc, where);
+	}
+
 	if (!(tree = cc_expr_new(where))) {
 		return NULL;
 	}
 
 	tree->_op = op;
+	tree->_ty = ty;
 	tree->_loc = loc;
 	tree->_u._kids[0] = lhs;
 	tree->_u._kids[1] = rhs;
@@ -999,13 +1122,119 @@ static BOOL cc_expr_multiplicative(struct tagCCContext* ctx, FCCExprTree** outex
 static FCCExprTree* cc_expr_additive_check(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
+	FCCType* ty = NULL;
+
+	if (IsArith(lhs->_ty) && IsArith(rhs->_ty))
+	{
+		ty = cc_type_select(lhs->_ty, rhs->_ty);
+		lhs = cc_expr_makecast(ctx, ty, lhs, where);
+		rhs = cc_expr_makecast(ctx, ty, rhs, where);
+
+		/* do constant fold */
+		if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
+		{
+			FCCConstVal cnstval;
+
+			if (UnQual(ty)->_op == Type_SInteger) {
+				switch (op)
+				{
+				case EXPR_ADD:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._sint + rhs->_u._symbol->_u._cnstval._sint; break;
+				case EXPR_SUB:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._sint - rhs->_u._symbol->_u._cnstval._sint; break;
+				default:
+					assert(0);
+					break;
+				}
+			}
+			else if (UnQual(ty)->_op == Type_UInteger) {
+				switch (op)
+				{
+				case EXPR_ADD:
+					cnstval._uint = lhs->_u._symbol->_u._cnstval._uint + rhs->_u._symbol->_u._cnstval._uint; break;
+				case EXPR_SUB:
+					cnstval._uint = lhs->_u._symbol->_u._cnstval._uint - rhs->_u._symbol->_u._cnstval._uint; break;
+				default:
+					assert(0);
+					break;
+				}
+			}
+			else if (UnQual(ty)->_op == Type_Float) {
+				switch (op)
+				{
+				case EXPR_ADD:
+					cnstval._float = lhs->_u._symbol->_u._cnstval._float + rhs->_u._symbol->_u._cnstval._float; break;
+				case EXPR_SUB:
+					cnstval._float = lhs->_u._symbol->_u._cnstval._float - rhs->_u._symbol->_u._cnstval._float; break;
+				default:
+					assert(0);
+					break;
+				}
+			}
+
+			return cc_expr_makeconstant(ctx, ty, cnstval, loc, where);
+		}
+
+	}
+	else if (IsPtr(lhs->_ty))
+	{
+		if (lhs->_ty->_type->_size == 0) {
+			logger_output_s("error: unknown %t size at %w\n", lhs->_ty->_type, &loc);
+			return NULL;
+		}
+
+		if (IsInt(rhs->_ty)) {
+			ty = lhs->_ty;
+			rhs = cc_expr_makecast(ctx, gBuiltinTypes._sinttype, rhs, where);
+
+			/* constant folding */
+			if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
+			{
+				FCCConstVal cnstval;
+
+				switch (op)
+				{
+				case EXPR_ADD:
+					cnstval._pointer = lhs->_u._symbol->_u._cnstval._pointer + rhs->_u._symbol->_u._cnstval._sint * ty->_type->_size; break;
+				case EXPR_SUB:
+					cnstval._pointer = lhs->_u._symbol->_u._cnstval._pointer - rhs->_u._symbol->_u._cnstval._sint * ty->_type->_size; break;
+				default:
+					assert(0);
+					break;
+				}
+
+				return cc_expr_makeconstant(ctx, ty, cnstval, loc, where);
+			}
+		}
+		else if (IsPtr(rhs->_ty)) {
+			if (!cc_type_isequal(lhs->_ty, rhs->_ty, 0) || op != EXPR_SUB) {
+				logger_output_s("error: invalid pointer additive operate at %w\n", &loc);
+				return FALSE;
+			}
+
+			ty = gBuiltinTypes._sinttype;
+			/* constant folding */
+			if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
+			{
+				FCCConstVal cnstval;
+
+				cnstval._sint = (lhs->_u._symbol->_u._cnstval._pointer - rhs->_u._symbol->_u._cnstval._pointer) / lhs->_ty->_type->_size;
+				return cc_expr_makeconstant(ctx, ty, cnstval, loc, where);
+			}
+		}
+	}
+	else {
+		logger_output_s("error: invalid operand for '%s' at %w\n", cc_expr_name(op), &loc);
+		return NULL;
+	}
 
 	if (!(tree = cc_expr_new(where))) {
-		return FALSE;
+		return NULL;
 	}
 
 	tree->_op = op;
 	tree->_loc = loc;
+	tree->_ty = ty;
 	tree->_u._kids[0] = lhs;
 	tree->_u._kids[1] = rhs;
 
@@ -1049,12 +1278,53 @@ static FCCExprTree* cc_expr_shift_check(struct tagCCContext* ctx, int op, FCCExp
 {
 	FCCExprTree* tree;
 
+	if (!IsInt(lhs->_ty) || !IsInt(rhs->_ty)) {
+		logger_output_s("error: integer operand is expected for '%s' at %w\n", cc_expr_name(op), &loc);
+		return NULL;
+	}
+	lhs = cc_expr_makecast(ctx, cc_type_promote(lhs->_ty), lhs, where);
+	rhs = cc_expr_makecast(ctx, cc_type_promote(rhs->_ty), rhs, where);
+
+	/* constant folding */
+	if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
+	{
+		FCCConstVal cnstval;
+
+		if (UnQual(lhs->_ty)->_op == Type_SInteger)
+		{
+			switch (op)
+			{
+			case EXPR_LSHFIT:
+				cnstval._sint = lhs->_u._symbol->_u._cnstval._sint << rhs->_u._symbol->_u._cnstval._sint; break;
+			case EXPR_RSHFIT:
+				cnstval._sint = lhs->_u._symbol->_u._cnstval._sint >> rhs->_u._symbol->_u._cnstval._sint; break;
+			default:
+				break;
+			}
+		}
+		else if (UnQual(lhs->_ty)->_op == Type_UInteger)
+		{
+			switch (op)
+			{
+			case EXPR_LSHFIT:
+				cnstval._uint = lhs->_u._symbol->_u._cnstval._uint << rhs->_u._symbol->_u._cnstval._sint; break;
+			case EXPR_RSHFIT:
+				cnstval._uint = lhs->_u._symbol->_u._cnstval._uint >> rhs->_u._symbol->_u._cnstval._sint; break;
+			default:
+				break;
+			}
+		}
+
+		return cc_expr_makeconstant(ctx, lhs->_ty, cnstval, loc, where);
+	}
+
 	if (!(tree = cc_expr_new(where))) {
 		return FALSE;
 	}
 
 	tree->_op = op;
 	tree->_loc = loc;
+	tree->_ty = lhs->_ty;
 	tree->_u._kids[0] = lhs;
 	tree->_u._kids[1] = rhs;
 
@@ -1099,12 +1369,111 @@ static FCCExprTree* cc_expr_relational_check(struct tagCCContext* ctx, int op, F
 {
 	FCCExprTree* tree;
 
+	if (IsArith(lhs->_ty) && IsArith(rhs->_ty))
+	{
+		FCCType* ty;
+
+		ty = cc_type_select(lhs->_ty, rhs->_ty);
+		lhs = cc_expr_makecast(ctx, ty, lhs, where);
+		rhs = cc_expr_makecast(ctx, ty, rhs, where);
+
+		/* do constant fold */
+		if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
+		{
+			FCCConstVal cnstval;
+
+			if (UnQual(ty)->_op == Type_SInteger) {
+				switch (op)
+				{
+				case EXPR_LESS:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._sint < rhs->_u._symbol->_u._cnstval._sint; break;
+				case EXPR_LESSEQ:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._sint <= rhs->_u._symbol->_u._cnstval._sint; break;
+				case EXPR_GREAT:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._sint > rhs->_u._symbol->_u._cnstval._sint; break;
+				case EXPR_GREATEQ:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._sint >= rhs->_u._symbol->_u._cnstval._sint; break;
+				default:
+					assert(0);
+					break;
+				}
+			}
+			else if (UnQual(ty)->_op == Type_UInteger) {
+				switch (op)
+				{
+				case EXPR_LESS:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._uint < rhs->_u._symbol->_u._cnstval._uint; break;
+				case EXPR_LESSEQ:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._uint <= rhs->_u._symbol->_u._cnstval._uint; break;
+				case EXPR_GREAT:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._uint > rhs->_u._symbol->_u._cnstval._uint; break;
+				case EXPR_GREATEQ:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._uint >= rhs->_u._symbol->_u._cnstval._uint; break;
+				default:
+					assert(0);
+					break;
+				}
+			}
+			else if (UnQual(ty)->_op == Type_Float) {
+				switch (op)
+				{
+				case EXPR_LESS:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._float < rhs->_u._symbol->_u._cnstval._float; break;
+				case EXPR_LESSEQ:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._float <= rhs->_u._symbol->_u._cnstval._float; break;
+				case EXPR_GREAT:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._float > rhs->_u._symbol->_u._cnstval._float; break;
+				case EXPR_GREATEQ:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._float >= rhs->_u._symbol->_u._cnstval._float; break;
+				default:
+					assert(0);
+					break;
+				}
+			}
+
+			return cc_expr_makeconstant(ctx, gBuiltinTypes._sinttype, cnstval, loc, where);
+		}
+
+	}
+	else if ((IsPtr(lhs->_ty) || IsArray(lhs->_ty)) 
+		&& (IsPtr(rhs->_ty) || IsArray(rhs->_ty))
+		&& cc_type_isequal(lhs->_ty->_type, rhs->_ty->_type, TRUE))
+	{
+			/* constant folding */
+			if (lhs->_op == EXPR_CONSTANT && !lhs->_blvalue && rhs->_op == EXPR_CONSTANT && !rhs->_blvalue)
+			{
+				FCCConstVal cnstval;
+
+				switch (op)
+				{
+				case EXPR_LESS:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._pointer < rhs->_u._symbol->_u._cnstval._pointer; break;
+				case EXPR_LESSEQ:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._pointer <= rhs->_u._symbol->_u._cnstval._pointer; break;
+				case EXPR_GREAT:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._pointer > rhs->_u._symbol->_u._cnstval._pointer; break;
+				case EXPR_GREATEQ:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._pointer >= rhs->_u._symbol->_u._cnstval._pointer; break;
+				default:
+					assert(0);
+					break;
+				}
+
+				return cc_expr_makeconstant(ctx, gBuiltinTypes._sinttype, cnstval, loc, where);
+			}
+	}
+	else {
+		logger_output_s("error: invalid operand for '%s' at %w\n", cc_expr_name(op), &loc);
+		return NULL;
+	}
+
 	if (!(tree = cc_expr_new(where))) {
 		return FALSE;
 	}
 
 	tree->_op = op;
 	tree->_loc = loc;
+	tree->_ty = gBuiltinTypes._sinttype;
 	tree->_u._kids[0] = lhs;
 	tree->_u._kids[1] = rhs;
 
@@ -1157,12 +1526,95 @@ static FCCExprTree* cc_expr_equality_check(struct tagCCContext* ctx, int op, FCC
 {
 	FCCExprTree* tree;
 
+	if (IsArith(lhs->_ty) && IsArith(rhs->_ty))
+	{
+		FCCType* ty;
+
+		ty = cc_type_select(lhs->_ty, rhs->_ty);
+		lhs = cc_expr_makecast(ctx, ty, lhs, where);
+		rhs = cc_expr_makecast(ctx, ty, rhs, where);
+
+		/* do constant fold */
+		if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
+		{
+			FCCConstVal cnstval;
+
+			if (UnQual(ty)->_op == Type_SInteger) {
+				switch (op)
+				{
+				case EXPR_EQ:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._sint == rhs->_u._symbol->_u._cnstval._sint; break;
+				case EXPR_UNEQ:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._sint != rhs->_u._symbol->_u._cnstval._sint; break;
+				default:
+					assert(0);
+					break;
+				}
+			}
+			else if (UnQual(ty)->_op == Type_UInteger) {
+				switch (op)
+				{
+				case EXPR_EQ:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._uint == rhs->_u._symbol->_u._cnstval._uint; break;
+				case EXPR_UNEQ:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._uint != rhs->_u._symbol->_u._cnstval._uint; break;
+				default:
+					assert(0);
+					break;
+				}
+			}
+			else if (UnQual(ty)->_op == Type_Float) {
+				switch (op)
+				{
+				case EXPR_EQ:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._float == rhs->_u._symbol->_u._cnstval._float; break;
+				case EXPR_UNEQ:
+					cnstval._sint = lhs->_u._symbol->_u._cnstval._float != rhs->_u._symbol->_u._cnstval._float; break;
+				default:
+					assert(0);
+					break;
+				}
+			}
+
+			return cc_expr_makeconstant(ctx, gBuiltinTypes._sinttype, cnstval, loc, where);
+		}
+
+	}
+	else if ((IsPtr(lhs->_ty) || IsArray(lhs->_ty) || cc_expr_isnullptr(lhs))
+		&& (IsPtr(rhs->_ty) || IsArray(rhs->_ty) || cc_expr_isnullptr(lhs))
+		&& (cc_type_isequal(lhs->_ty->_type, rhs->_ty->_type, TRUE) || IsVoidptr(lhs->_ty) || IsVoidptr(rhs->_ty)))
+	{
+		/* constant folding */
+		if (lhs->_op == EXPR_CONSTANT && !lhs->_blvalue && rhs->_op == EXPR_CONSTANT && !rhs->_blvalue)
+		{
+			FCCConstVal cnstval;
+
+			switch (op)
+			{
+			case EXPR_EQ:
+				cnstval._sint = lhs->_u._symbol->_u._cnstval._pointer == rhs->_u._symbol->_u._cnstval._pointer; break;
+			case EXPR_UNEQ:
+				cnstval._sint = lhs->_u._symbol->_u._cnstval._pointer != rhs->_u._symbol->_u._cnstval._pointer; break;
+			default:
+				assert(0);
+				break;
+			}
+
+			return cc_expr_makeconstant(ctx, gBuiltinTypes._sinttype, cnstval, loc, where);
+		}
+	}
+	else {
+		logger_output_s("error: invalid operand for '%s' at %w\n", cc_expr_name(op), &loc);
+		return NULL;
+	}
+
 	if (!(tree = cc_expr_new(where))) {
 		return FALSE;
 	}
 
 	tree->_op = op;
 	tree->_loc = loc;
+	tree->_ty = gBuiltinTypes._sinttype;
 	tree->_u._kids[0] = lhs;
 	tree->_u._kids[1] = rhs;
 
@@ -1206,6 +1658,31 @@ static BOOL cc_expr_equality(struct tagCCContext* ctx, FCCExprTree** outexpr, en
 static FCCExprTree* cc_expr_bitand_check(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
+	FCCType* ty;
+
+	if (!IsInt(lhs->_ty) || !IsInt(rhs->_ty)) {
+		logger_output_s("error: integer operand is expected for '%s' at %w\n", cc_expr_name(op), &loc);
+		return NULL;
+	}
+
+	ty = cc_type_promote(cc_type_select(lhs->_ty, rhs->_ty));
+	lhs = cc_expr_makecast(ctx, ty, lhs, where);
+	rhs = cc_expr_makecast(ctx, ty, rhs, where);
+
+	/* do constant fold */
+	if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
+	{
+		FCCConstVal cnstval;
+
+		if (UnQual(ty)->_op == Type_SInteger) {
+			cnstval._sint = lhs->_u._symbol->_u._cnstval._sint & rhs->_u._symbol->_u._cnstval._sint;
+		}
+		else if (UnQual(ty)->_op == Type_UInteger) {
+			cnstval._uint = lhs->_u._symbol->_u._cnstval._uint & rhs->_u._symbol->_u._cnstval._uint;
+		}
+
+		return cc_expr_makeconstant(ctx, ty, cnstval, loc, where);
+	}
 
 	if (!(tree = cc_expr_new(where))) {
 		return FALSE;
@@ -1213,6 +1690,7 @@ static FCCExprTree* cc_expr_bitand_check(struct tagCCContext* ctx, int op, FCCEx
 
 	tree->_op = op;
 	tree->_loc = loc;
+	tree->_ty = ty;
 	tree->_u._kids[0] = lhs;
 	tree->_u._kids[1] = rhs;
 
@@ -1252,6 +1730,31 @@ static BOOL cc_expr_bitand(struct tagCCContext* ctx, FCCExprTree** outexpr, enum
 static FCCExprTree* cc_expr_bitxor_check(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
+	FCCType* ty;
+
+	if (!IsInt(lhs->_ty) || !IsInt(rhs->_ty)) {
+		logger_output_s("error: integer operand is expected for '%s' at %w\n", cc_expr_name(op), &loc);
+		return NULL;
+	}
+
+	ty = cc_type_promote(cc_type_select(lhs->_ty, rhs->_ty));
+	lhs = cc_expr_makecast(ctx, ty, lhs, where);
+	rhs = cc_expr_makecast(ctx, ty, rhs, where);
+
+	/* do constant fold */
+	if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
+	{
+		FCCConstVal cnstval;
+
+		if (UnQual(ty)->_op == Type_SInteger) {
+			cnstval._sint = lhs->_u._symbol->_u._cnstval._sint ^ rhs->_u._symbol->_u._cnstval._sint;
+		}
+		else if (UnQual(ty)->_op == Type_UInteger) {
+			cnstval._uint = lhs->_u._symbol->_u._cnstval._uint ^ rhs->_u._symbol->_u._cnstval._uint;
+		}
+
+		return cc_expr_makeconstant(ctx, ty, cnstval, loc, where);
+	}
 
 	if (!(tree = cc_expr_new(where))) {
 		return FALSE;
@@ -1259,6 +1762,7 @@ static FCCExprTree* cc_expr_bitxor_check(struct tagCCContext* ctx, int op, FCCEx
 
 	tree->_op = op;
 	tree->_loc = loc;
+	tree->_ty = ty;
 	tree->_u._kids[0] = lhs;
 	tree->_u._kids[1] = rhs;
 
@@ -1298,6 +1802,31 @@ static BOOL cc_expr_bitxor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum
 static FCCExprTree* cc_expr_bitor_check(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
+	FCCType* ty;
+
+	if (!IsInt(lhs->_ty) || !IsInt(rhs->_ty)) {
+		logger_output_s("error: integer operand is expected for '%s' at %w\n", cc_expr_name(op), &loc);
+		return NULL;
+	}
+
+	ty = cc_type_promote(cc_type_select(lhs->_ty, rhs->_ty));
+	lhs = cc_expr_makecast(ctx, ty, lhs, where);
+	rhs = cc_expr_makecast(ctx, ty, rhs, where);
+
+	/* do constant fold */
+	if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
+	{
+		FCCConstVal cnstval;
+
+		if (UnQual(ty)->_op == Type_SInteger) {
+			cnstval._sint = lhs->_u._symbol->_u._cnstval._sint | rhs->_u._symbol->_u._cnstval._sint;
+		}
+		else if (UnQual(ty)->_op == Type_UInteger) {
+			cnstval._uint = lhs->_u._symbol->_u._cnstval._uint | rhs->_u._symbol->_u._cnstval._uint;
+		}
+
+		return cc_expr_makeconstant(ctx, ty, cnstval, loc, where);
+	}
 
 	if (!(tree = cc_expr_new(where))) {
 		return FALSE;
@@ -1305,6 +1834,7 @@ static FCCExprTree* cc_expr_bitor_check(struct tagCCContext* ctx, int op, FCCExp
 
 	tree->_op = op;
 	tree->_loc = loc;
+	tree->_ty = ty;
 	tree->_u._kids[0] = lhs;
 	tree->_u._kids[1] = rhs;
 
@@ -1345,12 +1875,55 @@ static FCCExprTree* cc_expr_logicand_check(struct tagCCContext* ctx, int op, FCC
 {
 	FCCExprTree* tree;
 
+	if (!IsScalar(lhs->_ty) || !IsScalar(rhs->_ty))
+	{
+		logger_output_s("error scalar type is expected for '&&' at %w.\n", &loc);
+		return NULL;
+	}
+
+	if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
+	{
+		FCCConstVal cnstval;
+		int lv = 0, rv = 0;
+
+		if (UnQual(lhs->_ty)->_op == Type_SInteger) {
+			lv = lhs->_u._symbol->_u._cnstval._sint != 0;
+		}
+		else if (UnQual(lhs->_ty)->_op == Type_UInteger) {
+			lv = lhs->_u._symbol->_u._cnstval._uint != 0;
+		}
+		else if (UnQual(lhs->_ty)->_op == Type_Float) {
+			lv = lhs->_u._symbol->_u._cnstval._float != 0.0;
+		}
+		else if (UnQual(lhs->_ty)->_op == Type_Pointer) {
+			lv = lhs->_u._symbol->_u._cnstval._pointer == 0;
+		}
+
+		if (UnQual(rhs->_ty)->_op == Type_SInteger) {
+			rv = rhs->_u._symbol->_u._cnstval._sint != 0;
+		}
+		else if (UnQual(rhs->_ty)->_op == Type_UInteger) {
+			rv = rhs->_u._symbol->_u._cnstval._uint != 0;
+		}
+		else if (UnQual(rhs->_ty)->_op == Type_Float) {
+			rv = rhs->_u._symbol->_u._cnstval._float != 0.0;
+		}
+		else if (UnQual(rhs->_ty)->_op == Type_Pointer) {
+			rv = rhs->_u._symbol->_u._cnstval._pointer == 0;
+		}
+
+		cnstval._sint = lv && rv;
+		return cc_expr_makeconstant(ctx, gBuiltinTypes._sinttype, cnstval, loc, where);
+	}
+
+
 	if (!(tree = cc_expr_new(where))) {
 		return FALSE;
 	}
 
 	tree->_op = op;
 	tree->_loc = loc;
+	tree->_ty = gBuiltinTypes._sinttype;
 	tree->_u._kids[0] = lhs;
 	tree->_u._kids[1] = rhs;
 
@@ -1391,12 +1964,54 @@ static FCCExprTree* cc_expr_logicor_check(struct tagCCContext* ctx, int op, FCCE
 {
 	FCCExprTree* tree;
 
+	if (!IsScalar(lhs->_ty) || !IsScalar(rhs->_ty))
+	{
+		logger_output_s("error scalar type is expected for '||' at %w.\n", &loc);
+		return NULL;
+	}
+
+	if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
+	{
+		FCCConstVal cnstval;
+		int lv = 0, rv = 0;
+
+		if (UnQual(lhs->_ty)->_op == Type_SInteger) {
+			lv = lhs->_u._symbol->_u._cnstval._sint != 0;
+		}
+		else if (UnQual(lhs->_ty)->_op == Type_UInteger) {
+			lv = lhs->_u._symbol->_u._cnstval._uint != 0;
+		}
+		else if (UnQual(lhs->_ty)->_op == Type_Float) {
+			lv = lhs->_u._symbol->_u._cnstval._float != 0.0;
+		}
+		else if (UnQual(lhs->_ty)->_op == Type_Pointer) {
+			lv = lhs->_u._symbol->_u._cnstval._pointer == 0;
+		}
+
+		if (UnQual(rhs->_ty)->_op == Type_SInteger) {
+			rv = rhs->_u._symbol->_u._cnstval._sint != 0;
+		}
+		else if (UnQual(rhs->_ty)->_op == Type_UInteger) {
+			rv = rhs->_u._symbol->_u._cnstval._uint != 0;
+		}
+		else if (UnQual(rhs->_ty)->_op == Type_Float) {
+			rv = rhs->_u._symbol->_u._cnstval._float != 0.0;
+		}
+		else if (UnQual(rhs->_ty)->_op == Type_Pointer) {
+			rv = rhs->_u._symbol->_u._cnstval._pointer == 0;
+		}
+
+		cnstval._sint = lv || rv;
+		return cc_expr_makeconstant(ctx, gBuiltinTypes._sinttype, cnstval, loc, where);
+	}
+
 	if (!(tree = cc_expr_new(where))) {
 		return FALSE;
 	}
 
 	tree->_op = op;
 	tree->_loc = loc;
+	tree->_ty = gBuiltinTypes._sinttype;
 	tree->_u._kids[0] = lhs;
 	tree->_u._kids[1] = rhs;
 
@@ -1436,6 +2051,50 @@ static BOOL cc_expr_logicor(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 static FCCExprTree* cc_expr_conditional_check(struct tagCCContext* ctx, int op, FCCExprTree* expr0, FCCExprTree* expr1, FCCExprTree* expr2, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
+	FCCType* ty;
+
+	if (!IsScalar(expr0->_ty))
+	{
+		logger_output_s("error scalar type is expected for '? : ' first expression at %w.\n", &loc);
+		return NULL;
+	}
+
+	if (cc_type_isequal(expr1->_ty, expr2->_ty, TRUE)) {
+		ty = expr1->_ty;
+	}
+	else if ((IsPtr(expr1->_ty) || IsArray(expr1->_ty)) && cc_expr_isnullptr(expr2))
+	{
+		ty = expr1->_ty;
+	}
+	else if (cc_expr_isnullptr(expr1) && (IsPtr(expr2->_ty) || IsArray(expr2->_ty)))
+	{
+		ty = expr2->_ty;
+	}
+	else
+	{
+		logger_output_s("error same type is expected for '? : ' 2rd & 3rd expression at %w.\n", &loc);
+		return NULL;
+	}
+
+	if (expr0->_op == EXPR_CONSTANT)
+	{
+		int val = 1;
+
+		if (UnQual(expr0->_ty)->_op == Type_SInteger) {
+			val = expr0->_u._symbol->_u._cnstval._sint != 0;
+		}
+		else if (UnQual(expr0->_ty)->_op == Type_UInteger) {
+			val = expr0->_u._symbol->_u._cnstval._uint != 0;
+		}
+		else if (UnQual(expr0->_ty)->_op == Type_Float) {
+			val = expr0->_u._symbol->_u._cnstval._float != 0.0;
+		}
+		else if (UnQual(expr0->_ty)->_op == Type_Pointer) {
+			val = expr0->_u._symbol->_u._cnstval._pointer == 0;
+		}
+
+		return val ? expr1 : expr2;
+	}
 
 	if (!(tree = cc_expr_new(where))) {
 		return FALSE;
@@ -1494,12 +2153,111 @@ static FCCExprTree* cc_expr_assignment_check(struct tagCCContext* ctx, int op, F
 {
 	FCCExprTree* tree;
 
+	if (!cc_expr_canmodify(lhs)) {
+		logger_output_s("error l-value is expected for operator '%s' at %w\n", cc_expr_name(op), &loc);
+		return NULL;
+	}
+
+	switch (op)
+	{
+	case EXPR_ASSIGN:
+	{
+		if (IsArith(lhs->_ty) && IsArith(rhs->_ty))
+		{
+			rhs = cc_expr_makecast(ctx, UnQual(rhs->_ty), rhs, where);
+		}
+		else if (IsPtr(lhs->_ty)) {
+			if (IsPtr(rhs->_ty)) {
+				if (!cc_type_isequal(lhs->_ty, rhs->_ty, TRUE) && (!IsVoidptr(lhs->_ty) && !IsVoidptr(rhs->_ty))) {
+					logger_output_s("error incompatible operands for operator '%s' at %w\n", cc_expr_name(op), &loc);
+					return NULL;
+				}
+			}
+			else if (!cc_expr_isnullptr(rhs)) {
+				logger_output_s("error incompatible operands for operator '%s' at %w\n", cc_expr_name(op), &loc);
+				return NULL;
+			}
+		}
+		else if (!cc_type_isequal(UnQual(lhs->_ty), UnQual(rhs->_ty), TRUE)) {
+			logger_output_s("error incompatible operands for operator '%s' at %w\n", cc_expr_name(op), &loc);
+			return NULL;
+		}
+	}
+		break;
+	case EXPR_ASSIGN_MUL:
+	case EXPR_ASSIGN_DIV:
+	{
+		if (!IsArith(lhs->_ty)  || !IsArith(rhs->_ty))
+		{
+			logger_output_s("error arithmetic operands is expected for '%s', at %w\n",cc_expr_name(op), &loc);
+			return NULL;
+		}
+
+		rhs = cc_expr_makecast(ctx, lhs->_ty, rhs, where);
+	}
+		break;
+	case EXPR_ASSIGN_MOD:
+	{
+		if (!IsInt(lhs->_ty) || !IsInt(rhs->_ty))
+		{
+			logger_output_s("error arithmetic operands is expected for '%s', at %w\n", cc_expr_name(op), &loc);
+			return NULL;
+		}
+
+		rhs = cc_expr_makecast(ctx, lhs->_ty, rhs, where);
+	}
+		break;
+	case EXPR_ASSIGN_ADD:
+	case EXPR_ASSIGN_SUB:
+	{
+		if (IsArith(lhs->_ty) && IsArith(rhs->_ty))
+		{
+			rhs = cc_expr_makecast(ctx, lhs->_ty, rhs, where);
+		}
+		else if (IsPtr(lhs->_ty) && IsInt(rhs->_ty))
+		{
+			if(lhs->_ty->_type->_size == 0) {
+				logger_output_s("error: unknown %t size at %w\n", lhs->_ty->_type , &loc);
+				return NULL;
+			}
+
+			rhs = cc_expr_makecast(ctx, gBuiltinTypes._sinttype, rhs, where);
+		}
+		else
+		{
+			logger_output_s("error: invalid operand for '%s' at %w\n", cc_expr_name(op), &loc);
+			return NULL;
+		}
+	}
+		break;
+	case EXPR_ASSIGN_LSHIFT:
+	case EXPR_ASSIGN_RSHIFT:
+	case EXPR_ASSIGN_BITAND:
+	case EXPR_ASSIGN_BITXOR:
+	case EXPR_ASSIGN_BITOR:
+	{
+		if (IsInt(lhs->_ty) && IsInt(rhs->_ty))
+		{
+			rhs = cc_expr_makecast(ctx, gBuiltinTypes._sinttype, rhs, where);
+		}
+		else
+		{
+			logger_output_s("error: invalid operand for '%s' at %w\n", cc_expr_name(op), &loc);
+			return NULL;
+		}
+	}
+		break;
+	default:
+		assert(0); break;
+	}
+
 	if (!(tree = cc_expr_new(where))) {
 		return FALSE;
 	}
 
 	tree->_op = op;
 	tree->_loc = loc;
+	tree->_ty = lhs->_ty;
 	tree->_u._kids[0] = lhs;
 	tree->_u._kids[1] = rhs;
 
@@ -1555,12 +2313,18 @@ static FCCExprTree* cc_expr_comma_check(struct tagCCContext* ctx, int op, FCCExp
 {
 	FCCExprTree* tree;
 
+	if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
+	{
+		return rhs;
+	}
+
 	if (!(tree = cc_expr_new(where))) {
 		return FALSE;
 	}
 
 	tree->_op = op;
 	tree->_loc = loc;
+	tree->_ty = rhs->_ty;
 	tree->_u._kids[0] = lhs;
 	tree->_u._kids[1] = rhs;
 
@@ -1656,7 +2420,7 @@ static BOOL cc_expr_isnullptr(FCCExprTree* expr)
 	return (expr->_op == EXPR_CONSTANT)
 		&& ((ty->_op == Type_SInteger && expr->_u._symbol->_u._cnstval._sint == 0)
 			|| (ty->_op == Type_UInteger && expr->_u._symbol->_u._cnstval._uint == 0)
-			|| (IsVoidptr(ty) && expr->_u._symbol->_u._cnstval._ptr == NULL));
+			|| (IsVoidptr(ty) && expr->_u._symbol->_u._cnstval._pointer == 0));
 }
 
 struct tagCCType* cc_expr_assigntype(struct tagCCType* lhs, struct tagCCExprTree* expr)
@@ -1692,8 +2456,6 @@ struct tagCCType* cc_expr_assigntype(struct tagCCType* lhs, struct tagCCExprTree
 		return xty;
 	}
 
-
-
 	if ((IsPtr(xty) && IsPtr(yty)
 		&& cc_type_isequal(UnQual(xty->_type), UnQual(yty->_type), TRUE))
 		&& ((IsConst(xty->_type) || !IsConst(yty->_type))
@@ -1721,8 +2483,60 @@ struct tagCCType* cc_expr_assigntype(struct tagCCType* lhs, struct tagCCExprTree
 
 FCCExprTree* cc_expr_makecast(struct tagCCContext* ctx, struct tagCCType* castty, FCCExprTree* expr, enum EMMArea where)
 {
-	// TODO:
-	return expr;
+	FCCExprTree* tree;
+
+	if (!cc_type_cancast(castty, expr->_ty))
+	{
+		logger_output_s("error typecast failed at %w\n", &expr->_loc);
+		return NULL;
+	}
+
+	if (expr->_op == EXPR_CONSTANT && !expr->_blvalue)
+	{
+		FCCConstVal cnstval;
+
+		if (IsFloat(castty) && !IsFloat(expr->_ty)) {
+			cnstval._float = (double)expr->_u._symbol->_u._cnstval._sint;
+		}
+		else if (!IsFloat(castty) && IsFloat(expr->_ty)) {
+			cnstval._sint = (int64_t)expr->_u._symbol->_u._cnstval._float;
+		}
+
+		return cc_expr_makeconstant(ctx, castty, cnstval, expr->_loc, where);
+	}
+
+	if (!(tree = cc_expr_new(where))) {
+		return NULL;
+	}
+	tree->_op = EXPR_TYPECAST;
+	tree->_loc = expr->_loc;
+	tree->_ty = castty;
+	tree->_u._kids[0] = expr;
+	tree->_blvalue = IsArray(tree->_ty);
+
+	return tree;
+}
+
+FCCExprTree* cc_expr_makeconstant(struct tagCCContext* ctx, struct tagCCType* cnstty, FCCConstVal cnstval, FLocation loc, enum EMMArea where)
+{
+	FCCExprTree* tree;
+	FCCSymbol* p;
+
+	if (!(p = cc_symbol_constant(cnstty, cnstval)))
+	{
+		logger_output_s("error: install constant failed at %w\n", &loc);
+		return NULL;
+	}
+	if (!(tree = cc_expr_new(where))) {
+		return NULL;
+	}
+	tree->_op = EXPR_CONSTANT;
+	tree->_loc = loc;
+	tree->_ty = p->_type;
+	tree->_u._symbol = p;
+	tree->_blvalue = IsArray(p->_type);
+
+	return tree;
 }
 
 BOOL cc_expr_canmodify(FCCExprTree* expr)
@@ -1735,6 +2549,115 @@ BOOL cc_expr_canmodify(FCCExprTree* expr)
 	*/
 	return expr->_blvalue 
 		&& !IsConst(expr->_ty)
-		&& IsArray(expr->_ty)
+		&& !IsArray(expr->_ty)
 		&& (IsStruct(expr->_ty) ? UnQual(expr->_ty)->_u._symbol->_u._s._cfields : TRUE);
+}
+
+const char* cc_expr_name(enum EExprOp op)
+{
+	switch (op)
+	{
+	case EXPR_COMMA:
+		return ",";
+	case EXPR_ASSIGN:
+		return "=";
+	case EXPR_ASSIGN_MUL:
+		return "*=";
+	case EXPR_ASSIGN_DIV:
+		return "/=";
+	case EXPR_ASSIGN_MOD:
+		return "%=";
+	case EXPR_ASSIGN_ADD:
+		return "+=";
+	case EXPR_ASSIGN_SUB:
+		return "-=";
+	case EXPR_ASSIGN_LSHIFT:
+		return "<<=";
+	case EXPR_ASSIGN_RSHIFT:
+		return ">>=";
+	case EXPR_ASSIGN_BITAND:
+		return "&=";
+	case EXPR_ASSIGN_BITXOR:
+		return "^=";
+	case EXPR_ASSIGN_BITOR:
+		return "|=";
+	case EXPR_COND:
+		return "? : ";
+	case EXPR_LOGOR:
+		return "||";
+	case EXPR_LOGAND:
+		return "&&";
+	case EXPR_BITOR:
+		return "|";
+	case EXPR_BITXOR:
+		return "^";
+	case EXPR_BITAND:
+		return "&";
+	case EXPR_EQ:
+		return "=";
+	case EXPR_UNEQ:
+		return "!=";
+	case EXPR_LESS:
+		return "<";
+	case EXPR_GREAT:
+		return ">";
+	case EXPR_LESSEQ:
+		return "<=";
+	case EXPR_GREATEQ:
+		return ">=";
+	case EXPR_LSHFIT:
+		return "<<";
+	case EXPR_RSHFIT:
+		return ">>";
+	case EXPR_ADD:
+		return "+";
+	case EXPR_SUB:
+		return "-";
+	case EXPR_MUL:
+		return "*";
+	case EXPR_DIV:
+		return "/";
+	case EXPR_MOD:
+		return "%";
+	case EXPR_DEREF:
+		return "*";
+	case EXPR_ADDR:
+		return "&";
+	case EXPR_NEG:
+		return "-";
+	case EXPR_POS:
+		return "+";
+	case EXPR_NOT:
+		return "!";
+	case EXPR_COMPLEMENT:
+		return "~";
+	case EXPR_PREINC:
+		return "++";
+	case EXPR_PREDEC:
+		return "--";
+	case EXPR_SIZEOF:
+		return "sizeof";
+	case EXPR_TYPECAST:
+		return "(typecast)";
+	case EXPR_POSINC:
+		return "++";
+	case EXPR_POSDEC:
+		return "--";
+	case EXPR_ID:
+		return "identifier";
+	case EXPR_CONSTANT:
+		return "constant";
+	case EXPR_PTRFIELD:
+		return "->";
+	case EXPR_DOTFIELD:
+		return ".";
+	case EXPR_CALL:
+		return "function()";
+	case EXPR_ARRAYSUB:
+		return "[index]";
+	default:
+		break;
+	}
+
+	return "Unknown";
 }

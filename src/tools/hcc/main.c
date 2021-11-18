@@ -49,6 +49,8 @@ int main(int argc, char* argv[])
 	int v0[10][2], v1[10][2];
 	int color = -RED;
 
+	char* p = "abcd" - 1;
+
 	localename = setlocale(LC_ALL, "");
 	logger_output_s("LOCAL %s\n", localename);
 

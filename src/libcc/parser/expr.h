@@ -8,6 +8,7 @@
 #include "utils.h"
 #include "mm.h"
 #include "cc.h"
+#include "symbols.h"
 
 
 /* expression op type */
@@ -68,7 +69,6 @@ enum EExprOp
 	EXPR_PTRFIELD, /* struct field -> */
 	EXPR_DOTFIELD, /* struct field . */
 	EXPR_CALL, /* function call */
-	EXPR_ARGS, /* function args */
 	EXPR_ARRAYSUB, /* array subscripting */
 
 	EXPR_MAX
@@ -96,8 +96,6 @@ typedef struct tagCCExprTree {
 	
 	/* auxiliary flags */
 	int _blvalue : 1;
-	int _bconstant : 1;
-
 } FCCExprTree;
 
 
@@ -109,6 +107,8 @@ BOOL cc_expr_constant_expression(struct tagCCContext* ctx, FCCExprTree** outexpr
 BOOL cc_expr_constant_int(struct tagCCContext* ctx, int* val);
 struct tagCCType* cc_expr_assigntype(struct tagCCType* lhs, struct tagCCExprTree* expr);
 FCCExprTree* cc_expr_makecast(struct tagCCContext* ctx, struct tagCCType* castty, FCCExprTree* expr, enum EMMArea where);
+FCCExprTree* cc_expr_makeconstant(struct tagCCContext* ctx, struct tagCCType* cnstty, FCCConstVal cnstval, FLocation loc, enum EMMArea where);
 BOOL cc_expr_canmodify(FCCExprTree* expr);
 
+const char* cc_expr_name(enum EExprOp op);
 #endif /* _CC_EXPR_H__ */

@@ -170,7 +170,7 @@ void cc_type_init(const FCCTypeMetrics* m)
 	}
 	{
 		p = cc_symbol_install("void", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
-		gBuiltinTypes._voidtype = cc_type_new(Type_Void, NULL, 0, 0, p);
+		gBuiltinTypes._voidtype = cc_type_new(Type_Void, NULL, 1, 0, p); /* assume size to 1 byte */
 	}
 	{
 		p = cc_symbol_install("...", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
@@ -591,7 +591,6 @@ FCCType* cc_type_select(FCCType* ty1, FCCType* ty2)
 
 BOOL cc_type_cancast(FCCType* from, FCCType* to)
 {
-	if (from)
 	if (IsVoid(from) || !IsScalar(from)) {
 		return FALSE;
 	}
