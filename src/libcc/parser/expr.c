@@ -198,10 +198,17 @@ static BOOL cc_expr_checkarguments(struct tagCCContext* ctx, FCCType* functy, FC
 static FCCExprTree* cc_expr_postfix_subscript_check(struct tagCCContext* ctx, int op, FCCExprTree* expr, FCCExprTree* subscript, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
+	FCCType* ty;
 
 	/* check semantic */
 	if (!IsPtr(expr->_ty) && !IsArray(expr->_ty)) {
 		logger_output_s("error, pointer or array is expected at %w\n", &expr->_loc);
+		return NULL;
+	}
+
+	ty = expr->_ty->_type;
+	if (ty->_size == 0 || IsVoid(ty)) {
+		logger_output_s("error, in-completable type %t at %w\n", ty, &expr->_loc);
 		return NULL;
 	}
 	if (!IsInt(subscript->_ty)) {
@@ -216,7 +223,7 @@ static FCCExprTree* cc_expr_postfix_subscript_check(struct tagCCContext* ctx, in
 	
 	tree->_op = op;
 	tree->_loc = loc;
-	tree->_ty = expr->_ty->_type;
+	tree->_ty = ty;
 	tree->_u._kids[0] = expr;
 	tree->_u._kids[1] = subscript;
 	tree->_blvalue = 1;
@@ -537,6 +544,11 @@ static FCCExprTree* cc_expr_unary_address_check(struct tagCCContext* ctx, int op
 	if (!(IsFunction(expr->_ty) || expr->_blvalue))
 	{
 		logger_output_s("error l-value or function designator for '&' is expected at %w.\n", &loc);
+		return NULL;
+	}
+	if ((expr->_op == EXPR_PTRFIELD || expr->_op == EXPR_DOTFIELD) && expr->_u._s._field->_lsb > 0)
+	{
+		logger_output_s("error can't address a bits value at %w.\n", &loc);
 		return NULL;
 	}
 
