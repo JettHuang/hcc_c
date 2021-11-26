@@ -66,8 +66,8 @@
 #define IsFloat(t)	(UnQual(t)->_op == Type_Float)
 #define IsScalar(t) (UnQual(t)->_op <= Type_Pointer || IsEnum(t))
 #define IsArith(t)	(UnQual(t)->_op <= Type_Float || IsEnum(t))
-#define IsVoidptr(t)	(IsPtr(t) && UnQual(t->_type) == gBuiltinTypes._voidtype)
-#define IsVoid(t)	(UnQual(t->_type) == gBuiltinTypes._voidtype)
+#define IsVoidptr(t)	(IsPtr(t) && UnQual(t->_type) == gbuiltintypes._voidtype)
+#define IsVoid(t)	(UnQual(t) == gbuiltintypes._voidtype)
 
 /* cc type */
 typedef struct tagCCType
@@ -147,9 +147,10 @@ typedef struct tagCCBuiltinTypes
 	FCCType* _ldoubletype;
 	FCCType* _voidtype;
 	FCCType* _ellipsistype; /* ... */
+	FCCType* _ptroffsettype;
 } FCCBuiltinTypes;
 
-extern FCCBuiltinTypes gBuiltinTypes;
+extern FCCBuiltinTypes gbuiltintypes;
 
 void cc_type_init(const FCCTypeMetrics* m);
 
@@ -190,6 +191,6 @@ void cc_type_remove(int level);
 
 FCCType* cc_type_compose(FCCType* ty1, FCCType* ty2);
 FCCType* cc_type_select(FCCType* ty1, FCCType* ty2);
-BOOL cc_type_cancast(FCCType* from, FCCType* to);
+BOOL cc_type_cancast(FCCType* to, FCCType* from);
 
 #endif /* __CC_TYPES_H__ */

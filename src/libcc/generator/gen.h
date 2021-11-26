@@ -55,6 +55,6 @@ struct tagCCBackend* cc_new_backend();
 
 void cc_gen_internalname(struct tagCCSymbol* sym);
 void cc_gen_dumpsymbols(struct tagCCContext* ctx);
-
+void cc_gen_eval_constant_address(struct tagCCContext* ctx, struct tagCCExprTree* expr, struct tagCCSymbol** addrsym, int64_t*offset);
 
 #endif /* __CC_GEN_H__ */

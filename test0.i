@@ -46,7 +46,7 @@ int main(int argc, char* argv)
 {
  
  printf("%s:%d", "F:/GitHub/hcc_c/dist/samples/test0.c", 36);
- printf("%s,%s", "Jul 28 2021", "12:20:31");
+ printf("%s,%s", "Aug  4 2021", "14:22:44");
  return 0;
 }
 

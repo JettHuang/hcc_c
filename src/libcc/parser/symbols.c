@@ -238,7 +238,10 @@ FCCSymbol* cc_symbol_constant(struct tagCCType* ty, FCCConstVal val)
 				}
 				break;
 			case Type_Pointer:
-
+				if (p->_sym._u._cnstval._pointer == val._pointer) {
+					return &p->_sym;
+				}
+				break;
 			case Type_Array:
 				if (p->_sym._u._cnstval._payload == val._payload) {
 					return &p->_sym;

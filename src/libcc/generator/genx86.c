@@ -400,10 +400,15 @@ static void defconst_string(struct tagCCContext* ctx, const void* str, int count
 	}
 }
 
+
 static void defconst_address(struct tagCCContext* ctx, struct tagCCExprTree* expr)
 {
-	if (expr->_op == EXPR_CONSTANT && IsArray(expr->_ty)) { /* "string" */
+	if (expr->_op == EXPR_CONSTANT_STR) { /* "string" */
+		expr->_u._symbol->_x._refcnt++;
 		fprintf(ctx->_outfp, "  dd   %s \n", expr->_u._symbol->_x._name);
+	}
+	else {
+
 	}
 }
 

@@ -11,27 +11,74 @@
 #include <string.h>
 
 
-static BOOL cc_expr_primary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
-static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
-static BOOL cc_expr_arguments(struct tagCCContext* ctx, FArray* args, enum EMMArea where);
-static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
-static BOOL cc_expr_cast(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
-static BOOL cc_expr_multiplicative(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
-static BOOL cc_expr_additive(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
-static BOOL cc_expr_shift(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
-static BOOL cc_expr_relational(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
-static BOOL cc_expr_equality(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
-static BOOL cc_expr_bitand(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
-static BOOL cc_expr_bitxor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
-static BOOL cc_expr_bitor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
-static BOOL cc_expr_logicand(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
-static BOOL cc_expr_logicor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
-static BOOL cc_expr_conditional(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
-static BOOL cc_expr_isnullptr(FCCExprTree* expr);
+static BOOL cc_expr_parse_primary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
+static BOOL cc_expr_parse_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
+static BOOL cc_expr_parse_arguments(struct tagCCContext* ctx, FArray* args, enum EMMArea where);
+static BOOL cc_expr_parse_unary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
+static BOOL cc_expr_parse_cast(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
+static BOOL cc_expr_parse_multiplicative(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
+static BOOL cc_expr_parse_additive(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
+static BOOL cc_expr_parse_shift(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
+static BOOL cc_expr_parse_relational(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
+static BOOL cc_expr_parse_equality(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
+static BOOL cc_expr_parse_bitand(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
+static BOOL cc_expr_parse_bitxor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
+static BOOL cc_expr_parse_bitor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
+static BOOL cc_expr_parse_logicand(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
+static BOOL cc_expr_parse_logicor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
+static BOOL cc_expr_parse_conditional(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
+
 
 /* ------------------------------------------------------------------------------------------ */
+static FCCExprTree* cc_expr_id(struct tagCCContext* ctx, FCCSymbol* p, FLocation loc, enum EMMArea where)
+{
+	int op;
+	FCCExprTree* tree, * tree2;
+	FCCType* ty = UnQual(p->_type);
 
-static BOOL cc_expr_primary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
+	if (p->_scope == SCOPE_GLOBAL) {
+		op = EXPR_ADDRG;
+	}
+	else if (p->_scope == SCOPE_PARAM) {
+		op = EXPR_ADDRF;
+	}
+	else if (p->_sclass == SC_External || p->_sclass == SC_Static) {
+		assert(p->_u._alias);
+		p = p->_u._alias;
+		op = EXPR_ADDRG;
+	}
+	else {
+		op = EXPR_ADDRL;
+	}
+
+	if (IsArray(ty) || IsFunction(ty)) {
+		if (!(tree = cc_expr_new(where))) {
+			return NULL;
+		}
+		tree->_op = op;
+		tree->_loc = loc;
+		tree->_ty = p->_type;
+		tree->_u._symbol = p;
+		tree->_islvalue = !IsFunction(ty);
+		tree->_isconstant = (op == EXPR_ADDRG);
+	}
+	else {
+		if (!(tree = cc_expr_new(where))) {
+			return NULL;
+		}
+		tree->_op = op;
+		tree->_loc = loc;
+		tree->_ty = cc_type_ptr(p->_type);
+		tree->_u._symbol = p;
+		tree->_isconstant = (op == EXPR_ADDRG);
+
+		tree = cc_expr_unary_deref(ctx, tree, loc, where);
+	}
+
+	return tree;
+}
+
+static BOOL cc_expr_parse_primary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
 {
 	FCCExprTree* tree = NULL;
 	FCCSymbol* p = NULL;
@@ -48,89 +95,84 @@ static BOOL cc_expr_primary(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 			return FALSE;
 		}
 
-		if (IsEnum(p->_type)) 
+		if (IsEnum(p->_type))
 		{
 			cnstty = p->_type->_type;
 			cnstval._sint = p->_u._cnstval._sint;
 		}
 		else
 		{
-			if (!(tree = cc_expr_new(where))) {
+			if (!(tree = cc_expr_id(ctx, p, ctx->_currtk._loc, where))) {
 				return FALSE;
 			}
-			tree->_op = EXPR_ID;
-			tree->_loc = ctx->_currtk._loc;
-			tree->_ty = p->_type;
-			tree->_u._symbol = p;
-			tree->_blvalue = !IsFunction(p->_type);
 
 			cc_read_token(ctx, &ctx->_currtk);
 		}
 	}
-		break;
+	break;
 	case TK_CONSTANT_INT:
-		cnstty = gBuiltinTypes._sinttype; 
-		cnstval._sint = ctx->_currtk._val._int; 
+		cnstty = gbuiltintypes._sinttype;
+		cnstval._sint = ctx->_currtk._val._int;
 		break;
 	case TK_CONSTANT_UINT:
-		cnstty = gBuiltinTypes._uinttype; 
+		cnstty = gbuiltintypes._uinttype;
 		cnstval._uint = ctx->_currtk._val._uint;
 		break;
 	case TK_CONSTANT_LONG:
-		cnstty = gBuiltinTypes._slongtype; 
+		cnstty = gbuiltintypes._slongtype;
 		cnstval._sint = ctx->_currtk._val._long;
 		break;
 	case TK_CONSTANT_ULONG:
-		cnstty = gBuiltinTypes._ulongtype; 
+		cnstty = gbuiltintypes._ulongtype;
 		cnstval._uint = ctx->_currtk._val._ulong;
 		break;
 	case TK_CONSTANT_LLONG:
-		cnstty = gBuiltinTypes._sllongtype; 
+		cnstty = gbuiltintypes._sllongtype;
 		cnstval._sint = ctx->_currtk._val._llong;
 		break;
 	case TK_CONSTANT_ULLONG:
-		cnstty = gBuiltinTypes._ullongtype; 
+		cnstty = gbuiltintypes._ullongtype;
 		cnstval._uint = ctx->_currtk._val._ullong;
 		break;
 	case TK_CONSTANT_FLOAT:
-		cnstty = gBuiltinTypes._floattype; 
+		cnstty = gbuiltintypes._floattype;
 		cnstval._float = ctx->_currtk._val._float;
 		break;
 	case TK_CONSTANT_DOUBLE:
-		cnstty = gBuiltinTypes._doubletype; 
+		cnstty = gbuiltintypes._doubletype;
 		cnstval._float = ctx->_currtk._val._double;
 		break;
 	case TK_CONSTANT_LDOUBLE:
-		cnstty = gBuiltinTypes._ldoubletype; 
+		cnstty = gbuiltintypes._ldoubletype;
 		cnstval._float = ctx->_currtk._val._ldouble;
 		break;
 	case TK_CONSTANT_CHAR:
-		cnstty = gBuiltinTypes._chartype; 
+		cnstty = gbuiltintypes._chartype;
 		cnstval._sint = ctx->_currtk._val._ch;
 		break;
 	case TK_CONSTANT_WCHAR:
-		cnstty = gBuiltinTypes._wchartype;
+		cnstty = gbuiltintypes._wchartype;
 		cnstval._sint = ctx->_currtk._val._wch;
 		break;
 	case TK_CONSTANT_STR:
-		cnstty = cc_type_newarray(gBuiltinTypes._chartype, ctx->_currtk._val._astr._chcnt, 0); 
+		cnstty = cc_type_newarray(gbuiltintypes._chartype, ctx->_currtk._val._astr._chcnt, 0);
 		cnstval._payload = ctx->_currtk._val._astr._str;
 		break;
 	case TK_CONSTANT_WSTR:
-		cnstty = cc_type_newarray(gBuiltinTypes._wchartype, ctx->_currtk._val._wstr._chcnt / gBuiltinTypes._wchartype->_size, 0); 
+		cnstty = cc_type_newarray(gbuiltintypes._wchartype, ctx->_currtk._val._wstr._chcnt / gbuiltintypes._wchartype->_size, 0);
 		cnstval._payload = ctx->_currtk._val._wstr._str;
 		break;
 	case TK_LPAREN: /* '(' */
 	{
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_expression(ctx, &tree, where)) {
+		if (!cc_expr_parse_expression(ctx, &tree, where)) {
 			return FALSE;
 		}
 		if (!cc_parser_expect(ctx, TK_RPAREN)) { /* ')' */
 			return FALSE;
 		}
 	}
-		break;
+	break;
 	default:
 		logger_output_s("error: illegal expression at %w\n", &ctx->_currtk._loc);
 		return FALSE;
@@ -138,14 +180,21 @@ static BOOL cc_expr_primary(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 
 	if (cnstty != NULL)
 	{
-		if (!(tree = cc_expr_makeconstant(ctx, cnstty, cnstval, ctx->_currtk._loc, where)))
+		if (IsArray(cnstty))
+		{
+			if (!(tree = cc_expr_constant_str(ctx, cnstty, cnstval, ctx->_currtk._loc, where)))
+			{
+				return FALSE;
+			}
+		}
+		else if (!(tree = cc_expr_constant(ctx, cnstty, cnstval, ctx->_currtk._loc, where)))
 		{
 			return FALSE;
 		}
 
 		cc_read_token(ctx, &ctx->_currtk);
 	}
-	
+
 	*outexpr = tree;
 	return TRUE;
 }
@@ -156,8 +205,8 @@ static BOOL cc_expr_checkarguments(struct tagCCContext* ctx, FCCType* functy, FC
 	int m, n, k;
 
 	protos = functy->_u._f._protos;
-	for (m = 0; protos[m]; m++) ; /* end for m */
-	for (n = 0; args[n]; n++) ; /* end for n */
+	for (m = 0; protos[m]; m++); /* end for m */
+	for (n = 0; args[n]; n++); /* end for n */
 
 	if (cc_type_isvariance(functy)) {
 		if (m > n) {
@@ -165,7 +214,7 @@ static BOOL cc_expr_checkarguments(struct tagCCContext* ctx, FCCType* functy, FC
 			return FALSE;
 		}
 	}
-	else if(m != n) {
+	else if (m != n) {
 		logger_output_s("error: mismatch parameters count in call. \n");
 		return FALSE;
 	}
@@ -173,32 +222,33 @@ static BOOL cc_expr_checkarguments(struct tagCCContext* ctx, FCCType* functy, FC
 	for (k = 0; k < m; k++)
 	{
 		FCCType* ty = cc_expr_assigntype(protos[k], args[k]);
-		
+
 		if (!ty) {
 			logger_output_s("type error in argument %d; found `%t' expected `%t'\n", k, args[k]->_ty, protos[k]);
 			return FALSE;
 		}
 
-		args[k] = cc_expr_makecast(ctx, ty, args[k], where);
-		if (IsInt(args[k]->_ty) 
-			&& args[k]->_ty->_size != gBuiltinTypes._sinttype->_size)
+		args[k] = cc_expr_cast(ctx, ty, args[k], where);
+		if (IsInt(args[k]->_ty)
+			&& args[k]->_ty->_size != gbuiltintypes._sinttype->_size)
 		{
-			args[k] = cc_expr_makecast(ctx, cc_type_promote(args[k]->_ty), args[k], where);
+			args[k] = cc_expr_cast(ctx, cc_type_promote(args[k]->_ty), args[k], where);
 		}
 	} /* end for k */
 
-	for (; k<n; k++)
+	for (; k < n; k++)
 	{
-		args[k] = cc_expr_makecast(ctx, cc_type_promote(args[k]->_ty), args[k], where);
+		args[k] = cc_expr_cast(ctx, cc_type_promote(args[k]->_ty), args[k], where);
 	}
 
 	return TRUE;
 }
 
-static FCCExprTree* cc_expr_postfix_subscript_check(struct tagCCContext* ctx, int op, FCCExprTree* expr, FCCExprTree* subscript, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_postfix_subscript(struct tagCCContext* ctx, int op, FCCExprTree* expr, FCCExprTree* subscript, FLocation loc, enum EMMArea where)
 {
-	FCCExprTree* tree;
+	FCCExprTree* tree, *offset;
 	FCCType* ty;
+	FCCConstVal cnstval;
 
 	/* check semantic */
 	if (!IsPtr(expr->_ty) && !IsArray(expr->_ty)) {
@@ -206,7 +256,7 @@ static FCCExprTree* cc_expr_postfix_subscript_check(struct tagCCContext* ctx, in
 		return NULL;
 	}
 
-	ty = expr->_ty->_type;
+	ty = UnQual(expr->_ty)->_type;
 	if (ty->_size == 0 || IsVoid(ty)) {
 		logger_output_s("error, in-completable type %t at %w\n", ty, &expr->_loc);
 		return NULL;
@@ -216,29 +266,33 @@ static FCCExprTree* cc_expr_postfix_subscript_check(struct tagCCContext* ctx, in
 		return NULL;
 	}
 
-	subscript = cc_expr_makecast(ctx, gBuiltinTypes._sinttype, subscript, where);
+	cnstval._sint = ty->_size;
+	offset = cc_expr_multiplicative(ctx, EXPR_MUL, subscript, cc_expr_constant(ctx, gbuiltintypes._sinttype, cnstval, loc, where), loc, where);
+	offset = cc_expr_cast(ctx, gbuiltintypes._sinttype, offset, where);
+
 	if (!(tree = cc_expr_new(where))) {
 		return NULL;
 	}
-	
-	tree->_op = op;
+
+	tree->_op = EXPR_ADD;
 	tree->_loc = loc;
 	tree->_ty = ty;
 	tree->_u._kids[0] = expr;
-	tree->_u._kids[1] = subscript;
-	tree->_blvalue = 1;
+	tree->_u._kids[1] = offset;
+	tree->_islvalue = 1;
+	tree->_isconstant = expr->_isconstant;
 
 	return tree;
 }
 
-static FCCExprTree* cc_expr_postfix_call_check(struct tagCCContext* ctx, int op, FCCExprTree* expr, FArray *args, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_postfix_call(struct tagCCContext* ctx, int op, FCCExprTree* expr, FArray* args, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 	FCCType* functy;
 
 	/* check function type */
-	functy = expr->_ty;
-	if (IsPtr(expr->_ty)) { functy = expr->_ty->_type; }
+	functy = UnQual(expr->_ty);
+	if (IsPtr(functy)) { functy = functy->_type; }
 	if (!IsFunction(functy)) {
 		logger_output_s("error: function is expected at %w\n", &loc);
 		return NULL;
@@ -259,11 +313,11 @@ static FCCExprTree* cc_expr_postfix_call_check(struct tagCCContext* ctx, int op,
 	tree->_ty = cc_type_rettype(functy);
 	tree->_u._f._lhs = expr;
 	tree->_u._f._args = args->_data;
-	
+
 	return tree;
 }
 
-static FCCExprTree* cc_expr_postfix_dotfield_check(struct tagCCContext* ctx, int op, FCCExprTree* expr, const char* fieldname, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_postfix_dotfield(struct tagCCContext* ctx, int op, FCCExprTree* expr, const char* fieldname, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 	FCCField* field;
@@ -296,12 +350,13 @@ static FCCExprTree* cc_expr_postfix_dotfield_check(struct tagCCContext* ctx, int
 	tree->_ty = cc_type_qual(field->_type, cc_type_getqual(expr->_ty));
 	tree->_u._s._lhs = expr;
 	tree->_u._s._field = field;
-	tree->_blvalue = expr->_blvalue;
+	tree->_islvalue = expr->_islvalue;
+	tree->_isstaticaddressable = expr->_isstaticaddressable;
 
 	return tree;
 }
 
-static FCCExprTree* cc_expr_postfix_ptrfield_check(struct tagCCContext* ctx, int op, FCCExprTree* expr, const char* fieldname, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_postfix_ptrfield(struct tagCCContext* ctx, int op, FCCExprTree* expr, const char* fieldname, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 	FCCType* sty;
@@ -329,23 +384,25 @@ static FCCExprTree* cc_expr_postfix_ptrfield_check(struct tagCCContext* ctx, int
 	tree->_ty = cc_type_qual(field->_type, cc_type_getqual(sty));
 	tree->_u._s._lhs = expr;
 	tree->_u._s._field = field;
-	tree->_blvalue = 1;
+	tree->_islvalue = 1;
 
 	return tree;
 }
 
-static FCCExprTree* cc_expr_postfix_incdec_check(struct tagCCContext* ctx, int op, FCCExprTree* expr, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_postfix_incdec(struct tagCCContext* ctx, int op, FCCExprTree* expr, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
+	FCCType* ty;
 
-	if (!cc_expr_canmodify(expr)) {
+	if (!cc_expr_is_modifiable(expr)) {
 		logger_output_s("error modifiable l-value is expected at %w.\n", &expr->_loc);
 		return NULL;
 	}
 
-	if (IsPtr(expr->_ty) && (expr->_ty->_type->_size == 0))
+	ty = UnQual(expr->_ty);
+	if (IsPtr(ty) && (ty->_type->_size == 0) && !IsVoid(ty->_type)) /* surport void *p; p++ */
 	{
-		logger_output_s("error pointer to an incomplete type %t at %w.\n", expr->_ty->_type, &expr->_loc);
+		logger_output_s("error pointer to an incomplete type %t at %w.\n", ty->_type, &expr->_loc);
 		return NULL;
 	}
 
@@ -355,19 +412,19 @@ static FCCExprTree* cc_expr_postfix_incdec_check(struct tagCCContext* ctx, int o
 
 	tree->_op = op;
 	tree->_loc = loc;
-	tree->_ty = expr->_ty;
+	tree->_ty = ty;
 	tree->_u._kids[0] = expr;
-	tree->_blvalue = 0;
+	tree->_islvalue = 0;
 
 	return tree;
 }
 
-static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
+static BOOL cc_expr_parse_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
 {
 	FCCExprTree* expr, * tree;
 	FLocation loc;
 
-	if (!cc_expr_primary(ctx, &expr, where)) {
+	if (!cc_expr_parse_primary(ctx, &expr, where)) {
 		return FALSE;
 	}
 
@@ -379,7 +436,7 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 
 			loc = ctx->_currtk._loc;
 			cc_read_token(ctx, &ctx->_currtk);
-			if (!cc_expr_expression(ctx, &subscript, where))
+			if (!cc_expr_parse_expression(ctx, &subscript, where))
 			{
 				return FALSE;
 			}
@@ -389,10 +446,10 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 				return FALSE;
 			}
 
-			if (!(tree = cc_expr_postfix_subscript_check(ctx, EXPR_ARRAYSUB, expr, subscript, loc, where))) {
+			if (!(tree = cc_expr_postfix_subscript(ctx, EXPR_ARRAYINDEX, expr, subscript, loc, where))) {
 				return FALSE;
 			}
-			
+
 			expr = tree;
 		}
 		else if (ctx->_currtk._type == TK_LPAREN) /* '(' */
@@ -402,7 +459,7 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 			loc = ctx->_currtk._loc;
 			cc_read_token(ctx, &ctx->_currtk);
 			array_init(&args, 32, sizeof(FCCExprTree*), where);
-			if (!cc_expr_arguments(ctx, &args, where)) {
+			if (!cc_expr_parse_arguments(ctx, &args, where)) {
 				return FALSE;
 			}
 
@@ -412,7 +469,7 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 				return FALSE;
 			}
 
-			if (!(tree = cc_expr_postfix_call_check(ctx, EXPR_CALL, expr, &args, loc, where))) {
+			if (!(tree = cc_expr_postfix_call(ctx, EXPR_CALL, expr, &args, loc, where))) {
 				return FALSE;
 			}
 
@@ -421,7 +478,7 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 		else if (ctx->_currtk._type == TK_DOT) /* '.' */
 		{
 			const char* fieldname;
-			
+
 			loc = ctx->_currtk._loc;
 			cc_read_token(ctx, &ctx->_currtk);
 			if (ctx->_currtk._type != TK_ID)
@@ -431,10 +488,10 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 			}
 			fieldname = ctx->_currtk._val._astr._str;
 
-			if (!(tree = cc_expr_postfix_dotfield_check(ctx, EXPR_DOTFIELD, expr, fieldname, loc, where))) {
+			if (!(tree = cc_expr_postfix_dotfield(ctx, EXPR_DOTFIELD, expr, fieldname, loc, where))) {
 				return FALSE;
 			}
-			
+
 			expr = tree;
 			cc_read_token(ctx, &ctx->_currtk);
 		}
@@ -451,17 +508,17 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 			}
 			fieldname = ctx->_currtk._val._astr._str;
 
-			if (!(tree = cc_expr_postfix_ptrfield_check(ctx, EXPR_PTRFIELD, expr, fieldname, loc, where))) {
+			if (!(tree = cc_expr_postfix_ptrfield(ctx, EXPR_PTRFIELD, expr, fieldname, loc, where))) {
 				return FALSE;
 			}
-			
+
 			expr = tree;
 			cc_read_token(ctx, &ctx->_currtk);
 		}
 		else if (ctx->_currtk._type == TK_INC) /* ++ */
 		{
 			loc = ctx->_currtk._loc;
-			if (!(tree = cc_expr_postfix_incdec_check(ctx, EXPR_POSINC, expr, loc, where))) {
+			if (!(tree = cc_expr_postfix_incdec(ctx, EXPR_POSINC, expr, loc, where))) {
 				return FALSE;
 			}
 
@@ -471,7 +528,7 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 		else if (ctx->_currtk._type == TK_DEC) /* -- */
 		{
 			loc = ctx->_currtk._loc;
-			if (!(tree = cc_expr_postfix_incdec_check(ctx, EXPR_POSDEC, expr, loc, where))) {
+			if (!(tree = cc_expr_postfix_incdec(ctx, EXPR_POSDEC, expr, loc, where))) {
 				return FALSE;
 			}
 
@@ -488,12 +545,12 @@ static BOOL cc_expr_postfix(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 	return TRUE;
 }
 
-static BOOL cc_expr_arguments(struct tagCCContext* ctx, FArray* args, enum EMMArea where)
+static BOOL cc_expr_parse_arguments(struct tagCCContext* ctx, FArray* args, enum EMMArea where)
 {
 	while (ctx->_currtk._type != TK_RPAREN)
 	{
 		FCCExprTree* expr = NULL;
-		if (!cc_expr_assignment(ctx, &expr, where))
+		if (!cc_expr_parse_assignment(ctx, &expr, where))
 		{
 			return FALSE;
 		}
@@ -511,12 +568,21 @@ static BOOL cc_expr_arguments(struct tagCCContext* ctx, FArray* args, enum EMMAr
 	return TRUE;
 }
 
-static FCCExprTree* cc_expr_unary_incdec_check(struct tagCCContext* ctx, int op, FCCExprTree* expr, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_unary_incdec(struct tagCCContext* ctx, int op, FCCExprTree* expr, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
+	FCCType* ty;
 
-	if (!cc_expr_canmodify(expr)) {
+
+	if (!cc_expr_is_modifiable(expr)) {
 		logger_output_s("error modifiable l-value is expected at %w.\n", &loc);
+		return NULL;
+	}
+
+	ty = UnQual(expr->_ty);
+	if (IsPtr(ty) && (ty->_type->_size == 0) && !IsVoid(ty->_type)) /* surport void *p; --p */
+	{
+		logger_output_s("error pointer to an incomplete type %t at %w.\n", ty->_type, &expr->_loc);
 		return NULL;
 	}
 
@@ -526,14 +592,14 @@ static FCCExprTree* cc_expr_unary_incdec_check(struct tagCCContext* ctx, int op,
 
 	tree->_op = op;
 	tree->_loc = loc;
-	tree->_ty = expr->_ty;
+	tree->_ty = ty;
 	tree->_u._kids[0] = expr;
-	tree->_blvalue = 0;
+	tree->_islvalue = 0;
 
 	return tree;
 }
 
-static FCCExprTree* cc_expr_unary_address_check(struct tagCCContext* ctx, int op, FCCExprTree* expr, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_unary_address(struct tagCCContext* ctx, int op, FCCExprTree* expr, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 
@@ -541,7 +607,7 @@ static FCCExprTree* cc_expr_unary_address_check(struct tagCCContext* ctx, int op
 		return expr;
 	}
 
-	if (!(IsFunction(expr->_ty) || expr->_blvalue))
+	if (!(IsFunction(expr->_ty) || expr->_islvalue))
 	{
 		logger_output_s("error l-value or function designator for '&' is expected at %w.\n", &loc);
 		return NULL;
@@ -560,18 +626,15 @@ static FCCExprTree* cc_expr_unary_address_check(struct tagCCContext* ctx, int op
 	tree->_loc = loc;
 	tree->_ty = cc_type_ptr(expr->_ty);
 	tree->_u._kids[0] = expr;
-	tree->_blvalue = 0;
+	tree->_islvalue = 0;
+	tree->_isconstant = expr->_isstaticaddressable;
 
 	return tree;
 }
 
-static FCCExprTree* cc_expr_unary_deref_check(struct tagCCContext* ctx, int op, FCCExprTree* expr, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_unary_deref(struct tagCCContext* ctx, FCCExprTree* expr, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
-
-	if (expr->_op == EXPR_ADDR) { /* *(&obj) */
-		return expr;
-	}
 
 	if (!IsPtr(expr->_ty)) {
 		logger_output_s("error pointer is expected for dereference '*' at %w.\n", &loc);
@@ -586,12 +649,12 @@ static FCCExprTree* cc_expr_unary_deref_check(struct tagCCContext* ctx, int op, 
 	tree->_loc = loc;
 	tree->_ty = cc_type_deref(expr->_ty);
 	tree->_u._kids[0] = expr;
-	tree->_blvalue = !IsFunction(tree->_ty);
+	tree->_islvalue = !IsFunction(tree->_ty);
 
 	return tree;
 }
 
-static FCCExprTree* cc_expr_unary_positive_check(struct tagCCContext* ctx, int op, FCCExprTree* expr, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_unary_positive(struct tagCCContext* ctx, int op, FCCExprTree* expr, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 
@@ -612,23 +675,23 @@ static FCCExprTree* cc_expr_unary_positive_check(struct tagCCContext* ctx, int o
 	tree->_op = op;
 	tree->_loc = loc;
 	tree->_ty = cc_type_promote(expr->_ty);
-	tree->_u._kids[0] = cc_expr_makecast(ctx, tree->_ty, expr, where);
-	tree->_blvalue = 0;
+	tree->_u._kids[0] = cc_expr_cast(ctx, tree->_ty, expr, where);
+	tree->_islvalue = 0;
 
 	return tree;
 }
 
-static FCCExprTree* cc_expr_unary_negtive_check(struct tagCCContext* ctx, int op, FCCExprTree* expr, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_unary_negtive(struct tagCCContext* ctx, int op, FCCExprTree* expr, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 
 	if (!IsArith(expr->_ty))
 	{
-		logger_output_s("error arithmetic type is expected for '%s' at %w.\n", cc_expr_name(op), &loc);
+		logger_output_s("error arithmetic type is expected for '%s' at %w.\n", cc_expr_opname(op), &loc);
 		return NULL;
 	}
 
-	if (expr->_op == EXPR_CONSTANT) 
+	if (expr->_op == EXPR_CONSTANT)
 	{
 		FCCType* cnstty;
 		FCCConstVal cnstval;
@@ -643,8 +706,8 @@ static FCCExprTree* cc_expr_unary_negtive_check(struct tagCCContext* ctx, int op
 		else if (UnQual(expr->_ty)->_op == Type_Float) {
 			cnstval._float = -expr->_u._symbol->_u._cnstval._float;
 		}
-		
-		return cc_expr_makeconstant(ctx, cnstty, cnstval, loc, where);
+
+		return cc_expr_constant(ctx, cnstty, cnstval, loc, where);
 	}
 
 	if (!(tree = cc_expr_new(where))) {
@@ -654,19 +717,19 @@ static FCCExprTree* cc_expr_unary_negtive_check(struct tagCCContext* ctx, int op
 	tree->_op = op;
 	tree->_loc = loc;
 	tree->_ty = cc_type_promote(expr->_ty);
-	tree->_u._kids[0] = cc_expr_makecast(ctx, tree->_ty, expr, where);
-	tree->_blvalue = 0;
+	tree->_u._kids[0] = cc_expr_cast(ctx, tree->_ty, expr, where);
+	tree->_islvalue = 0;
 
 	return tree;
 }
 
-static FCCExprTree* cc_expr_unary_complement_check(struct tagCCContext* ctx, int op, FCCExprTree* expr, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_unary_complement(struct tagCCContext* ctx, int op, FCCExprTree* expr, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 
 	if (!IsInt(expr->_ty))
 	{
-		logger_output_s("error integer type is expected for '%s' at %w.\n", cc_expr_name(op), &loc);
+		logger_output_s("error integer type is expected for '%s' at %w.\n", cc_expr_opname(op), &loc);
 		return NULL;
 	}
 
@@ -683,7 +746,7 @@ static FCCExprTree* cc_expr_unary_complement_check(struct tagCCContext* ctx, int
 			cnstval._uint = ~expr->_u._symbol->_u._cnstval._uint;
 		}
 
-		return cc_expr_makeconstant(ctx, cnstty, cnstval, loc, where);
+		return cc_expr_constant(ctx, cnstty, cnstval, loc, where);
 	}
 
 	if (!(tree = cc_expr_new(where))) {
@@ -693,13 +756,13 @@ static FCCExprTree* cc_expr_unary_complement_check(struct tagCCContext* ctx, int
 	tree->_op = op;
 	tree->_loc = loc;
 	tree->_ty = cc_type_promote(expr->_ty);
-	tree->_u._kids[0] = cc_expr_makecast(ctx, tree->_ty, expr, where);
-	tree->_blvalue = 0;
+	tree->_u._kids[0] = cc_expr_cast(ctx, tree->_ty, expr, where);
+	tree->_islvalue = 0;
 
 	return tree;
 }
 
-static FCCExprTree* cc_expr_unary_not_check(struct tagCCContext* ctx, int op, FCCExprTree* expr, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_unary_not(struct tagCCContext* ctx, int op, FCCExprTree* expr, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 
@@ -726,7 +789,7 @@ static FCCExprTree* cc_expr_unary_not_check(struct tagCCContext* ctx, int op, FC
 			cnstval._sint = expr->_u._symbol->_u._cnstval._pointer == 0;
 		}
 
-		return cc_expr_makeconstant(ctx, gBuiltinTypes._sinttype, cnstval, loc, where);
+		return cc_expr_constant(ctx, gbuiltintypes._sinttype, cnstval, loc, where);
 	}
 
 	if (!(tree = cc_expr_new(where))) {
@@ -735,28 +798,28 @@ static FCCExprTree* cc_expr_unary_not_check(struct tagCCContext* ctx, int op, FC
 
 	tree->_op = op;
 	tree->_loc = loc;
-	tree->_ty = gBuiltinTypes._sinttype;
+	tree->_ty = gbuiltintypes._sinttype;
 	tree->_u._kids[0] = expr;
-	tree->_blvalue = 0;
+	tree->_islvalue = 0;
 
 	return tree;
 }
 
-static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
+static BOOL cc_expr_parse_unary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
 {
-	FCCExprTree* tree, *expr;
+	FCCExprTree* tree, * expr;
 	FLocation loc;
 
 	if (ctx->_currtk._type == TK_INC) /* ++ */
 	{
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_unary(ctx, &expr, where))
+		if (!cc_expr_parse_unary(ctx, &expr, where))
 		{
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_unary_incdec_check(ctx, EXPR_PREINC, expr, loc, where))) {
+		if (!(tree = cc_expr_unary_incdec(ctx, EXPR_PREINC, expr, loc, where))) {
 			return FALSE;
 		}
 
@@ -767,12 +830,12 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum 
 	{
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_unary(ctx, &expr, where))
+		if (!cc_expr_parse_unary(ctx, &expr, where))
 		{
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_unary_incdec_check(ctx, EXPR_PREDEC, expr, loc, where))) {
+		if (!(tree = cc_expr_unary_incdec(ctx, EXPR_PREDEC, expr, loc, where))) {
 			return FALSE;
 		}
 
@@ -783,12 +846,12 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum 
 	{
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_cast(ctx, &expr, where))
+		if (!cc_expr_parse_cast(ctx, &expr, where))
 		{
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_unary_address_check(ctx, EXPR_ADDR, expr, loc, where))) {
+		if (!(tree = cc_expr_unary_address(ctx, EXPR_ADDR, expr, loc, where))) {
 			return FALSE;
 		}
 
@@ -799,12 +862,12 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum 
 	{
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_cast(ctx, &expr, where))
+		if (!cc_expr_parse_cast(ctx, &expr, where))
 		{
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_unary_deref_check(ctx, EXPR_DEREF, expr, loc, where))) {
+		if (!(tree = cc_expr_unary_deref(ctx, EXPR_DEREF, expr, loc, where))) {
 			return FALSE;
 		}
 
@@ -815,12 +878,12 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum 
 	{
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_cast(ctx, &expr,where))
+		if (!cc_expr_parse_cast(ctx, &expr, where))
 		{
 			return FALSE;
 		}
-		
-		if (!(tree = cc_expr_unary_positive_check(ctx, EXPR_POS, expr, loc, where))) {
+
+		if (!(tree = cc_expr_unary_positive(ctx, EXPR_POS, expr, loc, where))) {
 			return FALSE;
 		}
 
@@ -831,12 +894,12 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum 
 	{
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_cast(ctx, &expr, where))
+		if (!cc_expr_parse_cast(ctx, &expr, where))
 		{
 			return FALSE;
 		}
-		
-		if (!(tree = cc_expr_unary_negtive_check(ctx, EXPR_NEG, expr, loc, where))) {
+
+		if (!(tree = cc_expr_unary_negtive(ctx, EXPR_NEG, expr, loc, where))) {
 			return FALSE;
 		}
 
@@ -847,12 +910,12 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum 
 	{
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_cast(ctx, &expr, where))
+		if (!cc_expr_parse_cast(ctx, &expr, where))
 		{
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_unary_complement_check(ctx, EXPR_COMPLEMENT, expr, loc, where))) {
+		if (!(tree = cc_expr_unary_complement(ctx, EXPR_COMPLEMENT, expr, loc, where))) {
 			return FALSE;
 		}
 
@@ -863,12 +926,12 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum 
 	{
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_cast(ctx, &expr, where))
+		if (!cc_expr_parse_cast(ctx, &expr, where))
 		{
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_unary_not_check(ctx, EXPR_NOT, expr, loc, where))) {
+		if (!(tree = cc_expr_unary_not(ctx, EXPR_NOT, expr, loc, where))) {
 			return FALSE;
 		}
 
@@ -917,11 +980,11 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum 
 				exprty = ty;
 			}
 		}
-		
+
 		if (!exprty) /* handle 'sizeof unary-expression' */
 		{
 			FCCExprTree* subexpr;
-			if (!cc_expr_unary(ctx, &subexpr, where)) {
+			if (!cc_expr_parse_unary(ctx, &subexpr, where)) {
 				return FALSE;
 			}
 
@@ -929,7 +992,7 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum 
 		}
 
 		cnstval._sint = exprty->_size;
-		if (!(tree = cc_expr_makeconstant(ctx, gBuiltinTypes._sinttype, cnstval, loc, where))) {
+		if (!(tree = cc_expr_constant(ctx, gbuiltintypes._sinttype, cnstval, loc, where))) {
 			return FALSE;
 		}
 
@@ -938,13 +1001,13 @@ static BOOL cc_expr_unary(struct tagCCContext* ctx, FCCExprTree** outexpr, enum 
 	}
 	else
 	{
-		return cc_expr_postfix(ctx, outexpr, where);
+		return cc_expr_parse_postfix(ctx, outexpr, where);
 	}
 
 	return FALSE;
 }
 
-static BOOL cc_expr_cast(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
+static BOOL cc_expr_parse_cast(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
 {
 	FCCExprTree* tree;
 
@@ -977,11 +1040,11 @@ static BOOL cc_expr_cast(struct tagCCContext* ctx, FCCExprTree** outexpr, enum E
 			}
 
 			loc = ctx->_currtk._loc;
-			if (!cc_expr_cast(ctx, &tree, where)) {
+			if (!cc_expr_parse_cast(ctx, &tree, where)) {
 				return FALSE;
 			}
 
-			if (!(tree = cc_expr_makecast(ctx, ty, tree, where))) {
+			if (!(tree = cc_expr_cast(ctx, ty, tree, where))) {
 				return FALSE;
 			}
 
@@ -991,27 +1054,27 @@ static BOOL cc_expr_cast(struct tagCCContext* ctx, FCCExprTree** outexpr, enum E
 		}
 	}
 
-	return cc_expr_unary(ctx, outexpr, where);
+	return cc_expr_parse_unary(ctx, outexpr, where);
 }
 
-static FCCExprTree* cc_expr_multiplicative_check(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_multiplicative(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 	FCCType* ty;
 
 	if (!IsArith(lhs->_ty) || !IsArith(rhs->_ty))
 	{
-		logger_output_s("error arithmetic operands is expected for '%s', at %w\n", cc_expr_name(op), &loc);
+		logger_output_s("error arithmetic operands is expected for '%s', at %w\n", cc_expr_opname(op), &loc);
 		return NULL;
 	}
 
 	ty = cc_type_select(lhs->_ty, rhs->_ty);
-	lhs = cc_expr_makecast(ctx, ty, lhs, where);
-	rhs = cc_expr_makecast(ctx, ty, rhs, where);
+	lhs = cc_expr_cast(ctx, ty, lhs, where);
+	rhs = cc_expr_cast(ctx, ty, rhs, where);
 
 	if (op == EXPR_MOD && !IsInt(ty))
 	{
-		logger_output_s("error integer operands is expected for '%s', at %w\n", cc_expr_name(op), &loc);
+		logger_output_s("error integer operands is expected for '%s', at %w\n", cc_expr_opname(op), &loc);
 		return NULL;
 	}
 
@@ -1081,7 +1144,7 @@ static FCCExprTree* cc_expr_multiplicative_check(struct tagCCContext* ctx, int o
 			}
 		}
 
-		return cc_expr_makeconstant(ctx, ty, cnstval, loc, where);
+		return cc_expr_constant(ctx, ty, cnstval, loc, where);
 	}
 
 	if (!(tree = cc_expr_new(where))) {
@@ -1097,13 +1160,13 @@ static FCCExprTree* cc_expr_multiplicative_check(struct tagCCContext* ctx, int o
 	return tree;
 }
 
-static BOOL cc_expr_multiplicative(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
+static BOOL cc_expr_parse_multiplicative(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
 {
-	FCCExprTree* lhs, *rhs, *tree;
+	FCCExprTree* lhs, * rhs, * tree;
 	FLocation loc;
 
 
-	if (!cc_expr_cast(ctx, &lhs, where))
+	if (!cc_expr_parse_cast(ctx, &lhs, where))
 	{
 		return FALSE;
 	}
@@ -1115,32 +1178,33 @@ static BOOL cc_expr_multiplicative(struct tagCCContext* ctx, FCCExprTree** outex
 
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_cast(ctx, &rhs, where)) {
+		if (!cc_expr_parse_cast(ctx, &rhs, where)) {
 			return FALSE;
 		}
-		
-		if (!(tree = cc_expr_multiplicative_check(ctx, (tktype == TK_MUL) ? EXPR_MUL : (tktype == TK_DIV ? EXPR_DIV : EXPR_MOD), lhs, rhs, loc, where)))
+
+		if (!(tree = cc_expr_multiplicative(ctx, (tktype == TK_MUL) ? EXPR_MUL : (tktype == TK_DIV ? EXPR_DIV : EXPR_MOD), lhs, rhs, loc, where)))
 		{
 			return FALSE;
 		}
 
 		lhs = tree;
 	} /* end while */
-	
+
 	*outexpr = tree;
 	return TRUE;
 }
 
-static FCCExprTree* cc_expr_additive_check(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_additive(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 	FCCType* ty = NULL;
+	BOOL isptrdiff = FALSE;
 
 	if (IsArith(lhs->_ty) && IsArith(rhs->_ty))
 	{
 		ty = cc_type_select(lhs->_ty, rhs->_ty);
-		lhs = cc_expr_makecast(ctx, ty, lhs, where);
-		rhs = cc_expr_makecast(ctx, ty, rhs, where);
+		lhs = cc_expr_cast(ctx, ty, lhs, where);
+		rhs = cc_expr_cast(ctx, ty, rhs, where);
 
 		/* do constant fold */
 		if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
@@ -1184,20 +1248,26 @@ static FCCExprTree* cc_expr_additive_check(struct tagCCContext* ctx, int op, FCC
 				}
 			}
 
-			return cc_expr_makeconstant(ctx, ty, cnstval, loc, where);
+			return cc_expr_constant(ctx, ty, cnstval, loc, where);
 		}
 
 	}
-	else if (IsPtr(lhs->_ty))
+	else if (IsPtr(lhs->_ty) || IsArray(lhs->_ty))
 	{
-		if (lhs->_ty->_type->_size == 0) {
+		int size = lhs->_ty->_type->_size;
+
+
+		if (IsVoid(lhs->_ty->_type)) {
+			size = 1;
+		}
+		if (size <= 0) {
 			logger_output_s("error: unknown %t size at %w\n", lhs->_ty->_type, &loc);
 			return NULL;
 		}
 
 		if (IsInt(rhs->_ty)) {
 			ty = lhs->_ty;
-			rhs = cc_expr_makecast(ctx, gBuiltinTypes._sinttype, rhs, where);
+			rhs = cc_expr_cast(ctx, gbuiltintypes._sinttype, rhs, where);
 
 			/* constant folding */
 			if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
@@ -1207,36 +1277,37 @@ static FCCExprTree* cc_expr_additive_check(struct tagCCContext* ctx, int op, FCC
 				switch (op)
 				{
 				case EXPR_ADD:
-					cnstval._pointer = lhs->_u._symbol->_u._cnstval._pointer + rhs->_u._symbol->_u._cnstval._sint * ty->_type->_size; break;
+					cnstval._pointer = lhs->_u._symbol->_u._cnstval._pointer + rhs->_u._symbol->_u._cnstval._sint * size; break;
 				case EXPR_SUB:
-					cnstval._pointer = lhs->_u._symbol->_u._cnstval._pointer - rhs->_u._symbol->_u._cnstval._sint * ty->_type->_size; break;
+					cnstval._pointer = lhs->_u._symbol->_u._cnstval._pointer - rhs->_u._symbol->_u._cnstval._sint * size; break;
 				default:
 					assert(0);
 					break;
 				}
 
-				return cc_expr_makeconstant(ctx, ty, cnstval, loc, where);
+				return cc_expr_constant(ctx, ty, cnstval, loc, where);
 			}
 		}
-		else if (IsPtr(rhs->_ty)) {
-			if (!cc_type_isequal(lhs->_ty, rhs->_ty, 0) || op != EXPR_SUB) {
+		else if (IsPtr(rhs->_ty) || IsArray(rhs->_ty)) {
+			if (!cc_type_isequal(lhs->_ty->_type, rhs->_ty->_type, 0) || op != EXPR_SUB) {
 				logger_output_s("error: invalid pointer additive operate at %w\n", &loc);
 				return FALSE;
 			}
 
-			ty = gBuiltinTypes._sinttype;
+			ty = gbuiltintypes._sinttype;
+			isptrdiff = TRUE;
 			/* constant folding */
 			if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
 			{
 				FCCConstVal cnstval;
 
-				cnstval._sint = (lhs->_u._symbol->_u._cnstval._pointer - rhs->_u._symbol->_u._cnstval._pointer) / lhs->_ty->_type->_size;
-				return cc_expr_makeconstant(ctx, ty, cnstval, loc, where);
+				cnstval._sint = (lhs->_u._symbol->_u._cnstval._pointer - rhs->_u._symbol->_u._cnstval._pointer) / size;
+				return cc_expr_constant(ctx, ty, cnstval, loc, where);
 			}
 		}
 	}
 	else {
-		logger_output_s("error: invalid operand for '%s' at %w\n", cc_expr_name(op), &loc);
+		logger_output_s("error: invalid operand for '%s' at %w\n", cc_expr_opname(op), &loc);
 		return NULL;
 	}
 
@@ -1249,17 +1320,18 @@ static FCCExprTree* cc_expr_additive_check(struct tagCCContext* ctx, int op, FCC
 	tree->_ty = ty;
 	tree->_u._kids[0] = lhs;
 	tree->_u._kids[1] = rhs;
+	tree->_isconstant = lhs->_isconstant && rhs->_isconstant && !isptrdiff;
 
 	return tree;
 }
 
-static BOOL cc_expr_additive(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
+static BOOL cc_expr_parse_additive(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
 {
 	FCCExprTree* lhs, * rhs, * tree;
 	FLocation loc;
 
 
-	if (!cc_expr_multiplicative(ctx, &lhs, where))
+	if (!cc_expr_parse_multiplicative(ctx, &lhs, where))
 	{
 		return FALSE;
 	}
@@ -1271,11 +1343,11 @@ static BOOL cc_expr_additive(struct tagCCContext* ctx, FCCExprTree** outexpr, en
 
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_multiplicative(ctx, &rhs, where)) {
+		if (!cc_expr_parse_multiplicative(ctx, &rhs, where)) {
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_additive_check(ctx, (tktype == TK_ADD) ? EXPR_ADD : EXPR_SUB, lhs, rhs, loc, where))) {
+		if (!(tree = cc_expr_additive(ctx, (tktype == TK_ADD) ? EXPR_ADD : EXPR_SUB, lhs, rhs, loc, where))) {
 			return FALSE;
 		}
 
@@ -1286,16 +1358,16 @@ static BOOL cc_expr_additive(struct tagCCContext* ctx, FCCExprTree** outexpr, en
 	return TRUE;
 }
 
-static FCCExprTree* cc_expr_shift_check(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_shift(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 
 	if (!IsInt(lhs->_ty) || !IsInt(rhs->_ty)) {
-		logger_output_s("error: integer operand is expected for '%s' at %w\n", cc_expr_name(op), &loc);
+		logger_output_s("error: integer operand is expected for '%s' at %w\n", cc_expr_opname(op), &loc);
 		return NULL;
 	}
-	lhs = cc_expr_makecast(ctx, cc_type_promote(lhs->_ty), lhs, where);
-	rhs = cc_expr_makecast(ctx, cc_type_promote(rhs->_ty), rhs, where);
+	lhs = cc_expr_cast(ctx, cc_type_promote(lhs->_ty), lhs, where);
+	rhs = cc_expr_cast(ctx, cc_type_promote(rhs->_ty), rhs, where);
 
 	/* constant folding */
 	if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
@@ -1327,7 +1399,7 @@ static FCCExprTree* cc_expr_shift_check(struct tagCCContext* ctx, int op, FCCExp
 			}
 		}
 
-		return cc_expr_makeconstant(ctx, lhs->_ty, cnstval, loc, where);
+		return cc_expr_constant(ctx, lhs->_ty, cnstval, loc, where);
 	}
 
 	if (!(tree = cc_expr_new(where))) {
@@ -1343,13 +1415,13 @@ static FCCExprTree* cc_expr_shift_check(struct tagCCContext* ctx, int op, FCCExp
 	return tree;
 }
 
-static BOOL cc_expr_shift(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
+static BOOL cc_expr_parse_shift(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
 {
 	FCCExprTree* lhs, * rhs, * tree;
 	FLocation loc;
 
 
-	if (!cc_expr_additive(ctx, &lhs, where))
+	if (!cc_expr_parse_additive(ctx, &lhs, where))
 	{
 		return FALSE;
 	}
@@ -1362,11 +1434,11 @@ static BOOL cc_expr_shift(struct tagCCContext* ctx, FCCExprTree** outexpr, enum 
 
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_additive(ctx, &rhs, where)) {
+		if (!cc_expr_parse_additive(ctx, &rhs, where)) {
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_shift_check(ctx, (tktype == TK_LSHIFT) ? EXPR_LSHFIT : EXPR_RSHFIT, lhs, rhs, loc, where))) {
+		if (!(tree = cc_expr_shift(ctx, (tktype == TK_LSHIFT) ? EXPR_LSHFIT : EXPR_RSHFIT, lhs, rhs, loc, where))) {
 			return FALSE;
 		}
 
@@ -1377,7 +1449,7 @@ static BOOL cc_expr_shift(struct tagCCContext* ctx, FCCExprTree** outexpr, enum 
 	return TRUE;
 }
 
-static FCCExprTree* cc_expr_relational_check(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_relational(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 
@@ -1386,8 +1458,8 @@ static FCCExprTree* cc_expr_relational_check(struct tagCCContext* ctx, int op, F
 		FCCType* ty;
 
 		ty = cc_type_select(lhs->_ty, rhs->_ty);
-		lhs = cc_expr_makecast(ctx, ty, lhs, where);
-		rhs = cc_expr_makecast(ctx, ty, rhs, where);
+		lhs = cc_expr_cast(ctx, ty, lhs, where);
+		rhs = cc_expr_cast(ctx, ty, rhs, where);
 
 		/* do constant fold */
 		if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
@@ -1443,39 +1515,39 @@ static FCCExprTree* cc_expr_relational_check(struct tagCCContext* ctx, int op, F
 				}
 			}
 
-			return cc_expr_makeconstant(ctx, gBuiltinTypes._sinttype, cnstval, loc, where);
+			return cc_expr_constant(ctx, gbuiltintypes._sinttype, cnstval, loc, where);
 		}
 
 	}
-	else if ((IsPtr(lhs->_ty) || IsArray(lhs->_ty)) 
+	else if ((IsPtr(lhs->_ty) || IsArray(lhs->_ty))
 		&& (IsPtr(rhs->_ty) || IsArray(rhs->_ty))
 		&& cc_type_isequal(lhs->_ty->_type, rhs->_ty->_type, TRUE))
 	{
-			/* constant folding */
-			if (lhs->_op == EXPR_CONSTANT && !lhs->_blvalue && rhs->_op == EXPR_CONSTANT && !rhs->_blvalue)
+		/* constant folding */
+		if (lhs->_op == EXPR_CONSTANT && !lhs->_islvalue && rhs->_op == EXPR_CONSTANT && !rhs->_islvalue)
+		{
+			FCCConstVal cnstval;
+
+			switch (op)
 			{
-				FCCConstVal cnstval;
-
-				switch (op)
-				{
-				case EXPR_LESS:
-					cnstval._sint = lhs->_u._symbol->_u._cnstval._pointer < rhs->_u._symbol->_u._cnstval._pointer; break;
-				case EXPR_LESSEQ:
-					cnstval._sint = lhs->_u._symbol->_u._cnstval._pointer <= rhs->_u._symbol->_u._cnstval._pointer; break;
-				case EXPR_GREAT:
-					cnstval._sint = lhs->_u._symbol->_u._cnstval._pointer > rhs->_u._symbol->_u._cnstval._pointer; break;
-				case EXPR_GREATEQ:
-					cnstval._sint = lhs->_u._symbol->_u._cnstval._pointer >= rhs->_u._symbol->_u._cnstval._pointer; break;
-				default:
-					assert(0);
-					break;
-				}
-
-				return cc_expr_makeconstant(ctx, gBuiltinTypes._sinttype, cnstval, loc, where);
+			case EXPR_LESS:
+				cnstval._sint = lhs->_u._symbol->_u._cnstval._pointer < rhs->_u._symbol->_u._cnstval._pointer; break;
+			case EXPR_LESSEQ:
+				cnstval._sint = lhs->_u._symbol->_u._cnstval._pointer <= rhs->_u._symbol->_u._cnstval._pointer; break;
+			case EXPR_GREAT:
+				cnstval._sint = lhs->_u._symbol->_u._cnstval._pointer > rhs->_u._symbol->_u._cnstval._pointer; break;
+			case EXPR_GREATEQ:
+				cnstval._sint = lhs->_u._symbol->_u._cnstval._pointer >= rhs->_u._symbol->_u._cnstval._pointer; break;
+			default:
+				assert(0);
+				break;
 			}
+
+			return cc_expr_constant(ctx, gbuiltintypes._sinttype, cnstval, loc, where);
+		}
 	}
 	else {
-		logger_output_s("error: invalid operand for '%s' at %w\n", cc_expr_name(op), &loc);
+		logger_output_s("error: invalid operand for '%s' at %w\n", cc_expr_opname(op), &loc);
 		return NULL;
 	}
 
@@ -1485,19 +1557,19 @@ static FCCExprTree* cc_expr_relational_check(struct tagCCContext* ctx, int op, F
 
 	tree->_op = op;
 	tree->_loc = loc;
-	tree->_ty = gBuiltinTypes._sinttype;
+	tree->_ty = gbuiltintypes._sinttype;
 	tree->_u._kids[0] = lhs;
 	tree->_u._kids[1] = rhs;
 
 	return tree;
 }
 
-static BOOL cc_expr_relational(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
+static BOOL cc_expr_parse_relational(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
 {
 	FCCExprTree* lhs, * rhs, * tree;
 	FLocation loc;
 
-	if (!cc_expr_shift(ctx, &lhs, where))
+	if (!cc_expr_parse_shift(ctx, &lhs, where))
 	{
 		return FALSE;
 	}
@@ -1511,7 +1583,7 @@ static BOOL cc_expr_relational(struct tagCCContext* ctx, FCCExprTree** outexpr, 
 
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_shift(ctx, &rhs, where)) {
+		if (!cc_expr_parse_shift(ctx, &rhs, where)) {
 			return FALSE;
 		}
 
@@ -1523,7 +1595,7 @@ static BOOL cc_expr_relational(struct tagCCContext* ctx, FCCExprTree** outexpr, 
 		case TK_GREAT_EQ: op = EXPR_GREATEQ; break;
 		}
 
-		if (!(tree = cc_expr_relational_check(ctx, op, lhs, rhs, loc, where))) {
+		if (!(tree = cc_expr_relational(ctx, op, lhs, rhs, loc, where))) {
 			return FALSE;
 		}
 
@@ -1534,7 +1606,7 @@ static BOOL cc_expr_relational(struct tagCCContext* ctx, FCCExprTree** outexpr, 
 	return TRUE;
 }
 
-static FCCExprTree* cc_expr_equality_check(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_equality(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 
@@ -1543,8 +1615,8 @@ static FCCExprTree* cc_expr_equality_check(struct tagCCContext* ctx, int op, FCC
 		FCCType* ty;
 
 		ty = cc_type_select(lhs->_ty, rhs->_ty);
-		lhs = cc_expr_makecast(ctx, ty, lhs, where);
-		rhs = cc_expr_makecast(ctx, ty, rhs, where);
+		lhs = cc_expr_cast(ctx, ty, lhs, where);
+		rhs = cc_expr_cast(ctx, ty, rhs, where);
 
 		/* do constant fold */
 		if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
@@ -1588,16 +1660,16 @@ static FCCExprTree* cc_expr_equality_check(struct tagCCContext* ctx, int op, FCC
 				}
 			}
 
-			return cc_expr_makeconstant(ctx, gBuiltinTypes._sinttype, cnstval, loc, where);
+			return cc_expr_constant(ctx, gbuiltintypes._sinttype, cnstval, loc, where);
 		}
 
 	}
-	else if ((IsPtr(lhs->_ty) || IsArray(lhs->_ty) || cc_expr_isnullptr(lhs))
-		&& (IsPtr(rhs->_ty) || IsArray(rhs->_ty) || cc_expr_isnullptr(lhs))
+	else if ((IsPtr(lhs->_ty) || IsArray(lhs->_ty) || cc_expr_is_nullptr(lhs))
+		&& (IsPtr(rhs->_ty) || IsArray(rhs->_ty) || cc_expr_is_nullptr(lhs))
 		&& (cc_type_isequal(lhs->_ty->_type, rhs->_ty->_type, TRUE) || IsVoidptr(lhs->_ty) || IsVoidptr(rhs->_ty)))
 	{
 		/* constant folding */
-		if (lhs->_op == EXPR_CONSTANT && !lhs->_blvalue && rhs->_op == EXPR_CONSTANT && !rhs->_blvalue)
+		if (lhs->_op == EXPR_CONSTANT && !lhs->_islvalue && rhs->_op == EXPR_CONSTANT && !rhs->_islvalue)
 		{
 			FCCConstVal cnstval;
 
@@ -1612,11 +1684,11 @@ static FCCExprTree* cc_expr_equality_check(struct tagCCContext* ctx, int op, FCC
 				break;
 			}
 
-			return cc_expr_makeconstant(ctx, gBuiltinTypes._sinttype, cnstval, loc, where);
+			return cc_expr_constant(ctx, gbuiltintypes._sinttype, cnstval, loc, where);
 		}
 	}
 	else {
-		logger_output_s("error: invalid operand for '%s' at %w\n", cc_expr_name(op), &loc);
+		logger_output_s("error: invalid operand for '%s' at %w\n", cc_expr_opname(op), &loc);
 		return NULL;
 	}
 
@@ -1626,20 +1698,20 @@ static FCCExprTree* cc_expr_equality_check(struct tagCCContext* ctx, int op, FCC
 
 	tree->_op = op;
 	tree->_loc = loc;
-	tree->_ty = gBuiltinTypes._sinttype;
+	tree->_ty = gbuiltintypes._sinttype;
 	tree->_u._kids[0] = lhs;
 	tree->_u._kids[1] = rhs;
 
 	return tree;
 }
 
-static BOOL cc_expr_equality(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
+static BOOL cc_expr_parse_equality(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
 {
 	FCCExprTree* lhs, * rhs, * tree;
 	FLocation loc;
 
 
-	if (!cc_expr_relational(ctx, &lhs, where))
+	if (!cc_expr_parse_relational(ctx, &lhs, where))
 	{
 		return FALSE;
 	}
@@ -1652,11 +1724,11 @@ static BOOL cc_expr_equality(struct tagCCContext* ctx, FCCExprTree** outexpr, en
 
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_relational(ctx, &rhs, where)) {
+		if (!cc_expr_parse_relational(ctx, &rhs, where)) {
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_equality_check(ctx, (tktype == TK_EQUAL) ? EXPR_EQ : EXPR_UNEQ, lhs, rhs, loc, where))) {
+		if (!(tree = cc_expr_equality(ctx, (tktype == TK_EQUAL) ? EXPR_EQ : EXPR_UNEQ, lhs, rhs, loc, where))) {
 			return FALSE;
 		}
 
@@ -1667,19 +1739,19 @@ static BOOL cc_expr_equality(struct tagCCContext* ctx, FCCExprTree** outexpr, en
 	return TRUE;
 }
 
-static FCCExprTree* cc_expr_bitand_check(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_bitand(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 	FCCType* ty;
 
 	if (!IsInt(lhs->_ty) || !IsInt(rhs->_ty)) {
-		logger_output_s("error: integer operand is expected for '%s' at %w\n", cc_expr_name(op), &loc);
+		logger_output_s("error: integer operand is expected for '%s' at %w\n", cc_expr_opname(op), &loc);
 		return NULL;
 	}
 
 	ty = cc_type_promote(cc_type_select(lhs->_ty, rhs->_ty));
-	lhs = cc_expr_makecast(ctx, ty, lhs, where);
-	rhs = cc_expr_makecast(ctx, ty, rhs, where);
+	lhs = cc_expr_cast(ctx, ty, lhs, where);
+	rhs = cc_expr_cast(ctx, ty, rhs, where);
 
 	/* do constant fold */
 	if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
@@ -1693,7 +1765,7 @@ static FCCExprTree* cc_expr_bitand_check(struct tagCCContext* ctx, int op, FCCEx
 			cnstval._uint = lhs->_u._symbol->_u._cnstval._uint & rhs->_u._symbol->_u._cnstval._uint;
 		}
 
-		return cc_expr_makeconstant(ctx, ty, cnstval, loc, where);
+		return cc_expr_constant(ctx, ty, cnstval, loc, where);
 	}
 
 	if (!(tree = cc_expr_new(where))) {
@@ -1709,12 +1781,12 @@ static FCCExprTree* cc_expr_bitand_check(struct tagCCContext* ctx, int op, FCCEx
 	return tree;
 }
 
-static BOOL cc_expr_bitand(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
+static BOOL cc_expr_parse_bitand(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
 {
 	FCCExprTree* lhs, * rhs, * tree;
 	FLocation loc;
 
-	if (!cc_expr_equality(ctx, &lhs, where))
+	if (!cc_expr_parse_equality(ctx, &lhs, where))
 	{
 		return FALSE;
 	}
@@ -1724,11 +1796,11 @@ static BOOL cc_expr_bitand(struct tagCCContext* ctx, FCCExprTree** outexpr, enum
 	{
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_equality(ctx, &rhs, where)) {
+		if (!cc_expr_parse_equality(ctx, &rhs, where)) {
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_bitand_check(ctx, EXPR_BITAND, lhs, rhs, loc, where))) {
+		if (!(tree = cc_expr_bitand(ctx, EXPR_BITAND, lhs, rhs, loc, where))) {
 			return FALSE;
 		}
 
@@ -1739,19 +1811,19 @@ static BOOL cc_expr_bitand(struct tagCCContext* ctx, FCCExprTree** outexpr, enum
 	return TRUE;
 }
 
-static FCCExprTree* cc_expr_bitxor_check(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_bitxor(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 	FCCType* ty;
 
 	if (!IsInt(lhs->_ty) || !IsInt(rhs->_ty)) {
-		logger_output_s("error: integer operand is expected for '%s' at %w\n", cc_expr_name(op), &loc);
+		logger_output_s("error: integer operand is expected for '%s' at %w\n", cc_expr_opname(op), &loc);
 		return NULL;
 	}
 
 	ty = cc_type_promote(cc_type_select(lhs->_ty, rhs->_ty));
-	lhs = cc_expr_makecast(ctx, ty, lhs, where);
-	rhs = cc_expr_makecast(ctx, ty, rhs, where);
+	lhs = cc_expr_cast(ctx, ty, lhs, where);
+	rhs = cc_expr_cast(ctx, ty, rhs, where);
 
 	/* do constant fold */
 	if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
@@ -1765,7 +1837,7 @@ static FCCExprTree* cc_expr_bitxor_check(struct tagCCContext* ctx, int op, FCCEx
 			cnstval._uint = lhs->_u._symbol->_u._cnstval._uint ^ rhs->_u._symbol->_u._cnstval._uint;
 		}
 
-		return cc_expr_makeconstant(ctx, ty, cnstval, loc, where);
+		return cc_expr_constant(ctx, ty, cnstval, loc, where);
 	}
 
 	if (!(tree = cc_expr_new(where))) {
@@ -1781,12 +1853,12 @@ static FCCExprTree* cc_expr_bitxor_check(struct tagCCContext* ctx, int op, FCCEx
 	return tree;
 }
 
-static BOOL cc_expr_bitxor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
+static BOOL cc_expr_parse_bitxor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
 {
 	FCCExprTree* lhs, * rhs, * tree;
 	FLocation loc;
 
-	if (!cc_expr_bitand(ctx, &lhs, where))
+	if (!cc_expr_parse_bitand(ctx, &lhs, where))
 	{
 		return FALSE;
 	}
@@ -1796,11 +1868,11 @@ static BOOL cc_expr_bitxor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum
 	{
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_bitand(ctx, &rhs, where)) {
+		if (!cc_expr_parse_bitand(ctx, &rhs, where)) {
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_bitxor_check(ctx, EXPR_BITXOR, lhs, rhs, loc, where))) {
+		if (!(tree = cc_expr_bitxor(ctx, EXPR_BITXOR, lhs, rhs, loc, where))) {
 			return FALSE;
 		}
 
@@ -1811,19 +1883,19 @@ static BOOL cc_expr_bitxor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum
 	return TRUE;
 }
 
-static FCCExprTree* cc_expr_bitor_check(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_bitor(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 	FCCType* ty;
 
 	if (!IsInt(lhs->_ty) || !IsInt(rhs->_ty)) {
-		logger_output_s("error: integer operand is expected for '%s' at %w\n", cc_expr_name(op), &loc);
+		logger_output_s("error: integer operand is expected for '%s' at %w\n", cc_expr_opname(op), &loc);
 		return NULL;
 	}
 
 	ty = cc_type_promote(cc_type_select(lhs->_ty, rhs->_ty));
-	lhs = cc_expr_makecast(ctx, ty, lhs, where);
-	rhs = cc_expr_makecast(ctx, ty, rhs, where);
+	lhs = cc_expr_cast(ctx, ty, lhs, where);
+	rhs = cc_expr_cast(ctx, ty, rhs, where);
 
 	/* do constant fold */
 	if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
@@ -1837,7 +1909,7 @@ static FCCExprTree* cc_expr_bitor_check(struct tagCCContext* ctx, int op, FCCExp
 			cnstval._uint = lhs->_u._symbol->_u._cnstval._uint | rhs->_u._symbol->_u._cnstval._uint;
 		}
 
-		return cc_expr_makeconstant(ctx, ty, cnstval, loc, where);
+		return cc_expr_constant(ctx, ty, cnstval, loc, where);
 	}
 
 	if (!(tree = cc_expr_new(where))) {
@@ -1853,12 +1925,12 @@ static FCCExprTree* cc_expr_bitor_check(struct tagCCContext* ctx, int op, FCCExp
 	return tree;
 }
 
-static BOOL cc_expr_bitor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
+static BOOL cc_expr_parse_bitor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
 {
 	FCCExprTree* lhs, * rhs, * tree;
 	FLocation loc;
 
-	if (!cc_expr_bitxor(ctx, &lhs, where))
+	if (!cc_expr_parse_bitxor(ctx, &lhs, where))
 	{
 		return FALSE;
 	}
@@ -1868,11 +1940,11 @@ static BOOL cc_expr_bitor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum 
 	{
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_bitxor(ctx, &rhs, where)) {
+		if (!cc_expr_parse_bitxor(ctx, &rhs, where)) {
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_bitor_check(ctx, EXPR_BITOR, lhs, rhs, loc, where))) {
+		if (!(tree = cc_expr_bitor(ctx, EXPR_BITOR, lhs, rhs, loc, where))) {
 			return FALSE;
 		}
 
@@ -1883,7 +1955,7 @@ static BOOL cc_expr_bitor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum 
 	return TRUE;
 }
 
-static FCCExprTree* cc_expr_logicand_check(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_logicand(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 
@@ -1925,7 +1997,7 @@ static FCCExprTree* cc_expr_logicand_check(struct tagCCContext* ctx, int op, FCC
 		}
 
 		cnstval._sint = lv && rv;
-		return cc_expr_makeconstant(ctx, gBuiltinTypes._sinttype, cnstval, loc, where);
+		return cc_expr_constant(ctx, gbuiltintypes._sinttype, cnstval, loc, where);
 	}
 
 
@@ -1935,19 +2007,19 @@ static FCCExprTree* cc_expr_logicand_check(struct tagCCContext* ctx, int op, FCC
 
 	tree->_op = op;
 	tree->_loc = loc;
-	tree->_ty = gBuiltinTypes._sinttype;
+	tree->_ty = gbuiltintypes._sinttype;
 	tree->_u._kids[0] = lhs;
 	tree->_u._kids[1] = rhs;
 
 	return tree;
 }
 
-static BOOL cc_expr_logicand(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
+static BOOL cc_expr_parse_logicand(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
 {
 	FCCExprTree* lhs, * rhs, * tree;
 	FLocation loc;
 
-	if (!cc_expr_bitor(ctx, &lhs, where))
+	if (!cc_expr_parse_bitor(ctx, &lhs, where))
 	{
 		return FALSE;
 	}
@@ -1957,11 +2029,11 @@ static BOOL cc_expr_logicand(struct tagCCContext* ctx, FCCExprTree** outexpr, en
 	{
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_bitor(ctx, &rhs, where)) {
+		if (!cc_expr_parse_bitor(ctx, &rhs, where)) {
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_logicand_check(ctx, EXPR_LOGAND, lhs, rhs, loc, where))) {
+		if (!(tree = cc_expr_logicand(ctx, EXPR_LOGAND, lhs, rhs, loc, where))) {
 			return FALSE;
 		}
 
@@ -1972,7 +2044,7 @@ static BOOL cc_expr_logicand(struct tagCCContext* ctx, FCCExprTree** outexpr, en
 	return TRUE;
 }
 
-static FCCExprTree* cc_expr_logicor_check(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_logicor(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 
@@ -2014,7 +2086,7 @@ static FCCExprTree* cc_expr_logicor_check(struct tagCCContext* ctx, int op, FCCE
 		}
 
 		cnstval._sint = lv || rv;
-		return cc_expr_makeconstant(ctx, gBuiltinTypes._sinttype, cnstval, loc, where);
+		return cc_expr_constant(ctx, gbuiltintypes._sinttype, cnstval, loc, where);
 	}
 
 	if (!(tree = cc_expr_new(where))) {
@@ -2023,19 +2095,19 @@ static FCCExprTree* cc_expr_logicor_check(struct tagCCContext* ctx, int op, FCCE
 
 	tree->_op = op;
 	tree->_loc = loc;
-	tree->_ty = gBuiltinTypes._sinttype;
+	tree->_ty = gbuiltintypes._sinttype;
 	tree->_u._kids[0] = lhs;
 	tree->_u._kids[1] = rhs;
 
 	return tree;
 }
 
-static BOOL cc_expr_logicor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
+static BOOL cc_expr_parse_logicor(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
 {
 	FCCExprTree* lhs, * rhs, * tree;
 	FLocation loc;
 
-	if (!cc_expr_logicand(ctx, &lhs, where))
+	if (!cc_expr_parse_logicand(ctx, &lhs, where))
 	{
 		return FALSE;
 	}
@@ -2045,11 +2117,11 @@ static BOOL cc_expr_logicor(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 	{
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_logicand(ctx, &rhs, where)) {
+		if (!cc_expr_parse_logicand(ctx, &rhs, where)) {
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_logicor_check(ctx, EXPR_LOGOR, lhs, rhs, loc, where))) {
+		if (!(tree = cc_expr_logicor(ctx, EXPR_LOGOR, lhs, rhs, loc, where))) {
 			return FALSE;
 		}
 
@@ -2060,7 +2132,7 @@ static BOOL cc_expr_logicor(struct tagCCContext* ctx, FCCExprTree** outexpr, enu
 	return TRUE;
 }
 
-static FCCExprTree* cc_expr_conditional_check(struct tagCCContext* ctx, int op, FCCExprTree* expr0, FCCExprTree* expr1, FCCExprTree* expr2, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_conditional(struct tagCCContext* ctx, int op, FCCExprTree* expr0, FCCExprTree* expr1, FCCExprTree* expr2, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 	FCCType* ty;
@@ -2074,11 +2146,11 @@ static FCCExprTree* cc_expr_conditional_check(struct tagCCContext* ctx, int op, 
 	if (cc_type_isequal(expr1->_ty, expr2->_ty, TRUE)) {
 		ty = expr1->_ty;
 	}
-	else if ((IsPtr(expr1->_ty) || IsArray(expr1->_ty)) && cc_expr_isnullptr(expr2))
+	else if ((IsPtr(expr1->_ty) || IsArray(expr1->_ty)) && cc_expr_is_nullptr(expr2))
 	{
 		ty = expr1->_ty;
 	}
-	else if (cc_expr_isnullptr(expr1) && (IsPtr(expr2->_ty) || IsArray(expr2->_ty)))
+	else if (cc_expr_is_nullptr(expr1) && (IsPtr(expr2->_ty) || IsArray(expr2->_ty)))
 	{
 		ty = expr2->_ty;
 	}
@@ -2121,12 +2193,12 @@ static FCCExprTree* cc_expr_conditional_check(struct tagCCContext* ctx, int op, 
 	return tree;
 }
 
-static BOOL cc_expr_conditional(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
+static BOOL cc_expr_parse_conditional(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
 {
-	FCCExprTree* tree, *expr0, * expr1, * expr2;
+	FCCExprTree* tree, * expr0, * expr1, * expr2;
 	FLocation loc;
 
-	if (!cc_expr_logicor(ctx, &expr0, where))
+	if (!cc_expr_parse_logicor(ctx, &expr0, where))
 	{
 		return FALSE;
 	}
@@ -2137,7 +2209,7 @@ static BOOL cc_expr_conditional(struct tagCCContext* ctx, FCCExprTree** outexpr,
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
 
-		if (!cc_expr_expression(ctx, &expr1, where))
+		if (!cc_expr_parse_expression(ctx, &expr1, where))
 		{
 			return FALSE;
 		}
@@ -2147,12 +2219,12 @@ static BOOL cc_expr_conditional(struct tagCCContext* ctx, FCCExprTree** outexpr,
 			return FALSE;
 		}
 
-		if (!cc_expr_conditional(ctx, &expr2, where))
+		if (!cc_expr_parse_conditional(ctx, &expr2, where))
 		{
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_conditional_check(ctx, EXPR_COND, expr0, expr1, expr2, loc, where))) {
+		if (!(tree = cc_expr_conditional(ctx, EXPR_COND, expr0, expr1, expr2, loc, where))) {
 			return FALSE;
 		}
 	}
@@ -2161,12 +2233,12 @@ static BOOL cc_expr_conditional(struct tagCCContext* ctx, FCCExprTree** outexpr,
 	return TRUE;
 }
 
-static FCCExprTree* cc_expr_assignment_check(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_assignment(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 
-	if (!cc_expr_canmodify(lhs)) {
-		logger_output_s("error l-value is expected for operator '%s' at %w\n", cc_expr_name(op), &loc);
+	if (!cc_expr_is_modifiable(lhs)) {
+		logger_output_s("error l-value is expected for operator '%s' at %w\n", cc_expr_opname(op), &loc);
 		return NULL;
 	}
 
@@ -2176,72 +2248,72 @@ static FCCExprTree* cc_expr_assignment_check(struct tagCCContext* ctx, int op, F
 	{
 		if (IsArith(lhs->_ty) && IsArith(rhs->_ty))
 		{
-			rhs = cc_expr_makecast(ctx, UnQual(rhs->_ty), rhs, where);
+			rhs = cc_expr_cast(ctx, UnQual(rhs->_ty), rhs, where);
 		}
 		else if (IsPtr(lhs->_ty)) {
 			if (IsPtr(rhs->_ty)) {
 				if (!cc_type_isequal(lhs->_ty, rhs->_ty, TRUE) && (!IsVoidptr(lhs->_ty) && !IsVoidptr(rhs->_ty))) {
-					logger_output_s("error incompatible operands for operator '%s' at %w\n", cc_expr_name(op), &loc);
+					logger_output_s("error incompatible operands for operator '%s' at %w\n", cc_expr_opname(op), &loc);
 					return NULL;
 				}
 			}
-			else if (!cc_expr_isnullptr(rhs)) {
-				logger_output_s("error incompatible operands for operator '%s' at %w\n", cc_expr_name(op), &loc);
+			else if (!cc_expr_is_nullptr(rhs)) {
+				logger_output_s("error incompatible operands for operator '%s' at %w\n", cc_expr_opname(op), &loc);
 				return NULL;
 			}
 		}
 		else if (!cc_type_isequal(UnQual(lhs->_ty), UnQual(rhs->_ty), TRUE)) {
-			logger_output_s("error incompatible operands for operator '%s' at %w\n", cc_expr_name(op), &loc);
+			logger_output_s("error incompatible operands for operator '%s' at %w\n", cc_expr_opname(op), &loc);
 			return NULL;
 		}
 	}
-		break;
+	break;
 	case EXPR_ASSIGN_MUL:
 	case EXPR_ASSIGN_DIV:
 	{
-		if (!IsArith(lhs->_ty)  || !IsArith(rhs->_ty))
+		if (!IsArith(lhs->_ty) || !IsArith(rhs->_ty))
 		{
-			logger_output_s("error arithmetic operands is expected for '%s', at %w\n",cc_expr_name(op), &loc);
+			logger_output_s("error arithmetic operands is expected for '%s', at %w\n", cc_expr_opname(op), &loc);
 			return NULL;
 		}
 
-		rhs = cc_expr_makecast(ctx, lhs->_ty, rhs, where);
+		rhs = cc_expr_cast(ctx, lhs->_ty, rhs, where);
 	}
-		break;
+	break;
 	case EXPR_ASSIGN_MOD:
 	{
 		if (!IsInt(lhs->_ty) || !IsInt(rhs->_ty))
 		{
-			logger_output_s("error arithmetic operands is expected for '%s', at %w\n", cc_expr_name(op), &loc);
+			logger_output_s("error arithmetic operands is expected for '%s', at %w\n", cc_expr_opname(op), &loc);
 			return NULL;
 		}
 
-		rhs = cc_expr_makecast(ctx, lhs->_ty, rhs, where);
+		rhs = cc_expr_cast(ctx, lhs->_ty, rhs, where);
 	}
-		break;
+	break;
 	case EXPR_ASSIGN_ADD:
 	case EXPR_ASSIGN_SUB:
 	{
 		if (IsArith(lhs->_ty) && IsArith(rhs->_ty))
 		{
-			rhs = cc_expr_makecast(ctx, lhs->_ty, rhs, where);
+			rhs = cc_expr_cast(ctx, lhs->_ty, rhs, where);
 		}
 		else if (IsPtr(lhs->_ty) && IsInt(rhs->_ty))
 		{
-			if(lhs->_ty->_type->_size == 0) {
-				logger_output_s("error: unknown %t size at %w\n", lhs->_ty->_type , &loc);
+			if (lhs->_ty->_type->_size == 0 && !IsVoid(lhs->_ty->_type)) {
+				logger_output_s("error: unknown %t size at %w\n", lhs->_ty->_type, &loc);
 				return NULL;
 			}
 
-			rhs = cc_expr_makecast(ctx, gBuiltinTypes._sinttype, rhs, where);
+			rhs = cc_expr_cast(ctx, gbuiltintypes._sinttype, rhs, where);
 		}
 		else
 		{
-			logger_output_s("error: invalid operand for '%s' at %w\n", cc_expr_name(op), &loc);
+			logger_output_s("error: invalid operand for '%s' at %w\n", cc_expr_opname(op), &loc);
 			return NULL;
 		}
 	}
-		break;
+	break;
 	case EXPR_ASSIGN_LSHIFT:
 	case EXPR_ASSIGN_RSHIFT:
 	case EXPR_ASSIGN_BITAND:
@@ -2250,15 +2322,15 @@ static FCCExprTree* cc_expr_assignment_check(struct tagCCContext* ctx, int op, F
 	{
 		if (IsInt(lhs->_ty) && IsInt(rhs->_ty))
 		{
-			rhs = cc_expr_makecast(ctx, gBuiltinTypes._sinttype, rhs, where);
+			rhs = cc_expr_cast(ctx, gbuiltintypes._sinttype, rhs, where);
 		}
 		else
 		{
-			logger_output_s("error: invalid operand for '%s' at %w\n", cc_expr_name(op), &loc);
+			logger_output_s("error: invalid operand for '%s' at %w\n", cc_expr_opname(op), &loc);
 			return NULL;
 		}
 	}
-		break;
+	break;
 	default:
 		assert(0); break;
 	}
@@ -2276,12 +2348,12 @@ static FCCExprTree* cc_expr_assignment_check(struct tagCCContext* ctx, int op, F
 	return tree;
 }
 
-BOOL cc_expr_assignment(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
+BOOL cc_expr_parse_assignment(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
 {
-	FCCExprTree *tree, *lhs, *rhs;
+	FCCExprTree* tree, * lhs, * rhs;
 	FLocation loc;
 
-	if (!cc_expr_conditional(ctx, &lhs, where)) {
+	if (!cc_expr_parse_conditional(ctx, &lhs, where)) {
 		return FALSE;
 	}
 
@@ -2307,11 +2379,11 @@ BOOL cc_expr_assignment(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EM
 		default: assert(0); break;
 		}
 
-		if (!cc_expr_assignment(ctx, &rhs, where)) {
+		if (!cc_expr_parse_assignment(ctx, &rhs, where)) {
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_assignment_check(ctx, op, lhs, rhs, loc, where))) {
+		if (!(tree = cc_expr_assignment(ctx, op, lhs, rhs, loc, where))) {
 			return FALSE;
 		}
 
@@ -2321,7 +2393,7 @@ BOOL cc_expr_assignment(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EM
 	return TRUE;
 }
 
-static FCCExprTree* cc_expr_comma_check(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
+static FCCExprTree* cc_expr_comma(struct tagCCContext* ctx, int op, FCCExprTree* lhs, FCCExprTree* rhs, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 
@@ -2343,12 +2415,12 @@ static FCCExprTree* cc_expr_comma_check(struct tagCCContext* ctx, int op, FCCExp
 	return tree;
 }
 
-BOOL cc_expr_expression(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
+BOOL cc_expr_parse_expression(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
 {
 	FCCExprTree* lhs, * rhs, * tree;
 	FLocation loc;
 
-	if (!cc_expr_assignment(ctx, &lhs, where))
+	if (!cc_expr_parse_assignment(ctx, &lhs, where))
 	{
 		return FALSE;
 	}
@@ -2358,11 +2430,11 @@ BOOL cc_expr_expression(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EM
 	{
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_expr_assignment(ctx, &rhs, where)) {
+		if (!cc_expr_parse_assignment(ctx, &rhs, where)) {
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_comma_check(ctx, EXPR_COMMA, lhs, rhs, loc, where))) {
+		if (!(tree = cc_expr_comma(ctx, EXPR_COMMA, lhs, rhs, loc, where))) {
 			return FALSE;
 		}
 
@@ -2373,30 +2445,23 @@ BOOL cc_expr_expression(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EM
 	return TRUE;
 }
 
-BOOL cc_expr_constant_expression(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
+BOOL cc_expr_parse_constant_expression(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where)
 {
-	return cc_expr_conditional(ctx, outexpr, where);
-}
-
-FCCExprTree* cc_expr_new(enum EMMArea where)
-{
-	FCCExprTree* tree = mm_alloc_area(sizeof(FCCExprTree), where);
-	if (tree) {
-		memset(tree, 0, sizeof(FCCExprTree));
-	}
-	else {
-		logger_output_s("error: out of memory at %s:%d\n", __FILE__, __LINE__);
+	if (cc_expr_parse_conditional(ctx, outexpr, where) && (*outexpr)->_isconstant)
+	{
+		return TRUE;
 	}
 
-	return tree;
+	logger_output_s("error: constant expression is expected at %w\n", &((*outexpr)->_loc));
+	return FALSE;
 }
 
-BOOL cc_expr_constant_int(struct tagCCContext* ctx, int* val)
+BOOL cc_expr_parse_constant_int(struct tagCCContext* ctx, int* val)
 {
 	FCCExprTree* expr;
 
 	*val = 0;
-	if (!cc_expr_constant_expression(ctx, &expr, CC_MM_TEMPPOOL) || expr==NULL) {
+	if (!cc_expr_parse_constant_expression(ctx, &expr, CC_MM_TEMPPOOL) || expr == NULL) {
 		return FALSE;
 	}
 
@@ -2425,16 +2490,6 @@ BOOL cc_expr_constant_int(struct tagCCContext* ctx, int* val)
 	return FALSE;
 }
 
-static BOOL cc_expr_isnullptr(FCCExprTree* expr)
-{
-	FCCType* ty = UnQual(expr->_ty);
-
-	return (expr->_op == EXPR_CONSTANT)
-		&& ((ty->_op == Type_SInteger && expr->_u._symbol->_u._cnstval._sint == 0)
-			|| (ty->_op == Type_UInteger && expr->_u._symbol->_u._cnstval._uint == 0)
-			|| (IsVoidptr(ty) && expr->_u._symbol->_u._cnstval._pointer == 0));
-}
-
 struct tagCCType* cc_expr_assigntype(struct tagCCType* lhs, struct tagCCExprTree* expr)
 {
 	FCCType* xty, * yty;
@@ -2457,18 +2512,18 @@ struct tagCCType* cc_expr_assigntype(struct tagCCType* lhs, struct tagCCExprTree
 		return xty;
 	}
 
-	if (IsPtr(xty) && cc_expr_isnullptr(expr)) {
+	if (IsPtr(xty) && cc_expr_is_nullptr(expr)) {
 		return xty;
 	}
 
-	if ((IsVoidptr(xty) && IsPtr(yty) || IsPtr(xty) && IsVoidptr(yty)) &&
+	if ((IsVoidptr(xty) && (IsPtr(yty) || IsArray(yty)) || IsPtr(xty) && IsVoidptr(yty)) &&
 		((IsConst(xty->_type) || !IsConst(yty->_type)) && (IsVolatile(xty->_type) || !IsVolatile(yty->_type)))
 		)
 	{
 		return xty;
 	}
 
-	if ((IsPtr(xty) && IsPtr(yty)
+	if ((IsPtr(xty) && (IsPtr(yty) || IsArray(yty))
 		&& cc_type_isequal(UnQual(xty->_type), UnQual(yty->_type), TRUE))
 		&& ((IsConst(xty->_type) || !IsConst(yty->_type))
 			&& (IsVolatile(xty->_type) || !IsVolatile(yty->_type))))
@@ -2476,14 +2531,14 @@ struct tagCCType* cc_expr_assigntype(struct tagCCType* lhs, struct tagCCExprTree
 		return xty;
 	}
 
-	if (IsPtr(xty) && IsPtr(yty)
+	if (IsPtr(xty) && (IsPtr(yty) || IsArray(yty))
 		&& ((IsConst(xty->_type) || !IsConst(yty->_type))
-			&& (IsVolatile(xty->_type) || !IsVolatile(yty->_type)))) 
+			&& (IsVolatile(xty->_type) || !IsVolatile(yty->_type))))
 	{
 		FCCType* lty = UnQual(xty->_type);
 		FCCType* rty = UnQual(yty->_type);
 		if (IsEnum(lty) && IsInt(rty)
-			|| IsEnum(rty) && IsInt(lty)) 
+			|| IsEnum(rty) && IsInt(lty))
 		{
 			logger_output_s("assignment between `%t' and `%t' is compiler-dependent\n", xty, yty);
 			return xty;
@@ -2493,7 +2548,7 @@ struct tagCCType* cc_expr_assigntype(struct tagCCType* lhs, struct tagCCExprTree
 	return NULL;
 }
 
-FCCExprTree* cc_expr_makecast(struct tagCCContext* ctx, struct tagCCType* castty, FCCExprTree* expr, enum EMMArea where)
+FCCExprTree* cc_expr_cast(struct tagCCContext* ctx, struct tagCCType* castty, FCCExprTree* expr, enum EMMArea where)
 {
 	FCCExprTree* tree;
 
@@ -2503,10 +2558,11 @@ FCCExprTree* cc_expr_makecast(struct tagCCContext* ctx, struct tagCCType* castty
 		return NULL;
 	}
 
-	if (expr->_op == EXPR_CONSTANT && !expr->_blvalue)
+	if (expr->_op == EXPR_CONSTANT)
 	{
 		FCCConstVal cnstval;
 
+		cnstval = expr->_u._symbol->_u._cnstval;
 		if (IsFloat(castty) && !IsFloat(expr->_ty)) {
 			cnstval._float = (double)expr->_u._symbol->_u._cnstval._sint;
 		}
@@ -2514,7 +2570,7 @@ FCCExprTree* cc_expr_makecast(struct tagCCContext* ctx, struct tagCCType* castty
 			cnstval._sint = (int64_t)expr->_u._symbol->_u._cnstval._float;
 		}
 
-		return cc_expr_makeconstant(ctx, castty, cnstval, expr->_loc, where);
+		return cc_expr_constant(ctx, castty, cnstval, expr->_loc, where);
 	}
 
 	if (!(tree = cc_expr_new(where))) {
@@ -2524,12 +2580,16 @@ FCCExprTree* cc_expr_makecast(struct tagCCContext* ctx, struct tagCCType* castty
 	tree->_loc = expr->_loc;
 	tree->_ty = castty;
 	tree->_u._kids[0] = expr;
-	tree->_blvalue = IsArray(tree->_ty);
+	tree->_islvalue = IsArray(tree->_ty);
+	if ((IsPtr(expr->_ty) || IsInt(expr->_ty)) && expr->_ty->_size == castty->_size)
+	{
+		tree->_isconstant = expr->_isconstant;
+	}
 
 	return tree;
 }
 
-FCCExprTree* cc_expr_makeconstant(struct tagCCContext* ctx, struct tagCCType* cnstty, FCCConstVal cnstval, FLocation loc, enum EMMArea where)
+FCCExprTree* cc_expr_constant(struct tagCCContext* ctx, struct tagCCType* cnstty, FCCConstVal cnstval, FLocation loc, enum EMMArea where)
 {
 	FCCExprTree* tree;
 	FCCSymbol* p;
@@ -2546,12 +2606,36 @@ FCCExprTree* cc_expr_makeconstant(struct tagCCContext* ctx, struct tagCCType* cn
 	tree->_loc = loc;
 	tree->_ty = p->_type;
 	tree->_u._symbol = p;
-	tree->_blvalue = IsArray(p->_type);
+	tree->_isconstant = 1;
 
 	return tree;
 }
 
-BOOL cc_expr_canmodify(FCCExprTree* expr)
+FCCExprTree* cc_expr_constant_str(struct tagCCContext* ctx, struct tagCCType* cnstty, FCCConstVal cnstval, FLocation loc, enum EMMArea where)
+{
+	FCCExprTree* tree;
+	FCCSymbol* p;
+
+	if (!(p = cc_symbol_constant(cnstty, cnstval)))
+	{
+		logger_output_s("error: install constant failed at %w\n", &loc);
+		return NULL;
+	}
+	if (!(tree = cc_expr_new(where))) {
+		return NULL;
+	}
+	tree->_op = EXPR_CONSTANT_STR;
+	tree->_loc = loc;
+	tree->_ty = p->_type;
+	tree->_u._symbol = p;
+	tree->_islvalue = 1;
+	tree->_isconstant = 1;
+	tree->_isstaticaddressable = 1;
+
+	return tree;
+}
+
+BOOL cc_expr_is_modifiable(FCCExprTree* expr)
 {
 	/* modifiable:
 	  1. l-value
@@ -2559,13 +2643,48 @@ BOOL cc_expr_canmodify(FCCExprTree* expr)
 	  3. not array type
 	  4. for union/struct, there is not any const field.
 	*/
-	return expr->_blvalue 
+	return expr->_islvalue
 		&& !IsConst(expr->_ty)
 		&& !IsArray(expr->_ty)
 		&& (IsStruct(expr->_ty) ? UnQual(expr->_ty)->_u._symbol->_u._s._cfields : TRUE);
 }
 
-const char* cc_expr_name(enum EExprOp op)
+BOOL cc_expr_is_nullptr(FCCExprTree* expr)
+{
+	FCCType* ty = UnQual(expr->_ty);
+
+	return (expr->_op == EXPR_CONSTANT)
+		&& ((ty->_op == Type_SInteger && expr->_u._symbol->_u._cnstval._sint == 0)
+			|| (ty->_op == Type_UInteger && expr->_u._symbol->_u._cnstval._uint == 0)
+			|| (IsVoidptr(ty) && expr->_u._symbol->_u._cnstval._pointer == 0));
+}
+
+FCCExprTree* cc_expr_to_pointer(FCCExprTree* expr)
+{
+	if (IsArray(expr->_ty)) {
+		expr->_ty = cc_type_arraytoptr(expr->_ty);
+	}
+	else if (IsFunction(expr->_ty)) {
+		expr->_ty = cc_type_ptr(expr->_ty);
+	}
+
+	return expr;
+}
+
+FCCExprTree* cc_expr_new(enum EMMArea where)
+{
+	FCCExprTree* tree = mm_alloc_area(sizeof(FCCExprTree), where);
+	if (tree) {
+		memset(tree, 0, sizeof(FCCExprTree));
+	}
+	else {
+		logger_output_s("error: out of memory at %s:%d\n", __FILE__, __LINE__);
+	}
+
+	return tree;
+}
+
+const char* cc_expr_opname(enum EExprOp op)
 {
 	switch (op)
 	{
@@ -2633,7 +2752,9 @@ const char* cc_expr_name(enum EExprOp op)
 		return "%";
 	case EXPR_DEREF:
 		return "*";
-	case EXPR_ADDR:
+	case EXPR_ADDRG:
+	case EXPR_ADDRF:
+	case EXPR_ADDRL:
 		return "&";
 	case EXPR_NEG:
 		return "-";
@@ -2655,18 +2776,10 @@ const char* cc_expr_name(enum EExprOp op)
 		return "++";
 	case EXPR_POSDEC:
 		return "--";
-	case EXPR_ID:
-		return "identifier";
 	case EXPR_CONSTANT:
 		return "constant";
-	case EXPR_PTRFIELD:
-		return "->";
-	case EXPR_DOTFIELD:
-		return ".";
 	case EXPR_CALL:
 		return "function()";
-	case EXPR_ARRAYSUB:
-		return "[index]";
 	default:
 		break;
 	}

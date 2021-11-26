@@ -66,12 +66,12 @@ BOOL cc_parser_initializer(struct tagCCContext* ctx, FVarInitializer** outinit, 
 	else {
 		initializer->_isblock = 0;
 		if (bExpectConstant) {
-			if (!cc_expr_constant_expression(ctx, &initializer->_u._expr, where)) {
+			if (!cc_expr_parse_constant_expression(ctx, &initializer->_u._expr, where)) {
 				return FALSE;
 			}
 		}
 		else {
-			if (!cc_expr_assignment(ctx, &initializer->_u._expr, where)) {
+			if (!cc_expr_parse_assignment(ctx, &initializer->_u._expr, where)) {
 				return FALSE;
 			}
 		}
@@ -121,7 +121,11 @@ static BOOL cc_varinit_check_scalar(struct tagCCContext* ctx, struct tagCCType* 
 		return FALSE;
 	}
 	
-	expr = cc_expr_makecast(ctx, ty, expr, where);
+	if (!(expr = cc_expr_cast(ctx, ty, expr, where))) {
+		logger_output_s("error: cast failed at %s:%d.\n", __FILE__, __LINE__);
+		return FALSE;
+	}
+	
 	thisinit->_u._expr = expr;
 
 	return TRUE;
@@ -256,7 +260,7 @@ static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* t
 		int arraysize, innerindex;
 
 		elety = UnQual(ty->_type);
-		ischararray = (elety == gBuiltinTypes._chartype) || (elety == gBuiltinTypes._wchartype);
+		ischararray = (elety == gbuiltintypes._chartype) || (elety == gbuiltintypes._wchartype);
 
 		if (thisinit->_isblock)
 		{
@@ -264,7 +268,7 @@ static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* t
 				for (innerindex = arraysize = 0; ty->_size > arraysize && innerindex < thisinit->_u._kids._cnt; arraysize += elety->_size)
 				{
 					tmpinit = *(thisinit->_u._kids._kids + innerindex);
-					iscnststr = !tmpinit->_isblock && tmpinit->_u._expr->_op == EXPR_CONSTANT && IsArray(tmpinit->_u._expr->_ty);
+					iscnststr = !tmpinit->_isblock && tmpinit->_u._expr->_op == EXPR_CONSTANT_STR;
 
 					if (ischararray && iscnststr)
 					{
@@ -300,7 +304,7 @@ static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* t
 				for (innerindex = arraysize = 0; innerindex < thisinit->_u._kids._cnt; arraysize += elety->_size)
 				{
 					tmpinit = *(thisinit->_u._kids._kids + innerindex);
-					iscnststr = !tmpinit->_isblock && tmpinit->_u._expr->_op == EXPR_CONSTANT && IsArray(tmpinit->_u._expr->_ty);
+					iscnststr = !tmpinit->_isblock && tmpinit->_u._expr->_op == EXPR_CONSTANT_STR;
 
 					if (ischararray && iscnststr)
 					{
@@ -330,7 +334,7 @@ static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* t
 		else
 		{
 			tmpinit = thisinit;
-			iscnststr = !tmpinit->_isblock && tmpinit->_u._expr->_op == EXPR_CONSTANT && IsArray(tmpinit->_u._expr->_ty);
+			iscnststr = !tmpinit->_isblock && tmpinit->_u._expr->_op == EXPR_CONSTANT_STR;
 			if (ischararray && iscnststr)
 			{
 				strty = UnQual(tmpinit->_u._expr->_ty->_type);
@@ -363,13 +367,13 @@ static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* t
 
 		assert(thisinit->_isblock);
 		elety = UnQual(ty->_type);
-		ischararray = (elety == gBuiltinTypes._chartype) || (elety == gBuiltinTypes._wchartype);
+		ischararray = (elety == gbuiltintypes._chartype) || (elety == gbuiltintypes._wchartype);
 
 		if (ty->_size > 0) {
 			for (arraysize = 0; ty->_size > arraysize && *outerindex < thisinit->_u._kids._cnt; arraysize += elety->_size)
 			{
 				tmpinit = *(thisinit->_u._kids._kids + *outerindex);
-				iscnststr = !tmpinit->_isblock && tmpinit->_u._expr->_op == EXPR_CONSTANT && IsArray(tmpinit->_u._expr->_ty);
+				iscnststr = !tmpinit->_isblock && tmpinit->_u._expr->_op == EXPR_CONSTANT_STR;
 
 				if (ischararray && iscnststr)
 				{
@@ -395,7 +399,7 @@ static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* t
 			for (arraysize = 0; *outerindex < thisinit->_u._kids._cnt; arraysize += elety->_size)
 			{
 				tmpinit = *(thisinit->_u._kids._kids + *outerindex);
-				iscnststr = !tmpinit->_isblock && tmpinit->_u._expr->_op == EXPR_CONSTANT && IsArray(tmpinit->_u._expr->_ty);
+				iscnststr = !tmpinit->_isblock && tmpinit->_u._expr->_op == EXPR_CONSTANT_STR;
 
 				if (ischararray && iscnststr)
 				{

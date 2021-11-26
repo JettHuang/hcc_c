@@ -342,7 +342,7 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 				return NULL;
 			}
 			typespec = Type_Void;
-			ty = gBuiltinTypes._voidtype;
+			ty = gbuiltintypes._voidtype;
 			cc_read_token(ctx, &ctx->_currtk);
 			break;
 		case TK_CHAR:
@@ -370,7 +370,7 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 				return NULL;
 			}
 			typespec = TK_FLOAT;
-			ty = gBuiltinTypes._floattype;
+			ty = gbuiltintypes._floattype;
 			cc_read_token(ctx, &ctx->_currtk);
 			break;
 		case TK_DOUBLE:
@@ -380,7 +380,7 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 				return NULL;
 			}
 			typespec = TK_DOUBLE;
-			ty = gBuiltinTypes._doubletype;
+			ty = gbuiltintypes._doubletype;
 			cc_read_token(ctx, &ctx->_currtk);
 			break;
 		case TK_ENUM:
@@ -452,48 +452,48 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 			return NULL;
 		}
 
-		ty = gBuiltinTypes._chartype;
+		ty = gbuiltintypes._chartype;
 		if (sign == Sign_Signed)
 		{
-			ty = gBuiltinTypes._schartype;
+			ty = gbuiltintypes._schartype;
 		}
 		else if (sign == Sign_Unsigned)
 		{
-			ty = gBuiltinTypes._uchartype;
+			ty = gbuiltintypes._uchartype;
 		}
 	}
 	else if (typespec == TK_INT)
 	{
 		if (sign == Sign_Signed || sign == Sign_Unknown)
 		{
-			ty = gBuiltinTypes._sinttype;
+			ty = gbuiltintypes._sinttype;
 			if (size == Size_Short)
 			{
-				ty = gBuiltinTypes._sshorttype;
+				ty = gbuiltintypes._sshorttype;
 			}
 			else if (size == Size_Long)
 			{
-				ty = gBuiltinTypes._slongtype;
+				ty = gbuiltintypes._slongtype;
 			}
 			else if (size == Size_Longlong)
 			{
-				ty = gBuiltinTypes._sllongtype;
+				ty = gbuiltintypes._sllongtype;
 			}
 		}
 		else
 		{
-			ty = gBuiltinTypes._uinttype;
+			ty = gbuiltintypes._uinttype;
 			if (size == Size_Short)
 			{
-				ty = gBuiltinTypes._ushorttype;
+				ty = gbuiltintypes._ushorttype;
 			}
 			else if (size == Size_Long)
 			{
-				ty = gBuiltinTypes._ulongtype;
+				ty = gbuiltintypes._ulongtype;
 			}
 			else if (size == Size_Longlong)
 			{
-				ty = gBuiltinTypes._ullongtype;
+				ty = gbuiltintypes._ullongtype;
 			}
 		}
 	}
@@ -683,7 +683,7 @@ BOOL cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FAr
 			cc_read_token(ctx, &ctx->_currtk);
 			if (cc_parser_is_constant(ctx->_currtk._type))
 			{
-				if (!cc_expr_constant_int(ctx, &cnt))
+				if (!cc_expr_parse_constant_int(ctx, &cnt))
 				{
 					logger_output_s("error: need integer constant. at %w.\n", &ctx->_currtk._loc);
 					return FALSE;
@@ -859,7 +859,7 @@ FCCSymbol* cc_parser_declglobal(FCCContext* ctx, int storage, const char* id, co
 
 	cc_gen_internalname(p);
 	if (ctx->_currtk._type == TK_ASSIGN && IsFunction(p->_type)) {
-		logger_output_s("error: illegal initialization for '%s'\n", p->_name);
+		logger_output_s("error: illegal initialization for '%s' at %w\n", p->_name, loc);
 		return NULL;
 	}
 	else if (ctx->_currtk._type == TK_ASSIGN) /* '=' */
@@ -868,7 +868,7 @@ FCCSymbol* cc_parser_declglobal(FCCContext* ctx, int storage, const char* id, co
 
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!cc_parser_initializer(ctx, &initializer, TRUE, CC_MM_PERMPOOL)) {
-			logger_output_s("error: illegal initialization for '%s'\n", p->_name);
+			logger_output_s("error: illegal initialization for '%s' at %w\n", p->_name, loc);
 			return FALSE;
 		}
 
@@ -979,7 +979,7 @@ FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, con
 
 		cc_read_token(ctx, &ctx->_currtk);
 		if (!cc_parser_initializer(ctx, &initializer, FALSE, CC_MM_PERMPOOL)) {
-			logger_output_s("error: illegal initialization for '%s'\n", p->_name);
+			logger_output_s("error: illegal initialization for '%s' at %w\n", p->_name, loc);
 			return FALSE;
 		}
 
@@ -1035,7 +1035,7 @@ FCCSymbol* cc_parser_declparam(FCCContext* ctx, int storage, const char* id, con
 	p->_defined = 1;
 	if (ctx->_currtk._type == TK_ASSIGN) /* '=' */
 	{
-		logger_output_s("error: illegal initialization for parameter '%s'\n", id);
+		logger_output_s("error: illegal initialization for parameter '%s' at %w\n", id, loc);
 		return NULL;
 	}
 
@@ -1103,14 +1103,14 @@ FCCType* cc_parser_declenum(FCCContext* ctx)
 			if (ctx->_currtk._type == TK_ASSIGN) /* '=' */
 			{
 				cc_read_token(ctx, &ctx->_currtk);
-				if (!cc_expr_constant_int(ctx, &ek))
+				if (!cc_expr_parse_constant_int(ctx, &ek))
 				{
 					return FALSE;
 				}
 			}
 			else
 			{
-				if (ek == gBuiltinTypes._sinttype->_u._symbol->_u._limits._max._sint) {
+				if (ek == gbuiltintypes._sinttype->_u._symbol->_u._limits._max._sint) {
 					logger_output_s("error: overflow in value for enumeration constant '%s' at %w\n", id, &loc);
 					return NULL;
 				}
@@ -1141,7 +1141,7 @@ FCCType* cc_parser_declenum(FCCContext* ctx)
 		p = NULL;
 		array_append(&enumerators, &p); /* append end null */
 
-		ty->_type = gBuiltinTypes._sinttype;
+		ty->_type = gbuiltintypes._sinttype;
 		ty->_size = ty->_type->_size;
 		ty->_align = ty->_type->_align;
 		ty->_u._symbol->_u._enumids = (FCCSymbol**)enumerators._data;
@@ -1163,7 +1163,7 @@ FCCType* cc_parser_declenum(FCCContext* ctx)
 			return NULL;
 		}
 
-		ty->_type = gBuiltinTypes._sinttype;
+		ty->_type = gbuiltintypes._sinttype;
 		ty->_size = ty->_type->_size;
 		ty->_align = ty->_type->_align;
 	}
@@ -1287,14 +1287,14 @@ BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
 			{
 				int bitsize;
 
-				if (UnQual(ty) != gBuiltinTypes._sinttype && UnQual(ty) != gBuiltinTypes._uinttype)
+				if (UnQual(ty) != gbuiltintypes._sinttype && UnQual(ty) != gbuiltintypes._uinttype)
 				{
 					logger_output_s("error: illegal bit-field type, expecting int or unsigned int, at %w.\n", &ctx->_currtk._loc);
 					return FALSE;
 				}
 
 				cc_read_token(ctx, &ctx->_currtk);
-				if (!cc_expr_constant_int(ctx, &bitsize))
+				if (!cc_expr_parse_constant_int(ctx, &bitsize))
 				{
 					return FALSE;
 				}
