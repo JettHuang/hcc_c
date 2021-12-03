@@ -21,8 +21,8 @@
 #define Type_UInteger	2  /* uint8 unsigned integer */
 #define Type_Float		3  /* float, double ,long double */
 #define Type_Enum		4
-#define Type_Void		5
-#define Type_Pointer	6
+#define Type_Pointer	5
+#define Type_Void		6
 /* aggregate types */
 #define Type_Array		7
 #define Type_Union		8

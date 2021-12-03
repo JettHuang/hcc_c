@@ -14,29 +14,49 @@
 #define OPTPARSE_API static
 #include "optparse.h"
 
+#include <stdio.h>
+#include <stdarg.h>
 
-struct Struct {
-	int a : 2;
-	int b;
-	char str[4];
-};
+void printvalue(int kind, ...)
+{
+	char c;
+	short s;
+	int i;
+	int64_t k;
+	float f;
+	double d;
+	long double l;
 
-struct Struct s = { 1, 2, 'a', 'b' };
+	va_list vl;
+	va_start(vl, kind);
 
-struct Struct gPairs[] = {
-	{1.0, 2, 'a', 'b', {1}},
-	3, 4,
-	{ 5 },
-	6, 7
-};
+	switch (kind)
+	{
+	case 'c':
+		c = va_arg(vl, char);
+		break;
+	case 's':
+		s = va_arg(vl, short);
+		break;
+	case 'i':
+		i = va_arg(vl, int);
+		break;
+	case 'k':
+		k = va_arg(vl, int64_t);
+		break;
+	case 'f':
+		f = va_arg(vl, float);
+		break;
+	case 'd':
+		d = va_arg(vl, double);
+		break;
+	case 'l':
+		//l = va_arg(vl, long double);
+		break;
+	}
 
-int a = 100 > 5 ? 10 : 20;
-
-enum COLOR {
-	RED,
-	GREEN,
-	BLUE
-};
+	va_end(vl);
+}
 
 int main(int argc, char* argv[])
 {
@@ -46,11 +66,10 @@ int main(int argc, char* argv[])
 	const char* srcfilename, *outfilename;
 	FCCContext cc;
 
-	int v0[10][2], v1[10][2];
-	int color = -RED;
+	char c = 0x8F;
 
-	char* p = "abcd" - 1;
-
+	printvalue('c', c);
+	
 	localename = setlocale(LC_ALL, "");
 	logger_output_s("LOCAL %s\n", localename);
 

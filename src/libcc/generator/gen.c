@@ -38,19 +38,6 @@ void cc_gen_dumpsymbols(struct tagCCContext* ctx)
 
 static void cc_gen_eval_constant_address_inner(struct tagCCContext* ctx, struct tagCCExprTree* expr, struct tagCCSymbol** addrsym, int64_t* offset)
 {
-	if (expr->_op == EXPR_TYPECAST) {
-		cc_gen_eval_constant_address_inner(ctx, expr->_u._kids[0], addrsym, offset);
-	}
-	else if (expr->_op == EXPR_ADDR) {
-		cc_gen_eval_constant_address_inner(ctx, expr->_u._kids[0], addrsym, offset);
-	}
-	else if (expr->_op == EXPR_ID || expr->_op == EXPR_CONSTANT_STR) {
-		assert(*addrsym == NULL);
-		*addrsym = expr->_u._symbol;
-	}
-	else if (expr->_op == EXPR_CONSTANT) {
-		*offset = expr->_u._symbol->_u._cnstval._sint;
-	}
 
 }
 

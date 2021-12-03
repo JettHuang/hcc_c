@@ -259,13 +259,16 @@ static void vfprint(FILE* f, char* bp, const char* fmt, va_list ap) {
 			case 'w': 
 			{ 
 				FLocation* loc = va_arg(ap, FLocation*);
-				assert(loc);
-
-				bp = outs(loc->_filename ? loc->_filename : "", f, bp);
-				bp = outs(":", f, bp);
-				bp = outd(loc->_line, f, bp);
-				bp = outs(": ", f, bp);
-				bp = outd(loc->_col, f, bp);
+				if (loc) {
+					bp = outs(loc->_filename ? loc->_filename : "", f, bp);
+					bp = outs(":", f, bp);
+					bp = outd(loc->_line, f, bp);
+					bp = outs(": ", f, bp);
+					bp = outd(loc->_col, f, bp);
+				}
+				else {
+					bp = outs("N/A", f, bp);
+				}
 			}
 				break;
 			case 'I': { int n = va_arg(ap, int);

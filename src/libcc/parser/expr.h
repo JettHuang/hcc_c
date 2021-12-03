@@ -9,107 +9,40 @@
 #include "mm.h"
 #include "cc.h"
 #include "symbols.h"
+#include "types.h"
+#include "ir.h"
 
 
-/* expression op type */
-enum EExprOp
-{
-	EXPR_COMMA = 0,
-	EXPR_ASSIGN, /* = *= /= %= += -= <<= >>= &= ^= |= */
-	EXPR_ASSIGN_MUL,
-	EXPR_ASSIGN_DIV,
-	EXPR_ASSIGN_MOD,
-	EXPR_ASSIGN_ADD,
-	EXPR_ASSIGN_SUB,
-	EXPR_ASSIGN_LSHIFT,
-	EXPR_ASSIGN_RSHIFT,
-	EXPR_ASSIGN_BITAND,
-	EXPR_ASSIGN_BITXOR,
-	EXPR_ASSIGN_BITOR,
-	EXPR_COND, /* ? : */ 
-	EXPR_LOGOR,
-	EXPR_LOGAND,
-	EXPR_BITOR,
-	EXPR_BITXOR,
-	EXPR_BITAND,
-	EXPR_EQ,
-	EXPR_UNEQ,
-	EXPR_LESS,
-	EXPR_GREAT,
-	EXPR_LESSEQ,
-	EXPR_GREATEQ,
-	EXPR_LSHFIT,
-	EXPR_RSHFIT,
-	EXPR_ADD,
-	EXPR_SUB,
-	EXPR_MUL,
-	EXPR_DIV,
-	EXPR_MOD,
-
-	/* unary prefix */
-	EXPR_DEREF,/* '*' */
-	EXPR_ADDRG, /* & */
-	EXPR_ADDRF,
-	EXPR_ADDRL,
-	EXPR_NEG,  /* - */
-	EXPR_POS,  /* + */
-	EXPR_NOT,  /* ! */
-	EXPR_COMPLEMENT,  /* ~ complement of one's */
-	EXPR_PREINC,
-	EXPR_PREDEC,
-	EXPR_SIZEOF,
-	EXPR_TYPECAST,
-
-	/* unary postfix */
-	EXPR_POSINC,
-	EXPR_POSDEC,
-
-	/* value */
-	EXPR_CONSTANT,
-	EXPR_CONSTANT_STR,
-
-	EXPR_CALL, /* function call */
-
-	EXPR_MAX
-};
-
-/* expression tree */
-typedef struct tagCCExprTree {
-	int _op;
-	FLocation _loc;
-	struct tagCCType* _ty; /* the derivation type of this expression */
-
-	union {
-		struct tagCCExprTree* _kids[3];
-		struct tagCCSymbol* _symbol;
-		struct tagStructField* _field;
-		struct {
-			struct tagCCExprTree* _lhs;
-			struct tagCCExprTree** _args; /* end with null */
-		} _f;
-	} _u;
-	
-	/* auxiliary flags */
-	int _isbitfield : 1;
-	int _islvalue : 1;
-	int _isconstant : 1; /* constant expressions can be used in initializers. */
-} FCCExprTree;
+/* parsing apis */
+BOOL cc_expr_parse_assignment(FCCContext* ctx, FCCIRTree** outexpr, enum EMMArea where);
+BOOL cc_expr_parse_expression(FCCContext* ctx, FCCIRTree** outexpr, enum EMMArea where);
+BOOL cc_expr_parse_constant_expression(FCCContext* ctx, FCCIRTree** outexpr, enum EMMArea where);
+BOOL cc_expr_parse_constant_int(FCCContext* ctx, int* val);
 
 
-FCCExprTree* cc_expr_new(enum EMMArea where);
-BOOL cc_expr_parse_assignment(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
-BOOL cc_expr_parse_expression(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
-BOOL cc_expr_parse_constant_expression(struct tagCCContext* ctx, FCCExprTree** outexpr, enum EMMArea where);
-BOOL cc_expr_parse_constant_int(struct tagCCContext* ctx, int* val);
+/* ir tree operating apis */
+FCCType* cc_expr_assigntype(FCCType* lhs, FCCIRTree* expr);
+BOOL cc_expr_is_modifiable(FCCIRTree* expr);
+BOOL cc_expr_is_nullptr(FCCIRTree* expr);
 
-struct tagCCType* cc_expr_assigntype(struct tagCCType* lhs, struct tagCCExprTree* expr);
-FCCExprTree* cc_expr_cast(struct tagCCContext* ctx, struct tagCCType* castty, FCCExprTree* expr, enum EMMArea where);
-FCCExprTree* cc_expr_constant(struct tagCCContext* ctx, struct tagCCType* cnstty, FCCConstVal cnstval, FLocation loc, enum EMMArea where);
-FCCExprTree* cc_expr_constant_str(struct tagCCContext* ctx, struct tagCCType* cnstty, FCCConstVal cnstval, FLocation loc, enum EMMArea where);
-BOOL cc_expr_is_modifiable(FCCExprTree* expr);
-BOOL cc_expr_is_nullptr(FCCExprTree* expr);
-FCCExprTree* cc_expr_to_pointer(FCCExprTree* expr);
-const char* cc_expr_opname(enum EExprOp op);
-
+/* generate ir tree apis */
+FCCIRTree* cc_expr_change_rettype(FCCIRTree* expr, FCCType* newty, enum EMMArea where);
+FCCIRTree* cc_expr_adjust(FCCIRTree* expr, enum EMMArea where);
+FCCIRTree* cc_expr_id(FCCSymbol* p, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_addr(FCCIRTree* expr, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_indir(FCCIRTree* expr, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_constant(FCCType* ty, int tycode, FLocation *loc, enum EMMArea where, ...);
+FCCIRTree* cc_expr_cast(FCCType* ty, FCCIRTree* expr, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_add(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_sub(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_mul(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_div(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_mod(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_call(FCCType* fty, FCCIRTree* expr, FArray* args, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_seq(FCCType* ty, FCCIRTree* expr0, FCCIRTree* expr1, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_assign(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_neg(FCCType* ty, FCCIRTree* expr, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_bitcom(FCCType* ty, FCCIRTree* expr, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_not(FCCType* ty, FCCIRTree* expr, FLocation* loc, enum EMMArea where);
 
 #endif /* _CC_EXPR_H__ */
