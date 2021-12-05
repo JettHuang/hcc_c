@@ -177,11 +177,8 @@ void cc_type_init(const FCCTypeMetrics* m)
 		gbuiltintypes._ellipsistype = cc_type_new(Type_Ellipsis, NULL, 0, 0, p);
 	}
 
-	{
-		gbuiltintypes._ptroffsettype = gbuiltintypes._sinttype;
-	}
-
 	sPointersym = cc_symbol_install("T*", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
+	gbuiltintypes._ptrvoidtype = cc_type_ptr(gbuiltintypes._voidtype);
 }
 
 FCCType* cc_type_tmp(int16_t op, FCCType* ty)
@@ -464,6 +461,15 @@ BOOL cc_type_isequal(FCCType* ty1, FCCType* ty2, BOOL option)
 	return FALSE;
 }
 
+BOOL cc_type_iscompatible(FCCType* ty1, FCCType* ty2)
+{
+	ty1 = UnQual(ty1);
+	ty2 = UnQual(ty2);
+
+	return IsPtr(ty1) && !IsFunction(ty1->_type) && IsPtr(ty2) && !IsFunction(ty2->_type)
+		&& cc_type_isequal(UnQual(ty1->_type), UnQual(ty2->_type), FALSE);
+}
+
 FCCType* cc_type_promote(FCCType* ty)
 {
 	ty = UnQual(ty);
@@ -570,6 +576,9 @@ FCCType* cc_type_compose(FCCType* ty1, FCCType* ty2)
 FCCType* cc_type_select(FCCType* ty1, FCCType* ty2)
 {
 #define XX(t)	if (ty1 == t || ty2 == t) { return t; }
+
+	ty1 = UnQual(ty1);
+	ty2 = UnQual(ty2);
 
 	XX(gbuiltintypes._ldoubletype);
 	XX(gbuiltintypes._doubletype);

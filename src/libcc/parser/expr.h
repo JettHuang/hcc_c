@@ -44,5 +44,16 @@ FCCIRTree* cc_expr_assign(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation
 FCCIRTree* cc_expr_neg(FCCType* ty, FCCIRTree* expr, FLocation* loc, enum EMMArea where);
 FCCIRTree* cc_expr_bitcom(FCCType* ty, FCCIRTree* expr, FLocation* loc, enum EMMArea where);
 FCCIRTree* cc_expr_not(FCCType* ty, FCCIRTree* expr, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_lshift(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_rshift(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_less(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_lequal(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_great(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_gequal(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_equal(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_unequal(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_bitand(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_bitxor(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_bitor(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
 
 #endif /* _CC_EXPR_H__ */

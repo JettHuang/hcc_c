@@ -63,6 +63,7 @@
 #define IsChar(t)	(UnQual(t)->_op == Type_Char && (t)->_size == 1)
 #define IsWideChar(t)	(UnQual(t)->_op == Type_Char && (t)->_size == 2)
 #define IsInt(t)	(UnQual(t)->_op == Type_SInteger || UnQual(t)->_op == Type_UInteger || IsEnum(t))
+#define IsUnsigned(t)	(UnQual(t)->_op == Type_UInteger)
 #define IsFloat(t)	(UnQual(t)->_op == Type_Float)
 #define IsScalar(t) (UnQual(t)->_op <= Type_Pointer || IsEnum(t))
 #define IsArith(t)	(UnQual(t)->_op <= Type_Float || IsEnum(t))
@@ -147,7 +148,7 @@ typedef struct tagCCBuiltinTypes
 	FCCType* _ldoubletype;
 	FCCType* _voidtype;
 	FCCType* _ellipsistype; /* ... */
-	FCCType* _ptroffsettype;
+	FCCType* _ptrvoidtype;
 } FCCBuiltinTypes;
 
 extern FCCBuiltinTypes gbuiltintypes;
@@ -186,6 +187,7 @@ FCCType* cc_type_rettype(FCCType* fn);
 BOOL cc_type_isvariance(FCCType* fn);
 
 BOOL cc_type_isequal(FCCType* ty1, FCCType* ty2, BOOL option);
+BOOL cc_type_iscompatible(FCCType* ty1, FCCType* ty2);
 FCCType* cc_type_promote(FCCType* ty);
 void cc_type_remove(int level);
 
