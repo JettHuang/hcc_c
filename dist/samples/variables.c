@@ -14,6 +14,16 @@ char str6[3] = {'a', 'b', 'c' };
 
 */
 
+struct S {
+	int a;
+	int b;
+};
+
+struct S gs;
+
+int* pval = &gs.b;
+
+char name[] = "123";
 char *pstr = "123456";
 
 /*

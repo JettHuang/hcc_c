@@ -62,11 +62,12 @@ static BOOL cc_expr_parse_primary(FCCContext* ctx, FCCIRTree** outexpr, enum EMM
 
 		if (IsEnum(p->_type))
 		{
+			ty = p->_type->_type;
 			tree = cc_expr_constant(ty, cc_ir_typecode(ty), &ctx->_currtk._loc, where, (int)p->_u._cnstval._sint);
 		}
 		else
 		{
-			if (!(tree = cc_expr_id(ctx, p, &ctx->_currtk._loc, where))) {
+			if (!(tree = cc_expr_id(p, &ctx->_currtk._loc, where))) {
 				return FALSE;
 			}
 		}
@@ -275,7 +276,7 @@ static BOOL cc_expr_parse_postfix(FCCContext* ctx, FCCIRTree** outexpr, enum EMM
 			if (IsPtr(ty)) {
 				tree = cc_expr_indir(tree, &loc, where);
 			}
-			tree->_u._field = field;
+			tree->_field = field;
 			tree->_isbitfield = field->_lsb > 0;
 			tree->_islvalue = expr->_islvalue;
 
@@ -320,7 +321,7 @@ static BOOL cc_expr_parse_postfix(FCCContext* ctx, FCCIRTree** outexpr, enum EMM
 			if (IsPtr(ty)) {
 				tree = cc_expr_indir(tree, &loc, where);
 			}
-			tree->_u._field = field;
+			tree->_field = field;
 			tree->_isbitfield = field->_lsb > 0;
 			tree->_islvalue = 1;
 
@@ -561,10 +562,10 @@ static BOOL cc_expr_parse_unary(FCCContext* ctx, FCCIRTree** outexpr, enum EMMAr
 			return FALSE;
 		}
 		if (IsFunction(expr->_ty->_type) || IsArray(expr->_ty->_type)) {
-			expr = cc_expr_change_rettype(expr, expr->_ty->_type, where);
+			tree = cc_expr_change_rettype(expr, expr->_ty->_type, where);
 		}
 		else {
-			expr = cc_expr_indir(expr, &loc, where);
+			tree = cc_expr_indir(expr, &loc, where);
 		}
 
 		*outexpr = tree;
@@ -631,7 +632,7 @@ static BOOL cc_expr_parse_unary(FCCContext* ctx, FCCIRTree** outexpr, enum EMMAr
 			return FALSE;
 		}
 		tree = cc_expr_cast(cc_type_promote(expr->_ty), expr, &loc, where);
-		tree = cc_expr_neg(tree->_ty, tree, &loc, where);
+		tree = cc_expr_bitcom(tree->_ty, tree, &loc, where);
 
 		*outexpr = tree;
 		return TRUE;
@@ -707,7 +708,7 @@ static BOOL cc_expr_parse_unary(FCCContext* ctx, FCCIRTree** outexpr, enum EMMAr
 			exprty = subexpr->_ty;
 		}
 
-		if (!(tree = cc_expr_constant(ctx, gbuiltintypes._sinttype, cc_ir_typecode(gbuiltintypes._sinttype), &loc, where, exprty->_size))) {
+		if (!(tree = cc_expr_constant(gbuiltintypes._sinttype, cc_ir_typecode(gbuiltintypes._sinttype), &loc, where, exprty->_size))) {
 			return FALSE;
 		}
 
@@ -795,6 +796,8 @@ static BOOL cc_expr_parse_multiplicative(FCCContext* ctx, FCCIRTree** outexpr, e
 		}
 
 		ty = cc_type_select(lhs->_ty, rhs->_ty);
+		lhs = cc_expr_cast(ty, lhs, &loc, where);
+		rhs = cc_expr_cast(ty, rhs, &loc, where);
 		switch (tktype)
 		{
 		case TK_MUL:
@@ -829,7 +832,6 @@ static BOOL cc_expr_parse_additive(FCCContext* ctx, FCCIRTree** outexpr, enum EM
 		return FALSE;
 	}
 
-	lhs = cc_expr_adjust(lhs, where);
 	tree = lhs;
 	while (ctx->_currtk._type == TK_ADD || ctx->_currtk._type == TK_SUB)
 	{
@@ -842,6 +844,7 @@ static BOOL cc_expr_parse_additive(FCCContext* ctx, FCCIRTree** outexpr, enum EM
 			return FALSE;
 		}
 
+		lhs = cc_expr_adjust(lhs, where);
 		rhs = cc_expr_adjust(rhs, where);
 		if (tktype == TK_ADD)
 		{
@@ -867,7 +870,7 @@ static BOOL cc_expr_parse_additive(FCCContext* ctx, FCCIRTree** outexpr, enum EM
 				assert(equalty->_size == gbuiltintypes._ptrvoidtype->_size);
 				rhs = cc_expr_cast(equalty, rhs, &loc, where);
 				if (n > 1) {
-					rhs = cc_expr_mul(equalty, rhs, cc_expr_constant(equalty, cc_ir_typecode(equalty), where, n), &loc, where);
+					rhs = cc_expr_mul(equalty, rhs, cc_expr_constant(equalty, cc_ir_typecode(equalty), &loc, where, n), &loc, where);
 				}
 
 				tree = cc_expr_add(ty, lhs, rhs, &loc, where);
@@ -888,7 +891,7 @@ static BOOL cc_expr_parse_additive(FCCContext* ctx, FCCIRTree** outexpr, enum EM
 				assert(equalty->_size == gbuiltintypes._ptrvoidtype->_size);
 				lhs = cc_expr_cast(equalty, lhs, &loc, where);
 				if (n > 1) {
-					lhs = cc_expr_mul(equalty, lhs, cc_expr_constant(equalty, cc_ir_typecode(equalty), where, n), &loc, where);
+					lhs = cc_expr_mul(equalty, lhs, cc_expr_constant(equalty, cc_ir_typecode(equalty), &loc, where, n), &loc, where);
 				}
 
 				tree = cc_expr_add(ty, lhs, rhs, &loc, where);
@@ -923,7 +926,7 @@ static BOOL cc_expr_parse_additive(FCCContext* ctx, FCCIRTree** outexpr, enum EM
 				assert(equalty->_size == gbuiltintypes._ptrvoidtype->_size);
 				rhs = cc_expr_cast(equalty, rhs, &loc, where);
 				if (n > 1) {
-					rhs = cc_expr_mul(equalty, rhs, cc_expr_constant(equalty, cc_ir_typecode(equalty), where, n), &loc, where);
+					rhs = cc_expr_mul(equalty, rhs, cc_expr_constant(equalty, cc_ir_typecode(equalty), &loc, where, n), &loc, where);
 				}
 
 				tree = cc_expr_sub(ty, lhs, rhs, &loc, where);
@@ -948,7 +951,7 @@ static BOOL cc_expr_parse_additive(FCCContext* ctx, FCCIRTree** outexpr, enum EM
 				rhs = cc_expr_cast(equalty, rhs, &loc, where);
 				tree = cc_expr_sub(equalty, lhs, rhs, &loc, where);
 				if (n > 1) {
-					tree = cc_expr_div(equalty, tree, cc_expr_constant(equalty, cc_ir_typecode(equalty), where, n), &loc, where);
+					tree = cc_expr_div(equalty, tree, cc_expr_constant(equalty, cc_ir_typecode(equalty), &loc, where, n), &loc, where);
 				}
 			}
 			else
@@ -1014,7 +1017,7 @@ static BOOL cc_expr_parse_relational(FCCContext* ctx, FCCIRTree** outexpr, enum 
 		return FALSE;
 	}
 
-	tree = lhs = cc_expr_adjust(lhs, where);
+	tree = lhs;
 	while (ctx->_currtk._type == TK_LESS || ctx->_currtk._type == TK_LESS_EQ
 		|| ctx->_currtk._type == TK_GREAT || ctx->_currtk._type == TK_GREAT_EQ)
 	{
@@ -1027,6 +1030,7 @@ static BOOL cc_expr_parse_relational(FCCContext* ctx, FCCIRTree** outexpr, enum 
 			return FALSE;
 		}
 
+		lhs = cc_expr_adjust(lhs, where);
 		rhs = cc_expr_adjust(rhs, where);
 		if (IsArith(lhs->_ty) && IsArith(rhs->_ty)) {
 			ty = cc_type_select(lhs->_ty, rhs->_ty);
@@ -1045,10 +1049,10 @@ static BOOL cc_expr_parse_relational(FCCContext* ctx, FCCIRTree** outexpr, enum 
 
 		switch (tktype)
 		{
-		case TK_LESS: tree = cc_expr_less(ty, lhs, rhs, &loc, where); break;
-		case TK_LESS_EQ: tree = cc_expr_lequal(ty, lhs, rhs, &loc, where); break;
-		case TK_GREAT: tree = cc_expr_great(ty, lhs, rhs, &loc, where); break;
-		case TK_GREAT_EQ: tree = cc_expr_gequal(ty, lhs, rhs, &loc, where); break;
+		case TK_LESS: tree = cc_expr_less(gbuiltintypes._sinttype, lhs, rhs, &loc, where); break;
+		case TK_LESS_EQ: tree = cc_expr_lequal(gbuiltintypes._sinttype, lhs, rhs, &loc, where); break;
+		case TK_GREAT: tree = cc_expr_great(gbuiltintypes._sinttype, lhs, rhs, &loc, where); break;
+		case TK_GREAT_EQ: tree = cc_expr_gequal(gbuiltintypes._sinttype, lhs, rhs, &loc, where); break;
 		}
 
 		if (!tree) {
@@ -1073,7 +1077,7 @@ static BOOL cc_expr_parse_equality(FCCContext* ctx, FCCIRTree** outexpr, enum EM
 		return FALSE;
 	}
 
-	tree = lhs = cc_expr_adjust(lhs, where);
+	tree = lhs;
 	while (ctx->_currtk._type == TK_EQUAL || ctx->_currtk._type == TK_UNEQUAL)
 	{
 		enum ECCToken tktype = ctx->_currtk._type;
@@ -1085,6 +1089,7 @@ static BOOL cc_expr_parse_equality(FCCContext* ctx, FCCIRTree** outexpr, enum EM
 			return FALSE;
 		}
 
+		lhs = cc_expr_adjust(lhs, where);
 		rhs = cc_expr_adjust(rhs, where);
 		xty = UnQual(lhs->_ty);
 		yty = UnQual(rhs->_ty);
@@ -1244,65 +1249,6 @@ static BOOL cc_expr_parse_bitor(FCCContext* ctx, FCCIRTree** outexpr, enum EMMAr
 	return TRUE;
 }
 
-static FCCIRTree* cc_expr_logicand(FCCContext* ctx, int op, FCCIRTree* lhs, FCCIRTree* rhs, FLocation loc, enum EMMArea where)
-{
-	FCCIRTree* tree;
-
-	if (!IsScalar(lhs->_ty) || !IsScalar(rhs->_ty))
-	{
-		logger_output_s("error scalar type is expected for '&&' at %w.\n", &loc);
-		return NULL;
-	}
-
-	if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
-	{
-		FCCConstVal cnstval;
-		int lv = 0, rv = 0;
-
-		if (UnQual(lhs->_ty)->_op == Type_SInteger) {
-			lv = lhs->_u._symbol->_u._cnstval._sint != 0;
-		}
-		else if (UnQual(lhs->_ty)->_op == Type_UInteger) {
-			lv = lhs->_u._symbol->_u._cnstval._uint != 0;
-		}
-		else if (UnQual(lhs->_ty)->_op == Type_Float) {
-			lv = lhs->_u._symbol->_u._cnstval._float != 0.0;
-		}
-		else if (UnQual(lhs->_ty)->_op == Type_Pointer) {
-			lv = lhs->_u._symbol->_u._cnstval._pointer == 0;
-		}
-
-		if (UnQual(rhs->_ty)->_op == Type_SInteger) {
-			rv = rhs->_u._symbol->_u._cnstval._sint != 0;
-		}
-		else if (UnQual(rhs->_ty)->_op == Type_UInteger) {
-			rv = rhs->_u._symbol->_u._cnstval._uint != 0;
-		}
-		else if (UnQual(rhs->_ty)->_op == Type_Float) {
-			rv = rhs->_u._symbol->_u._cnstval._float != 0.0;
-		}
-		else if (UnQual(rhs->_ty)->_op == Type_Pointer) {
-			rv = rhs->_u._symbol->_u._cnstval._pointer == 0;
-		}
-
-		cnstval._sint = lv && rv;
-		return cc_expr_constant(ctx, gbuiltintypes._sinttype, cnstval, loc, where);
-	}
-
-
-	if (!(tree = cc_expr_new(where))) {
-		return FALSE;
-	}
-
-	tree->_op = op;
-	tree->_loc = loc;
-	tree->_ty = gbuiltintypes._sinttype;
-	tree->_u._kids[0] = lhs;
-	tree->_u._kids[1] = rhs;
-
-	return tree;
-}
-
 static BOOL cc_expr_parse_logicand(FCCContext* ctx, FCCIRTree** outexpr, enum EMMArea where)
 {
 	FCCIRTree* lhs, * rhs, * tree;
@@ -1322,7 +1268,14 @@ static BOOL cc_expr_parse_logicand(FCCContext* ctx, FCCIRTree** outexpr, enum EM
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_logicand(ctx, EXPR_LOGAND, lhs, rhs, loc, where))) {
+		lhs = cc_expr_adjust(lhs, where);
+		rhs = cc_expr_adjust(rhs, where);
+		if (!IsScalar(lhs->_ty) || !IsScalar(rhs->_ty)) {
+			logger_output_s("error: illegal operands for operator '&&' at %w\n", &loc);
+			return FALSE;
+		}
+
+		if (!(tree = cc_expr_logicand(gbuiltintypes._sinttype, lhs, rhs, &loc, where))) {
 			return FALSE;
 		}
 
@@ -1331,64 +1284,6 @@ static BOOL cc_expr_parse_logicand(FCCContext* ctx, FCCIRTree** outexpr, enum EM
 
 	*outexpr = tree;
 	return TRUE;
-}
-
-static FCCIRTree* cc_expr_logicor(FCCContext* ctx, int op, FCCIRTree* lhs, FCCIRTree* rhs, FLocation loc, enum EMMArea where)
-{
-	FCCIRTree* tree;
-
-	if (!IsScalar(lhs->_ty) || !IsScalar(rhs->_ty))
-	{
-		logger_output_s("error scalar type is expected for '||' at %w.\n", &loc);
-		return NULL;
-	}
-
-	if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
-	{
-		FCCConstVal cnstval;
-		int lv = 0, rv = 0;
-
-		if (UnQual(lhs->_ty)->_op == Type_SInteger) {
-			lv = lhs->_u._symbol->_u._cnstval._sint != 0;
-		}
-		else if (UnQual(lhs->_ty)->_op == Type_UInteger) {
-			lv = lhs->_u._symbol->_u._cnstval._uint != 0;
-		}
-		else if (UnQual(lhs->_ty)->_op == Type_Float) {
-			lv = lhs->_u._symbol->_u._cnstval._float != 0.0;
-		}
-		else if (UnQual(lhs->_ty)->_op == Type_Pointer) {
-			lv = lhs->_u._symbol->_u._cnstval._pointer == 0;
-		}
-
-		if (UnQual(rhs->_ty)->_op == Type_SInteger) {
-			rv = rhs->_u._symbol->_u._cnstval._sint != 0;
-		}
-		else if (UnQual(rhs->_ty)->_op == Type_UInteger) {
-			rv = rhs->_u._symbol->_u._cnstval._uint != 0;
-		}
-		else if (UnQual(rhs->_ty)->_op == Type_Float) {
-			rv = rhs->_u._symbol->_u._cnstval._float != 0.0;
-		}
-		else if (UnQual(rhs->_ty)->_op == Type_Pointer) {
-			rv = rhs->_u._symbol->_u._cnstval._pointer == 0;
-		}
-
-		cnstval._sint = lv || rv;
-		return cc_expr_constant(ctx, gbuiltintypes._sinttype, cnstval, loc, where);
-	}
-
-	if (!(tree = cc_expr_new(where))) {
-		return FALSE;
-	}
-
-	tree->_op = op;
-	tree->_loc = loc;
-	tree->_ty = gbuiltintypes._sinttype;
-	tree->_u._kids[0] = lhs;
-	tree->_u._kids[1] = rhs;
-
-	return tree;
 }
 
 static BOOL cc_expr_parse_logicor(FCCContext* ctx, FCCIRTree** outexpr, enum EMMArea where)
@@ -1410,7 +1305,14 @@ static BOOL cc_expr_parse_logicor(FCCContext* ctx, FCCIRTree** outexpr, enum EMM
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_logicor(ctx, EXPR_LOGOR, lhs, rhs, loc, where))) {
+		lhs = cc_expr_adjust(lhs, where);
+		rhs = cc_expr_adjust(rhs, where);
+		if (!IsScalar(lhs->_ty) || !IsScalar(rhs->_ty)) {
+			logger_output_s("error: illegal operands for operator '||' at %w\n", &loc);
+			return FALSE;
+		}
+
+		if (!(tree = cc_expr_logicor(gbuiltintypes._sinttype, lhs, rhs, &loc, where))) {
 			return FALSE;
 		}
 
@@ -1419,67 +1321,6 @@ static BOOL cc_expr_parse_logicor(FCCContext* ctx, FCCIRTree** outexpr, enum EMM
 
 	*outexpr = tree;
 	return TRUE;
-}
-
-static FCCIRTree* cc_expr_conditional(FCCContext* ctx, int op, FCCIRTree* expr0, FCCIRTree* expr1, FCCIRTree* expr2, FLocation loc, enum EMMArea where)
-{
-	FCCIRTree* tree;
-	FCCType* ty;
-
-	if (!IsScalar(expr0->_ty))
-	{
-		logger_output_s("error scalar type is expected for '? : ' first expression at %w.\n", &loc);
-		return NULL;
-	}
-
-	if (cc_type_isequal(expr1->_ty, expr2->_ty, TRUE)) {
-		ty = expr1->_ty;
-	}
-	else if ((IsPtr(expr1->_ty) || IsArray(expr1->_ty)) && cc_expr_is_nullptr(expr2))
-	{
-		ty = expr1->_ty;
-	}
-	else if (cc_expr_is_nullptr(expr1) && (IsPtr(expr2->_ty) || IsArray(expr2->_ty)))
-	{
-		ty = expr2->_ty;
-	}
-	else
-	{
-		logger_output_s("error same type is expected for '? : ' 2rd & 3rd expression at %w.\n", &loc);
-		return NULL;
-	}
-
-	if (expr0->_op == EXPR_CONSTANT)
-	{
-		int val = 1;
-
-		if (UnQual(expr0->_ty)->_op == Type_SInteger) {
-			val = expr0->_u._symbol->_u._cnstval._sint != 0;
-		}
-		else if (UnQual(expr0->_ty)->_op == Type_UInteger) {
-			val = expr0->_u._symbol->_u._cnstval._uint != 0;
-		}
-		else if (UnQual(expr0->_ty)->_op == Type_Float) {
-			val = expr0->_u._symbol->_u._cnstval._float != 0.0;
-		}
-		else if (UnQual(expr0->_ty)->_op == Type_Pointer) {
-			val = expr0->_u._symbol->_u._cnstval._pointer == 0;
-		}
-
-		return val ? expr1 : expr2;
-	}
-
-	if (!(tree = cc_expr_new(where))) {
-		return FALSE;
-	}
-
-	tree->_op = op;
-	tree->_loc = loc;
-	tree->_u._kids[0] = expr0;
-	tree->_u._kids[1] = expr1;
-	tree->_u._kids[2] = expr2;
-
-	return tree;
 }
 
 static BOOL cc_expr_parse_conditional(FCCContext* ctx, FCCIRTree** outexpr, enum EMMArea where)
@@ -1497,144 +1338,27 @@ static BOOL cc_expr_parse_conditional(FCCContext* ctx, FCCIRTree** outexpr, enum
 	{
 		loc = ctx->_currtk._loc;
 		cc_read_token(ctx, &ctx->_currtk);
-
-		if (!cc_expr_parse_expression(ctx, &expr1, where))
-		{
+		if (!cc_expr_parse_expression(ctx, &expr1, where)) {
+			return FALSE;
+		}
+		if (!cc_parser_expect(ctx, TK_COLON)) /* ':' */ {
+			return FALSE;
+		}
+		if (!cc_expr_parse_conditional(ctx, &expr2, where)) {
 			return FALSE;
 		}
 
-		if (!cc_parser_expect(ctx, TK_COLON)) /* ':' */
-		{
-			return FALSE;
-		}
+		expr0 = cc_expr_adjust(expr0, where);
+		expr1 = cc_expr_adjust(expr1, where);
+		expr2 = cc_expr_adjust(expr2, where);
 
-		if (!cc_expr_parse_conditional(ctx, &expr2, where))
-		{
-			return FALSE;
-		}
-
-		if (!(tree = cc_expr_conditional(ctx, EXPR_COND, expr0, expr1, expr2, loc, where))) {
+		if (!(tree = cc_expr_condition(expr0, expr1, expr2, &loc, where))) {
 			return FALSE;
 		}
 	}
 
 	*outexpr = tree;
 	return TRUE;
-}
-
-static FCCIRTree* cc_expr_assignment(FCCContext* ctx, int op, FCCIRTree* lhs, FCCIRTree* rhs, FLocation loc, enum EMMArea where)
-{
-	FCCIRTree* tree;
-
-	if (!cc_expr_is_modifiable(lhs)) {
-		logger_output_s("error l-value is expected for operator '%s' at %w\n", cc_expr_opname(op), &loc);
-		return NULL;
-	}
-
-	switch (op)
-	{
-	case EXPR_ASSIGN:
-	{
-		if (IsArith(lhs->_ty) && IsArith(rhs->_ty))
-		{
-			rhs = cc_expr_cast(ctx, UnQual(rhs->_ty), rhs, where);
-		}
-		else if (IsPtr(lhs->_ty)) {
-			if (IsPtr(rhs->_ty)) {
-				if (!cc_type_isequal(lhs->_ty, rhs->_ty, TRUE) && (!IsVoidptr(lhs->_ty) && !IsVoidptr(rhs->_ty))) {
-					logger_output_s("error incompatible operands for operator '%s' at %w\n", cc_expr_opname(op), &loc);
-					return NULL;
-				}
-			}
-			else if (!cc_expr_is_nullptr(rhs)) {
-				logger_output_s("error incompatible operands for operator '%s' at %w\n", cc_expr_opname(op), &loc);
-				return NULL;
-			}
-		}
-		else if (!cc_type_isequal(UnQual(lhs->_ty), UnQual(rhs->_ty), TRUE)) {
-			logger_output_s("error incompatible operands for operator '%s' at %w\n", cc_expr_opname(op), &loc);
-			return NULL;
-		}
-	}
-	break;
-	case EXPR_ASSIGN_MUL:
-	case EXPR_ASSIGN_DIV:
-	{
-		if (!IsArith(lhs->_ty) || !IsArith(rhs->_ty))
-		{
-			logger_output_s("error arithmetic operands is expected for '%s', at %w\n", cc_expr_opname(op), &loc);
-			return NULL;
-		}
-
-		rhs = cc_expr_cast(ctx, lhs->_ty, rhs, where);
-	}
-	break;
-	case EXPR_ASSIGN_MOD:
-	{
-		if (!IsInt(lhs->_ty) || !IsInt(rhs->_ty))
-		{
-			logger_output_s("error arithmetic operands is expected for '%s', at %w\n", cc_expr_opname(op), &loc);
-			return NULL;
-		}
-
-		rhs = cc_expr_cast(ctx, lhs->_ty, rhs, where);
-	}
-	break;
-	case EXPR_ASSIGN_ADD:
-	case EXPR_ASSIGN_SUB:
-	{
-		if (IsArith(lhs->_ty) && IsArith(rhs->_ty))
-		{
-			rhs = cc_expr_cast(ctx, lhs->_ty, rhs, where);
-		}
-		else if (IsPtr(lhs->_ty) && IsInt(rhs->_ty))
-		{
-			if (lhs->_ty->_type->_size == 0 && !IsVoid(lhs->_ty->_type)) {
-				logger_output_s("error: unknown %t size at %w\n", lhs->_ty->_type, &loc);
-				return NULL;
-			}
-
-			rhs = cc_expr_cast(ctx, gbuiltintypes._sinttype, rhs, where);
-		}
-		else
-		{
-			logger_output_s("error: invalid operand for '%s' at %w\n", cc_expr_opname(op), &loc);
-			return NULL;
-		}
-	}
-	break;
-	case EXPR_ASSIGN_LSHIFT:
-	case EXPR_ASSIGN_RSHIFT:
-	case EXPR_ASSIGN_BITAND:
-	case EXPR_ASSIGN_BITXOR:
-	case EXPR_ASSIGN_BITOR:
-	{
-		if (IsInt(lhs->_ty) && IsInt(rhs->_ty))
-		{
-			rhs = cc_expr_cast(ctx, gbuiltintypes._sinttype, rhs, where);
-		}
-		else
-		{
-			logger_output_s("error: invalid operand for '%s' at %w\n", cc_expr_opname(op), &loc);
-			return NULL;
-		}
-	}
-	break;
-	default:
-		assert(0); break;
-	}
-
-	if (!(tree = cc_expr_new(where))) {
-		return FALSE;
-	}
-
-	tree->_op = op;
-	tree->_loc = loc;
-	tree->_ty = lhs->_ty;
-	tree->_u._kids[0] = lhs;
-	tree->_u._kids[1] = rhs;
-
-	return tree;
 }
 
 BOOL cc_expr_parse_assignment(FCCContext* ctx, FCCIRTree** outexpr, enum EMMArea where)
@@ -1649,59 +1373,86 @@ BOOL cc_expr_parse_assignment(FCCContext* ctx, FCCIRTree** outexpr, enum EMMArea
 	tree = lhs;
 	if (cc_parser_is_assign(ctx->_currtk._type))
 	{
-		enum EExprOp op;
+		enum ECCToken assigntk = ctx->_currtk._type;
+		FCCType *ty;
 
 		loc = ctx->_currtk._loc;
-		switch (ctx->_currtk._type)
-		{
-		case TK_ASSIGN: op = EXPR_ASSIGN; break;
-		case TK_MUL_ASSIGN: op = EXPR_ASSIGN_MUL; break;
-		case TK_DIV_ASSIGN: op = EXPR_ASSIGN_DIV; break;
-		case TK_MOD_ASSIGN: op = EXPR_ASSIGN_MOD; break;
-		case TK_ADD_ASSIGN: op = EXPR_ASSIGN_ADD; break;
-		case TK_SUB_ASSIGN: op = EXPR_ASSIGN_SUB; break;
-		case TK_LSHIFT_ASSIGN: op = EXPR_ASSIGN_LSHIFT; break;
-		case TK_RSHIFT_ASSIGN: op = EXPR_ASSIGN_RSHIFT; break;
-		case TK_BITAND_ASSIGN: op = EXPR_ASSIGN_BITAND; break;
-		case TK_BITXOR_ASSIGN: op = EXPR_ASSIGN_BITXOR; break;
-		case TK_BITOR_ASSIGN: op = EXPR_ASSIGN_BITOR; break;
-		default: assert(0); break;
-		}
-
 		if (!cc_expr_parse_assignment(ctx, &rhs, where)) {
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_assignment(ctx, op, lhs, rhs, loc, where))) {
+		if (!cc_expr_is_modifiable(lhs)) {
+			logger_output_s("error: assign to an un-modifiable object at %w\n", &loc);
 			return FALSE;
 		}
 
-	}
+		if (!(IsInt(lhs->_ty) && IsInt(rhs->_ty)) && assigntk == TK_MOD_ASSIGN) {
+			logger_output_s("error: illegal operands for '%%=' '%t'%='%t' at %w\n", lhs->_ty, rhs->_ty, &loc);
+			return FALSE;
+		}
+
+		rhs = cc_expr_adjust(rhs, where);
+		ty = cc_expr_assigntype(lhs->_ty, rhs);
+		if (ty) {
+			rhs = cc_expr_cast(ty, rhs, &loc, where);
+		}
+		else {
+			logger_output_s("error: can't assign to different type operands '%t' = '%t' at %w\n", lhs->_ty, rhs->_ty, &loc);
+			return FALSE;
+		}
+
+		switch (assigntk)
+		{
+		case TK_ASSIGN:
+			tree = cc_expr_assign(ty, lhs, rhs, &loc, where);
+			break;
+		case TK_MUL_ASSIGN:
+			tree = cc_expr_mul(ty, lhs, rhs, &loc, where);
+			tree = cc_expr_seq(ty, tree, cc_expr_assign(ty, lhs, tree, &loc, where), &loc, where);
+			break;
+		case TK_DIV_ASSIGN:
+			tree = cc_expr_div(ty, lhs, rhs, &loc, where);
+			tree = cc_expr_seq(ty, tree, cc_expr_assign(ty, lhs, tree, &loc, where), &loc, where);
+			break;
+		case TK_MOD_ASSIGN:
+			tree = cc_expr_mod(ty, lhs, rhs, &loc, where);
+			tree = cc_expr_seq(ty, tree, cc_expr_assign(ty, lhs, tree, &loc, where), &loc, where);
+			break;
+		case TK_ADD_ASSIGN:
+			tree = cc_expr_add(ty, lhs, rhs, &loc, where);
+			tree = cc_expr_seq(ty, tree, cc_expr_assign(ty, lhs, tree, &loc, where), &loc, where);
+			break;
+		case TK_SUB_ASSIGN:
+			tree = cc_expr_sub(ty, lhs, rhs, &loc, where);
+			tree = cc_expr_seq(ty, tree, cc_expr_assign(ty, lhs, tree, &loc, where), &loc, where);
+			break;
+		case TK_LSHIFT_ASSIGN:
+			tree = cc_expr_lshift(ty, lhs, rhs, &loc, where);
+			tree = cc_expr_seq(ty, tree, cc_expr_assign(ty, lhs, tree, &loc, where), &loc, where);
+			break;
+		case TK_RSHIFT_ASSIGN:
+			tree = cc_expr_rshift(ty, lhs, rhs, &loc, where);
+			tree = cc_expr_seq(ty, tree, cc_expr_assign(ty, lhs, tree, &loc, where), &loc, where);
+			break;
+		case TK_BITAND_ASSIGN:
+			tree = cc_expr_bitand(ty, lhs, rhs, &loc, where);
+			tree = cc_expr_seq(ty, tree, cc_expr_assign(ty, lhs, tree, &loc, where), &loc, where);
+			break;
+		case TK_BITXOR_ASSIGN:
+			tree = cc_expr_bitxor(ty, lhs, rhs, &loc, where);
+			tree = cc_expr_seq(ty, tree, cc_expr_assign(ty, lhs, tree, &loc, where), &loc, where);
+			break;
+		case TK_BITOR_ASSIGN:
+			tree = cc_expr_bitor(ty, lhs, rhs, &loc, where);
+			tree = cc_expr_seq(ty, tree, cc_expr_assign(ty, lhs, tree, &loc, where), &loc, where);
+			break;
+		}
+
+		if (!tree) { return FALSE; }
+	} /* end if */
 
 	*outexpr = tree;
 	return TRUE;
-}
-
-static FCCIRTree* cc_expr_comma(FCCContext* ctx, int op, FCCIRTree* lhs, FCCIRTree* rhs, FLocation loc, enum EMMArea where)
-{
-	FCCIRTree* tree;
-
-	if (lhs->_op == EXPR_CONSTANT && rhs->_op == EXPR_CONSTANT)
-	{
-		return rhs;
-	}
-
-	if (!(tree = cc_expr_new(where))) {
-		return FALSE;
-	}
-
-	tree->_op = op;
-	tree->_loc = loc;
-	tree->_ty = rhs->_ty;
-	tree->_u._kids[0] = lhs;
-	tree->_u._kids[1] = rhs;
-
-	return tree;
 }
 
 BOOL cc_expr_parse_expression(FCCContext* ctx, FCCIRTree** outexpr, enum EMMArea where)
@@ -1723,7 +1474,7 @@ BOOL cc_expr_parse_expression(FCCContext* ctx, FCCIRTree** outexpr, enum EMMArea
 			return FALSE;
 		}
 
-		if (!(tree = cc_expr_comma(ctx, EXPR_COMMA, lhs, rhs, loc, where))) {
+		if (!(tree = cc_expr_seq(rhs->_ty, lhs, rhs, &loc, where))) {
 			return FALSE;
 		}
 
@@ -1736,7 +1487,7 @@ BOOL cc_expr_parse_expression(FCCContext* ctx, FCCIRTree** outexpr, enum EMMArea
 
 BOOL cc_expr_parse_constant_expression(FCCContext* ctx, FCCIRTree** outexpr, enum EMMArea where)
 {
-	if (cc_expr_parse_conditional(ctx, outexpr, where) && (*outexpr)->_isconstant)
+	if (cc_expr_parse_conditional(ctx, outexpr, where) && cc_expr_is_constant(*outexpr))
 	{
 		return TRUE;
 	}
@@ -1858,6 +1609,38 @@ BOOL cc_expr_is_nullptr(FCCIRTree* expr)
 			|| (IsVoidptr(ty) && expr->_u._val._pointer == 0));
 }
 
+BOOL cc_expr_is_constant(FCCIRTree* expr)
+{
+	/* 1. address of static storage object's
+	 * 2. constant value
+	 * 3. no type cast with size-change
+	 * 4. + -
+	 */
+
+	int ircode = IR_OP(expr->_op);
+	switch (ircode)
+	{
+	case IR_ADDRG:
+	case IR_CONST:
+		return TRUE;
+	case IR_ADD:
+	case IR_SUB:
+		return cc_expr_is_constant(expr->_u._kids[0]) && cc_expr_is_constant(expr->_u._kids[1]);
+	case IR_CVT:
+		if (IsPtr(expr->_u._kids[0]->_ty) && IsInt(expr->_ty) && expr->_ty->_size == gbuiltintypes._ptrvoidtype->_size
+			|| IsPtr(expr->_ty) && IsInt(expr->_u._kids[0]->_ty) && expr->_u._kids[0]->_ty->_size == gbuiltintypes._ptrvoidtype->_size
+			|| IsInt(expr->_ty) && IsInt(expr->_u._kids[0]->_ty) && expr->_u._kids[0]->_ty->_size == expr->_ty->_size)
+		{
+			return TRUE;
+		}
+		break;
+	default:
+		break;
+	}
+
+	return FALSE;
+}
+
 /* ----------------------------------------------------------------------------------- */
 FCCIRTree* cc_expr_change_rettype(FCCIRTree* expr, FCCType* newty, enum EMMArea where)
 {
@@ -1874,7 +1657,7 @@ FCCIRTree* cc_expr_change_rettype(FCCIRTree* expr, FCCType* newty, enum EMMArea 
 	}
 
 	*tree = *expr;
-	tree->_op = IR_MKOP2(IR_OP(tree->_op), tycode, IR_OP1(tree->_op));
+	tree->_op = IR_MKOP2(IR_OP(tree->_op), tycode, IR_OPTY1(tree->_op));
 	tree->_ty = newty;
 	return tree;
 }
@@ -1897,7 +1680,7 @@ FCCIRTree* cc_expr_adjust(FCCIRTree* expr, enum EMMArea where)
 			return NULL;
 		}
 
-		expr = cc_expr_addr(expr, NULL, where);
+		expr = cc_expr_adjust(expr, where);
 	} else if (IsArray(expr->_ty)) {
 		expr = cc_expr_change_rettype(expr, cc_type_arraytoptr(expr->_ty), where);
 	} else if (IsFunction(expr->_ty)) {
@@ -2001,7 +1784,7 @@ FCCIRTree* cc_expr_constant(FCCType* ty, int tycode, FLocation* loc, enum EMMAre
 	case IR_U64: tree->_u._val._uint = va_arg(arg, uint64_t); break;
 	case IR_F32: tree->_u._val._float = va_arg(arg, float); break;
 	case IR_F64: tree->_u._val._float = va_arg(arg, double); break;
-	case IR_PTR: tree->_u._val._pointer = va_arg(arg, uint64_t); break;
+	case IR_PTR: tree->_u._val._pointer = va_arg(arg, uint32_t); break;
 	case IR_STRA:
 	case IR_STRW:
 		tree->_u._val._payload = va_arg(arg, void*); break;
@@ -2078,7 +1861,7 @@ static FCCIRTree* cc_expr_cast_constant(FCCType* ty, FCCIRTree* expr, FLocation*
 		XX_CAST_CNST(double);
 		break;
 	case IR_PTR:
-		XX_CAST_CNST(uint64_t);
+		XX_CAST_CNST(uint32_t);
 		break;
 	default:
 		break;
@@ -2103,12 +1886,14 @@ FCCIRTree* cc_expr_cast(FCCType* ty, FCCIRTree* expr, FLocation* loc, enum EMMAr
 		return NULL;
 	}
 
-	if (IsPtr(expr->_ty) && IsPtr(ty)) {
-		return cc_expr_change_rettype(expr, ty, where);
-	}
-
 	if (IR_OP(expr->_op) == IR_CONST) {
 		return cc_expr_cast_constant(ty, expr, loc, where);
+	}
+	if (!(expr = cc_expr_value(expr, where))) {
+		return NULL;
+	}
+	if (IsPtr(expr->_ty) && IsPtr(ty)) {
+		return cc_expr_change_rettype(expr, ty, where);
 	}
 
 	if (!(tree = cc_expr_new(where))) {
@@ -2125,35 +1910,302 @@ FCCIRTree* cc_expr_cast(FCCType* ty, FCCIRTree* expr, FLocation* loc, enum EMMAr
 	return tree;
 }
 
+static BOOL cc_expr_iszero(FCCIRTree* lhs)
+{
+	int tycode = cc_ir_typecode(lhs->_ty);
+
+	switch (tycode)	
+	{
+	case IR_S8:
+	case IR_S16:
+	case IR_S32:
+	case IR_S64:
+		return lhs->_u._val._sint == 0;
+	case IR_U8:	
+	case IR_U16:
+	case IR_U32:
+	case IR_U64:
+		return lhs->_u._val._uint == 0u;
+	case IR_F32:
+	case IR_F64:
+		return lhs->_u._val._float == 0.0;
+	case IR_PTR:			\
+		return lhs->_u._val._pointer == 0;
+	default:
+		assert(0); break;
+	}
+
+	return FALSE;
+}
+
+static FCCIRTree* cc_fold_constant(int op, FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
+{
+	/* begin define */
+	#define XX_CALC_CNST(tycode, op)\
+		switch (tycode)			\
+		{						\
+		case IR_S8:				\
+		case IR_S16:			\
+		case IR_S32:			\
+		case IR_S64:			\
+			ivalue = lhs->_u._val._sint op rhs->_u._val._sint;	break;\
+		case IR_U8:				\
+		case IR_U16:			\
+		case IR_U32:			\
+		case IR_U64:			\
+			uvalue = lhs->_u._val._uint op rhs->_u._val._uint;	break;\
+		case IR_F32:			\
+		case IR_F64:			\
+			fvalue = lhs->_u._val._float op rhs->_u._val._float; break;\
+		case IR_PTR:			\
+			pvalue = lhs->_u._val._pointer op (uint32_t)(rhs->_u._val._uint); break;\
+		default:				\
+			assert(0); break;	\
+		}
+
+	#define XX_CALC_CNST_MOD(tycode)\
+		switch (tycode)			\
+		{						\
+		case IR_S8:				\
+		case IR_S16:			\
+		case IR_S32:			\
+		case IR_S64:			\
+			ivalue = lhs->_u._val._sint % rhs->_u._val._sint;	break;\
+		case IR_U8:				\
+		case IR_U16:			\
+		case IR_U32:			\
+		case IR_U64:			\
+			uvalue = lhs->_u._val._uint % rhs->_u._val._uint;	break;\
+		default:	\
+			assert(0); break;	\
+		}
+	/* end define */
+
+	int64_t ivalue;
+	uint64_t uvalue;
+	double fvalue;
+	uint32_t pvalue;
+
+	int tycode = cc_ir_typecode(ty);
+	switch (op)
+	{
+	case '+':
+		XX_CALC_CNST(tycode, +);
+		break;
+	case '-':
+		XX_CALC_CNST(tycode, -);
+		break;
+	case '*':
+		XX_CALC_CNST(tycode, *);
+		break;
+	case '/':
+		XX_CALC_CNST(tycode, /);
+		break;
+	case '%':
+		XX_CALC_CNST_MOD(tycode);
+		break;
+	}
+
+	switch (tycode)	
+	{
+	case IR_S8:	
+		return cc_expr_constant(ty, tycode, loc, where, (int8_t)ivalue);
+	case IR_S16:
+		return cc_expr_constant(ty, tycode, loc, where, (int16_t)ivalue);
+	case IR_S32:
+		return cc_expr_constant(ty, tycode, loc, where, (int32_t)ivalue);
+	case IR_S64:
+		return cc_expr_constant(ty, tycode, loc, where, (int64_t)ivalue);
+	case IR_U8:
+		return cc_expr_constant(ty, tycode, loc, where, (uint8_t)uvalue);
+	case IR_U16:
+		return cc_expr_constant(ty, tycode, loc, where, (uint16_t)uvalue);
+	case IR_U32:
+		return cc_expr_constant(ty, tycode, loc, where, (uint32_t)uvalue);
+	case IR_U64:
+		return cc_expr_constant(ty, tycode, loc, where, (uint64_t)uvalue);
+	case IR_F32:
+		return cc_expr_constant(ty, tycode, loc, where, (float)fvalue);
+	case IR_F64:
+		return cc_expr_constant(ty, tycode, loc, where, (double)fvalue);
+	case IR_PTR:
+		return cc_expr_constant(ty, tycode, loc, where, (uint32_t)pvalue);
+	default:
+		assert(0); break;
+	}
+
+	return NULL;
+
+#undef XX_CALC_CNST
+#undef XX_CALC_CNST_MOD
+}
+
 FCCIRTree* cc_expr_add(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
 {
-	return NULL;
+	FCCIRTree* tree;
+	int code0, code1;
+
+	if (IR_OP(lhs->_op) == IR_CONST && IR_OP(rhs->_op) == IR_CONST) {
+		return cc_fold_constant('+', ty, lhs, rhs, loc, where);
+	}
+	if (IR_OP(rhs->_op) == IR_CONST)
+	{
+		if (IR_OP(lhs->_op) == IR_ADD) {
+			FCCIRTree* llhs = lhs->_u._kids[0];
+			FCCIRTree* lrhs = lhs->_u._kids[1];
+			if (IR_OP(lrhs->_op) == IR_CONST) {
+				lrhs = cc_expr_add(lrhs->_ty, lrhs, cc_expr_cast(lrhs->_ty, rhs, loc, where), loc, where);
+				return cc_expr_add(ty, llhs, lrhs, loc, where);
+			}
+		}
+		else if (IR_OP(lhs->_op) == IR_SUB) {
+			FCCIRTree* llhs = lhs->_u._kids[0];
+			FCCIRTree* lrhs = lhs->_u._kids[1];
+			if (IR_OP(lrhs->_op) == IR_CONST) {
+				lrhs = cc_expr_sub(lrhs->_ty, cc_expr_cast(lrhs->_ty, rhs, loc, where), lrhs, loc, where);
+				return cc_expr_add(ty, llhs, lrhs, loc, where);
+			}
+		}
+	}
+
+	if (!(lhs = cc_expr_value(lhs, where))) { return NULL; }
+	if (!(rhs = cc_expr_value(rhs, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+	
+	code0 = cc_ir_typecode(ty);
+	code1 = cc_ir_typecode(rhs->_ty);
+	tree->_op = IR_MKOP2(IR_ADD, code0, code0);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : lhs->_loc;
+	tree->_u._kids[0] = lhs;
+	tree->_u._kids[1] = rhs;
+
+	return tree;
 }
 
 FCCIRTree* cc_expr_sub(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
 {
-	return NULL;
+	FCCIRTree* tree;
+	int code0, code1;
+
+	if (IR_OP(lhs->_op) == IR_CONST && IR_OP(rhs->_op) == IR_CONST) {
+		return cc_fold_constant('-', ty, lhs, rhs, loc, where);
+	}
+	if (IR_OP(rhs->_op) == IR_CONST)
+	{
+		if (IR_OP(lhs->_op) == IR_ADD) {
+			FCCIRTree* llhs = lhs->_u._kids[0];
+			FCCIRTree* lrhs = lhs->_u._kids[1];
+			if (IR_OP(lrhs->_op) == IR_CONST) {
+				lrhs = cc_expr_sub(lrhs->_ty, lrhs, cc_expr_cast(lrhs->_ty, rhs, loc, where), loc, where);
+				return cc_expr_add(ty, llhs, lrhs, loc, where);
+			}
+		}
+		else if (IR_OP(lhs->_op) == IR_SUB) {
+			FCCIRTree* llhs = lhs->_u._kids[0];
+			FCCIRTree* lrhs = lhs->_u._kids[1];
+			if (IR_OP(lrhs->_op) == IR_CONST) {
+				lrhs = cc_expr_add(lrhs->_ty, lrhs, cc_expr_cast(lrhs->_ty, rhs, loc, where), loc, where);
+				return cc_expr_sub(ty, llhs, lrhs, loc, where);
+			}
+		}
+	}
+
+	if (!(lhs = cc_expr_value(lhs, where))) { return NULL; }
+	if (!(rhs = cc_expr_value(rhs, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+
+	code0 = cc_ir_typecode(ty);
+	code1 = cc_ir_typecode(rhs->_ty);
+	tree->_op = IR_MKOP2(IR_SUB, code0, code0);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : lhs->_loc;
+	tree->_u._kids[0] = lhs;
+	tree->_u._kids[1] = rhs;
+
+	return tree;
 }
 
 FCCIRTree* cc_expr_mul(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
 {
-	return NULL;
+	FCCIRTree* tree;
+	int code0, code1;
+
+	if (IR_OP(lhs->_op) == IR_CONST && IR_OP(rhs->_op) == IR_CONST) {
+		return cc_fold_constant('*', ty, lhs, rhs, loc, where);
+	}
+
+	if (!(lhs = cc_expr_value(lhs, where))) { return NULL; }
+	if (!(rhs = cc_expr_value(rhs, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+
+	code0 = code1 = cc_ir_typecode(ty);
+	tree->_op = IR_MKOP2(IR_MUL, code0, code0);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : lhs->_loc;
+	tree->_u._kids[0] = lhs;
+	tree->_u._kids[1] = rhs;
+
+	return tree;
 }
 
 FCCIRTree* cc_expr_div(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
 {
-	return NULL;
+	FCCIRTree* tree;
+	int code0, code1;
+
+	if (IR_OP(lhs->_op) == IR_CONST && IR_OP(rhs->_op) == IR_CONST) {
+		if (cc_expr_iszero(rhs)) {
+			logger_output_s("error: divisor is 0 at %w\n", loc);
+			return NULL;
+		}
+		return cc_fold_constant('/', ty, lhs, rhs, loc, where);
+	}
+
+	if (!(lhs = cc_expr_value(lhs, where))) { return NULL; }
+	if (!(rhs = cc_expr_value(rhs, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+
+	code0 = code1 = cc_ir_typecode(ty);
+	tree->_op = IR_MKOP2(IR_DIV, code0, code0);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : lhs->_loc;
+	tree->_u._kids[0] = lhs;
+	tree->_u._kids[1] = rhs;
+
+	return tree;
 }
 
 FCCIRTree* cc_expr_mod(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
 {
+	FCCIRTree* tree;
+	int code0, code1;
+
 	if (!IsInt(ty))
 	{
 		logger_output_s("error integer operands is expected for '%', at %w\n", loc);
 		return NULL;
 	}
+	if (IR_OP(lhs->_op) == IR_CONST && IR_OP(rhs->_op) == IR_CONST) {
+		if (cc_expr_iszero(rhs)) {
+			logger_output_s("error: divisor is 0 at %w\n", loc);
+			return NULL;
+		}
+		return cc_fold_constant('%', ty, lhs, rhs, loc, where);
+	}
 
-	return NULL;
+	if (!(lhs = cc_expr_value(lhs, where))) { return NULL; }
+	if (!(rhs = cc_expr_value(rhs, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+
+	code0 = code1 = cc_ir_typecode(ty);
+	tree->_op = IR_MKOP2(IR_MOD, code0, code0);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : lhs->_loc;
+	tree->_u._kids[0] = lhs;
+	tree->_u._kids[1] = rhs;
+
+	return tree;
 }
 
 static BOOL cc_expr_checkarguments(FCCType* functy, FCCIRTree** args, enum EMMArea where)
@@ -2185,6 +2237,7 @@ static BOOL cc_expr_checkarguments(FCCType* functy, FCCIRTree** args, enum EMMAr
 			return FALSE;
 		}
 
+		args[k] = cc_expr_value(args[k], where);
 		args[k] = cc_expr_cast(ty, args[k], NULL, where);
 		if (IsInt(args[k]->_ty)
 			&& args[k]->_ty->_size != gbuiltintypes._sinttype->_size)
@@ -2203,91 +2256,932 @@ static BOOL cc_expr_checkarguments(FCCType* functy, FCCIRTree** args, enum EMMAr
 
 FCCIRTree* cc_expr_call(FCCType* fty, FCCIRTree* expr, FArray* args, FLocation* loc, enum EMMArea where)
 {
+	FCCIRTree* tree;
+	int code0;
+
 	/* check arguments */
 	if (!cc_expr_checkarguments(fty, args->_data, where)) {
 		logger_output_s("error: function parameters checking failed at %w\n", &loc);
 		return NULL;
 	}
 
-	return NULL;
+	if (!(tree = cc_expr_new(where))) {
+		return NULL;
+	}
+
+	code0 = cc_ir_typecode(fty);
+	tree->_op = IR_MKOP1(IR_CALL, code0);
+	tree->_ty = fty;
+	tree->_loc = loc ? *loc : expr->_loc;
+	tree->_u._f._lhs = expr;
+	tree->_u._f._args = args->_data;
+
+	return tree;
 }
 
 FCCIRTree* cc_expr_seq(FCCType* ty, FCCIRTree* expr0, FCCIRTree* expr1, FLocation* loc, enum EMMArea where)
 {
-	return NULL;
-}
+	FCCIRTree* tree;
+	int code0;
 
-FCCIRTree* cc_expr_assign(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
-{
-	return NULL;
+	if (!(tree = cc_expr_new(where))) {
+		return NULL;
+	}
+
+	code0 = cc_ir_typecode(ty);
+	tree->_op = IR_MKOP1(IR_SEQ, code0);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : expr1->_loc;
+	tree->_u._kids[0] = expr0;
+	tree->_u._kids[1] = expr1;
+
+	return tree;
 }
 
 FCCIRTree* cc_expr_neg(FCCType* ty, FCCIRTree* expr, FLocation* loc, enum EMMArea where)
 {
-	return NULL;
+	FCCIRTree* tree;
+	int tycode;
+
+	tycode = cc_ir_typecode(ty);
+	if (IR_OP(expr->_op) == IR_CONST)
+	{
+		switch (tycode)
+		{
+		case IR_S8:
+			return cc_expr_constant(ty, tycode, loc, where, (int8_t)(-expr->_u._val._sint));
+		case IR_S16:
+			return cc_expr_constant(ty, tycode, loc, where, (int16_t)(-expr->_u._val._sint));
+		case IR_S32:
+			return cc_expr_constant(ty, tycode, loc, where, (int32_t)(-expr->_u._val._sint));
+		case IR_S64:
+			return cc_expr_constant(ty, tycode, loc, where, (int64_t)(-expr->_u._val._sint));
+		case IR_U8:
+			return cc_expr_constant(ty, tycode, loc, where, (uint8_t)(-(int64_t)expr->_u._val._uint));
+		case IR_U16:
+			return cc_expr_constant(ty, tycode, loc, where, (uint16_t)(-(int64_t)expr->_u._val._uint));
+		case IR_U32:
+			return cc_expr_constant(ty, tycode, loc, where, (uint32_t)(-(int64_t)expr->_u._val._uint));
+		case IR_U64:
+			return cc_expr_constant(ty, tycode, loc, where, (uint64_t)(-(int64_t)expr->_u._val._uint));
+		case IR_F32:
+			return cc_expr_constant(ty, tycode, loc, where, (float)(-expr->_u._val._float));
+		case IR_F64:
+			return cc_expr_constant(ty, tycode, loc, where, (double)(-expr->_u._val._float));
+		case IR_PTR:
+			return cc_expr_constant(ty, tycode, loc, where, (uint32_t)(-(int32_t)expr->_u._val._pointer));
+		default:
+			assert(0); break;
+		}
+	}
+
+	if (!(expr = cc_expr_value(expr, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+
+	tree->_op = IR_MKOP1(IR_NEG, tycode);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : expr->_loc;
+	tree->_u._kids[0] = expr;
+
+	return tree;
 }
 
 FCCIRTree* cc_expr_bitcom(FCCType* ty, FCCIRTree* expr, FLocation* loc, enum EMMArea where)
 {
-	return NULL;
+	FCCIRTree* tree;
+	int tycode;
+
+	tycode = cc_ir_typecode(ty);
+	if (IR_OP(expr->_op) == IR_CONST)
+	{
+		switch (tycode)
+		{
+		case IR_S8:
+			return cc_expr_constant(ty, tycode, loc, where, (int8_t)(~expr->_u._val._sint));
+		case IR_S16:
+			return cc_expr_constant(ty, tycode, loc, where, (int16_t)(~expr->_u._val._sint));
+		case IR_S32:
+			return cc_expr_constant(ty, tycode, loc, where, (int32_t)(~expr->_u._val._sint));
+		case IR_S64:
+			return cc_expr_constant(ty, tycode, loc, where, (int64_t)(~expr->_u._val._sint));
+		case IR_U8:
+			return cc_expr_constant(ty, tycode, loc, where, (uint8_t)(~expr->_u._val._uint));
+		case IR_U16:
+			return cc_expr_constant(ty, tycode, loc, where, (uint16_t)(~expr->_u._val._uint));
+		case IR_U32:
+			return cc_expr_constant(ty, tycode, loc, where, (uint32_t)(~expr->_u._val._uint));
+		case IR_U64:
+			return cc_expr_constant(ty, tycode, loc, where, (uint64_t)(~expr->_u._val._uint));
+		default:
+			assert(0); break;
+		}
+	}
+
+	if (!(expr = cc_expr_value(expr, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+
+	tree->_op = IR_MKOP1(IR_BCOM, tycode);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : expr->_loc;
+	tree->_u._kids[0] = expr;
+
+	return tree;
 }
 
 FCCIRTree* cc_expr_not(FCCType* ty, FCCIRTree* expr, FLocation* loc, enum EMMArea where)
 {
-	return NULL;
+	FCCIRTree* tree;
+	int tycode;
+
+	tycode = cc_ir_typecode(ty);
+	if (IR_OP(expr->_op) == IR_CONST)
+	{
+		switch (IR_OPTY0(expr->_op))
+		{
+		case IR_S8:
+		case IR_S16:
+		case IR_S32:
+		case IR_S64:
+			return cc_expr_constant(ty, tycode, loc, where, (int32_t)(!expr->_u._val._sint));
+		case IR_U8:
+		case IR_U16:
+		case IR_U32:
+		case IR_U64:
+			return cc_expr_constant(ty, tycode, loc, where, (int32_t)(!expr->_u._val._uint));
+		case IR_F32:
+		case IR_F64:
+			return cc_expr_constant(ty, tycode, loc, where, (int32_t)(!expr->_u._val._float));
+		case IR_PTR:
+			return cc_expr_constant(ty, tycode, loc, where, (int32_t)(!expr->_u._val._pointer));
+		default:
+			assert(0); break;
+		}
+	}
+
+	if (!(expr = cc_expr_value(expr, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+
+	tree->_op = IR_MKOP1(IR_NOT, tycode);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : expr->_loc;
+	tree->_u._kids[0] = expr;
+
+	return tree;
 }
 
 FCCIRTree* cc_expr_lshift(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
 {
-	return NULL;
+	FCCIRTree* tree;
+	int code0, code1;
+
+	code0 = cc_ir_typecode(ty);
+	code1 = cc_ir_typecode(rhs->_ty);
+	if (IR_OP(lhs->_op) == IR_CONST && IR_OP(rhs->_op) == IR_CONST)
+	{
+		switch (code0)
+		{
+		case IR_S8:
+			return cc_expr_constant(ty, code0, loc, where, (int8_t)(lhs->_u._val._sint << rhs->_u._val._sint));
+		case IR_S16:
+			return cc_expr_constant(ty, code0, loc, where, (int16_t)(lhs->_u._val._sint << rhs->_u._val._sint));
+		case IR_S32:
+			return cc_expr_constant(ty, code0, loc, where, (int32_t)(lhs->_u._val._sint << rhs->_u._val._sint));
+		case IR_S64:
+			return cc_expr_constant(ty, code0, loc, where, (int64_t)(lhs->_u._val._sint << rhs->_u._val._sint));
+		case IR_U8:
+			return cc_expr_constant(ty, code0, loc, where, (uint8_t)(lhs->_u._val._uint << rhs->_u._val._sint));
+		case IR_U16:
+			return cc_expr_constant(ty, code0, loc, where, (uint16_t)(lhs->_u._val._uint << rhs->_u._val._sint));
+		case IR_U32:
+			return cc_expr_constant(ty, code0, loc, where, (uint32_t)(lhs->_u._val._uint << rhs->_u._val._sint));
+		case IR_U64:
+			return cc_expr_constant(ty, code0, loc, where, (uint64_t)(lhs->_u._val._uint << rhs->_u._val._sint));
+		default:
+			assert(0); break;
+		}
+	}
+
+	if (!(lhs = cc_expr_value(lhs, where))) { return NULL; }
+	if (!(rhs = cc_expr_value(rhs, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+
+	tree->_op = IR_MKOP2(IR_LSHIFT, code0, code1);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : lhs->_loc;
+	tree->_u._kids[0] = lhs;
+	tree->_u._kids[1] = rhs;
+
+	return tree;
 }
 
 FCCIRTree* cc_expr_rshift(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
 {
+	FCCIRTree* tree;
+	int code0, code1;
+
+	code0 = cc_ir_typecode(ty);
+	code1 = cc_ir_typecode(rhs->_ty);
+	if (IR_OP(lhs->_op) == IR_CONST && IR_OP(rhs->_op) == IR_CONST)
+	{
+		switch (code0)
+		{
+		case IR_S8:
+			return cc_expr_constant(ty, code0, loc, where, (int8_t)(lhs->_u._val._sint >> rhs->_u._val._sint));
+		case IR_S16:
+			return cc_expr_constant(ty, code0, loc, where, (int16_t)(lhs->_u._val._sint >> rhs->_u._val._sint));
+		case IR_S32:
+			return cc_expr_constant(ty, code0, loc, where, (int32_t)(lhs->_u._val._sint >> rhs->_u._val._sint));
+		case IR_S64:
+			return cc_expr_constant(ty, code0, loc, where, (int64_t)(lhs->_u._val._sint >> rhs->_u._val._sint));
+		case IR_U8:
+			return cc_expr_constant(ty, code0, loc, where, (uint8_t)(lhs->_u._val._uint >> rhs->_u._val._sint));
+		case IR_U16:
+			return cc_expr_constant(ty, code0, loc, where, (uint16_t)(lhs->_u._val._uint >> rhs->_u._val._sint));
+		case IR_U32:
+			return cc_expr_constant(ty, code0, loc, where, (uint32_t)(lhs->_u._val._uint >> rhs->_u._val._sint));
+		case IR_U64:
+			return cc_expr_constant(ty, code0, loc, where, (uint64_t)(lhs->_u._val._uint >> rhs->_u._val._sint));
+		default:
+			assert(0); break;
+		}
+	}
+
+	if (!(lhs = cc_expr_value(lhs, where))) { return NULL; }
+	if (!(rhs = cc_expr_value(rhs, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+
+	tree->_op = IR_MKOP2(IR_RSHIFT, code0, code1);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : lhs->_loc;
+	tree->_u._kids[0] = lhs;
+	tree->_u._kids[1] = rhs;
+
+	return tree;
+}
+
+static FCCIRTree* cc_fold_constant2(int op, FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
+{
+	/* begin define */
+	#define XX_CALC_CNST(op)\
+		switch (code1)			\
+		{						\
+		case IR_S8:				\
+		case IR_S16:			\
+		case IR_S32:			\
+		case IR_S64:			\
+			return cc_expr_constant(ty, code0, loc, where, (int32_t)(lhs->_u._val._sint op rhs->_u._val._sint)); \
+		case IR_U8:				\
+		case IR_U16:			\
+		case IR_U32:			\
+		case IR_U64:			\
+			return cc_expr_constant(ty, code0, loc, where, (int32_t)(lhs->_u._val._uint op rhs->_u._val._uint)); \
+		case IR_F32:			\
+		case IR_F64:			\
+			return cc_expr_constant(ty, code0, loc, where, (int32_t)(lhs->_u._val._float op rhs->_u._val._float)); \
+		case IR_PTR:			\
+			return cc_expr_constant(ty, code0, loc, where, (int32_t)(lhs->_u._val._pointer op rhs->_u._val._pointer)); \
+		default:				\
+			assert(0); break;	\
+		}
+	/* end define */
+
+	int code0, code1;
+
+	code0 = cc_ir_typecode(ty);
+	code1 = cc_ir_typecode(lhs->_ty);
+	
+	switch (op)
+	{
+	case '<':
+		XX_CALC_CNST(<);
+		break;
+	case '<=':
+		XX_CALC_CNST(<=);
+		break;
+	case '>':
+		XX_CALC_CNST(>);
+		break;
+	case '>=':
+		XX_CALC_CNST(>=);
+		break;
+	case '==':
+		XX_CALC_CNST(==);
+		break;
+	case '!=':
+		XX_CALC_CNST(!=);
+		break;
+	}
+
+	assert(0);
 	return NULL;
+
+#undef XX_CALC_CNST
 }
 
 FCCIRTree* cc_expr_less(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
 {
-	return NULL;
+	FCCIRTree* tree;
+	int code0, code1;
+
+	code0 = cc_ir_typecode(ty);
+	code1 = cc_ir_typecode(lhs->_ty);
+	if (IR_OP(lhs->_op) == IR_CONST && IR_OP(rhs->_op) == IR_CONST)
+	{
+		return cc_fold_constant2('<', ty, lhs, rhs, loc, where);
+	}
+
+	if (!(lhs = cc_expr_value(lhs, where))) { return NULL; }
+	if (!(rhs = cc_expr_value(rhs, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+
+	tree->_op = IR_MKOP2(IR_LESS, code0, code1);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : lhs->_loc;
+	tree->_u._kids[0] = lhs;
+	tree->_u._kids[1] = rhs;
+
+	return tree;
 }
 
 FCCIRTree* cc_expr_lequal(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
 {
-	return NULL;
+	FCCIRTree* tree;
+	int code0, code1;
+
+	code0 = cc_ir_typecode(ty);
+	code1 = cc_ir_typecode(lhs->_ty);
+	if (IR_OP(lhs->_op) == IR_CONST && IR_OP(rhs->_op) == IR_CONST)
+	{
+		return cc_fold_constant2('<=', ty, lhs, rhs, loc, where);
+	}
+
+	if (!(lhs = cc_expr_value(lhs, where))) { return NULL; }
+	if (!(rhs = cc_expr_value(rhs, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+
+	tree->_op = IR_MKOP2(IR_LEQ, code0, code1);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : lhs->_loc;
+	tree->_u._kids[0] = lhs;
+	tree->_u._kids[1] = rhs;
+
+	return tree;
 }
 
 FCCIRTree* cc_expr_great(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
 {
-	return NULL;
+	FCCIRTree* tree;
+	int code0, code1;
+
+	code0 = cc_ir_typecode(ty);
+	code1 = cc_ir_typecode(lhs->_ty);
+	if (IR_OP(lhs->_op) == IR_CONST && IR_OP(rhs->_op) == IR_CONST)
+	{
+		return cc_fold_constant2('>', ty, lhs, rhs, loc, where);
+	}
+
+	if (!(lhs = cc_expr_value(lhs, where))) { return NULL; }
+	if (!(rhs = cc_expr_value(rhs, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+
+	tree->_op = IR_MKOP2(IR_GREAT, code0, code1);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : lhs->_loc;
+	tree->_u._kids[0] = lhs;
+	tree->_u._kids[1] = rhs;
+
+	return tree;
 }
 
 FCCIRTree* cc_expr_gequal(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
 {
-	return NULL;
+	FCCIRTree* tree;
+	int code0, code1;
+
+	code0 = cc_ir_typecode(ty);
+	code1 = cc_ir_typecode(lhs->_ty);
+	if (IR_OP(lhs->_op) == IR_CONST && IR_OP(rhs->_op) == IR_CONST)
+	{
+		return cc_fold_constant2('>=', ty, lhs, rhs, loc, where);
+	}
+
+	if (!(lhs = cc_expr_value(lhs, where))) { return NULL; }
+	if (!(rhs = cc_expr_value(rhs, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+
+	tree->_op = IR_MKOP2(IR_GEQ, code0, code1);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : lhs->_loc;
+	tree->_u._kids[0] = lhs;
+	tree->_u._kids[1] = rhs;
+
+	return tree;
 }
 
 FCCIRTree* cc_expr_equal(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
 {
-	return NULL;
+	FCCIRTree* tree;
+	int code0, code1;
+
+	code0 = cc_ir_typecode(ty);
+	code1 = cc_ir_typecode(lhs->_ty);
+	if (IR_OP(lhs->_op) == IR_CONST && IR_OP(rhs->_op) == IR_CONST)
+	{
+		return cc_fold_constant2('==', ty, lhs, rhs, loc, where);
+	}
+
+	if (!(lhs = cc_expr_value(lhs, where))) { return NULL; }
+	if (!(rhs = cc_expr_value(rhs, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+
+	tree->_op = IR_MKOP2(IR_EQUAL, code0, code1);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : lhs->_loc;
+	tree->_u._kids[0] = lhs;
+	tree->_u._kids[1] = rhs;
+
+	return tree;
 }
 
 FCCIRTree* cc_expr_unequal(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
 {
+	FCCIRTree* tree;
+	int code0, code1;
+
+	code0 = cc_ir_typecode(ty);
+	code1 = cc_ir_typecode(lhs->_ty);
+	if (IR_OP(lhs->_op) == IR_CONST && IR_OP(rhs->_op) == IR_CONST)
+	{
+		return cc_fold_constant2('!=', ty, lhs, rhs, loc, where);
+	}
+
+	if (!(lhs = cc_expr_value(lhs, where))) { return NULL; }
+	if (!(rhs = cc_expr_value(rhs, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+
+	tree->_op = IR_MKOP2(IR_UNEQ, code0, code1);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : lhs->_loc;
+	tree->_u._kids[0] = lhs;
+	tree->_u._kids[1] = rhs;
+
+	return tree;
+}
+
+static FCCIRTree* cc_fold_constant3(int op, FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
+{
+	/* begin define */
+#define XX_CALC_CNST(tycode, op)\
+		switch (tycode)			\
+		{						\
+		case IR_S8:				\
+		case IR_S16:			\
+		case IR_S32:			\
+		case IR_S64:			\
+			ivalue = lhs->_u._val._sint op rhs->_u._val._sint;	break;\
+		case IR_U8:				\
+		case IR_U16:			\
+		case IR_U32:			\
+		case IR_U64:			\
+			uvalue = lhs->_u._val._uint op rhs->_u._val._uint;	break;\
+		default:				\
+			assert(0); break;	\
+		}
+	/* end define */
+
+	int64_t ivalue;
+	uint64_t uvalue;
+
+	int tycode = cc_ir_typecode(ty);
+	switch (op)
+	{
+	case '&':
+		XX_CALC_CNST(tycode, &);
+		break;
+	case '|':
+		XX_CALC_CNST(tycode, |);
+		break;
+	case '^':
+		XX_CALC_CNST(tycode, ^);
+		break;
+	}
+
+	switch (tycode)
+	{
+	case IR_S8:
+		return cc_expr_constant(ty, tycode, loc, where, (int8_t)ivalue);
+	case IR_S16:
+		return cc_expr_constant(ty, tycode, loc, where, (int16_t)ivalue);
+	case IR_S32:
+		return cc_expr_constant(ty, tycode, loc, where, (int32_t)ivalue);
+	case IR_S64:
+		return cc_expr_constant(ty, tycode, loc, where, (int64_t)ivalue);
+	case IR_U8:
+		return cc_expr_constant(ty, tycode, loc, where, (uint8_t)uvalue);
+	case IR_U16:
+		return cc_expr_constant(ty, tycode, loc, where, (uint16_t)uvalue);
+	case IR_U32:
+		return cc_expr_constant(ty, tycode, loc, where, (uint32_t)uvalue);
+	case IR_U64:
+		return cc_expr_constant(ty, tycode, loc, where, (uint64_t)uvalue);
+	default:
+		assert(0); break;
+	}
+
 	return NULL;
+
+#undef XX_CAST_CNST
 }
 
 FCCIRTree* cc_expr_bitand(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
 {
-	return NULL;
+	FCCIRTree* tree;
+	int code0;
+
+	code0 = cc_ir_typecode(ty);
+	if (IR_OP(lhs->_op) == IR_CONST && IR_OP(rhs->_op) == IR_CONST)
+	{
+		return cc_fold_constant3('&', ty, lhs, rhs, loc, where);
+	}
+
+	if (!(lhs = cc_expr_value(lhs, where))) { return NULL; }
+	if (!(rhs = cc_expr_value(rhs, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+
+	tree->_op = IR_MKOP2(IR_BITAND, code0, code0);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : lhs->_loc;
+	tree->_u._kids[0] = lhs;
+	tree->_u._kids[1] = rhs;
+
+	return tree;
 }
 
 FCCIRTree* cc_expr_bitxor(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
 {
-	return NULL;
+	FCCIRTree* tree;
+	int code0;
+
+	code0 = cc_ir_typecode(ty);
+	if (IR_OP(lhs->_op) == IR_CONST && IR_OP(rhs->_op) == IR_CONST)
+	{
+		return cc_fold_constant3('^', ty, lhs, rhs, loc, where);
+	}
+
+	if (!(lhs = cc_expr_value(lhs, where))) { return NULL; }
+	if (!(rhs = cc_expr_value(rhs, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+
+	tree->_op = IR_MKOP2(IR_BITXOR, code0, code0);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : lhs->_loc;
+	tree->_u._kids[0] = lhs;
+	tree->_u._kids[1] = rhs;
+
+	return tree;
 }
 
 FCCIRTree* cc_expr_bitor(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
 {
-	return NULL;
+	FCCIRTree* tree;
+	int code0;
+
+	code0 = cc_ir_typecode(ty);
+	if (IR_OP(lhs->_op) == IR_CONST && IR_OP(rhs->_op) == IR_CONST)
+	{
+		return cc_fold_constant3('|', ty, lhs, rhs, loc, where);
+	}
+
+	if (!(lhs = cc_expr_value(lhs, where))) { return NULL; }
+	if (!(rhs = cc_expr_value(rhs, where))) { return NULL; }
+	if (!(tree = cc_expr_new(where))) { return NULL; }
+
+	tree->_op = IR_MKOP2(IR_BITOR, code0, code0);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : lhs->_loc;
+	tree->_u._kids[0] = lhs;
+	tree->_u._kids[1] = rhs;
+
+	return tree;
+}
+
+FCCIRTree* cc_expr_logicand(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
+{
+	FCCIRTree* tree;
+	int code0;
+
+	code0 = cc_ir_typecode(ty);
+	if (!(lhs = cc_expr_bool(gbuiltintypes._sinttype, lhs, loc, where))) {
+		return NULL;
+	}
+	if (!(rhs = cc_expr_bool(gbuiltintypes._sinttype, rhs, loc, where))) {
+		return NULL;
+	}
+
+	if (IR_OP(lhs->_op) == IR_CONST && IR_OP(rhs->_op) == IR_CONST)
+	{
+		int r = lhs->_u._val._sint && rhs->_u._val._sint;
+		return cc_expr_constant(ty, code0, loc, where, r);
+	}
+
+	if (!(tree = cc_expr_new(where))) {
+		return NULL;
+	}
+
+	tree->_op = IR_MKOP2(IR_LOGAND, code0, cc_ir_typecode(gbuiltintypes._sinttype));
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : lhs->_loc;
+	tree->_u._kids[0] = lhs;
+	tree->_u._kids[1] = rhs;
+
+	return tree;
+}
+
+FCCIRTree* cc_expr_logicor(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
+{
+	FCCIRTree* tree;
+	int code0;
+
+	code0 = cc_ir_typecode(ty);
+	if (!(lhs = cc_expr_bool(gbuiltintypes._sinttype, lhs, loc, where))) {
+		return NULL;
+	}
+	if (!(rhs = cc_expr_bool(gbuiltintypes._sinttype, rhs, loc, where))) {
+		return NULL;
+	}
+
+	if (IR_OP(lhs->_op) == IR_CONST && IR_OP(rhs->_op) == IR_CONST)
+	{
+		int r = lhs->_u._val._sint || rhs->_u._val._sint;
+		return cc_expr_constant(ty, code0, loc, where, r);
+	}
+
+	if (!(tree = cc_expr_new(where))) {
+		return NULL;
+	}
+
+	tree->_op = IR_MKOP2(IR_LOGOR, code0, cc_ir_typecode(gbuiltintypes._sinttype));
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : lhs->_loc;
+	tree->_u._kids[0] = lhs;
+	tree->_u._kids[1] = rhs;
+
+	return tree;
+}
+
+FCCIRTree* cc_expr_condition(FCCIRTree* expr0, FCCIRTree* expr1, FCCIRTree* expr2, FLocation *loc, enum EMMArea where)
+{
+	FCCType* ty, *xty = expr1->_ty, *yty = expr2->_ty;
+	FCCIRTree* tree;
+	int code0;
+
+	expr0 = cc_expr_bool(gbuiltintypes._sinttype, expr0, loc, where);
+	if (!expr0) { return NULL; }
+
+	if (IsArith(xty) && IsArith(yty))
+		ty = cc_type_select(xty, yty);
+	else if (cc_type_isequal(xty, yty, TRUE))
+		ty = UnQual(xty);
+	else if (IsPtr(xty) && cc_expr_is_nullptr(expr2))
+		ty = xty;
+	else if (cc_expr_is_nullptr(expr1) && IsPtr(yty))
+		ty = yty;
+	else if (IsPtr(xty) && !IsFunction(xty->_type) && IsVoidptr(yty)
+		|| IsPtr(yty) && !IsFunction(yty->_type) && IsVoidptr(xty))
+		ty = gbuiltintypes._voidtype;
+	else if ((IsPtr(xty) && IsPtr(yty)
+		&& cc_type_isequal(UnQual(xty->_type), UnQual(yty->_type), TRUE)))
+		ty = xty;
+	else {
+		logger_output_s("error: invalid operands for '?:' '%t' : '%t' at %w\n", xty, yty, loc);
+		return NULL;
+	}
+
+	if (IsPtr(ty)) {
+		ty = UnQual(UnQual(ty)->_type);
+		if (IsPtr(xty) && IsConst(UnQual(xty)->_type)
+			|| IsPtr(yty) && IsConst(UnQual(yty)->_type))
+			ty = cc_type_qual(ty, Type_Const);
+		if (IsPtr(xty) && IsVolatile(UnQual(xty)->_type)
+			|| IsPtr(yty) && IsVolatile(UnQual(yty)->_type))
+			ty = cc_type_qual(ty, Type_Volatile);
+		ty = cc_type_ptr(ty);
+	}
+
+	if (IR_OP(expr0->_op) == IR_CONST)
+	{
+		return expr0->_u._val._sint ? expr1 : expr2;
+	}
+
+	if (!(tree = cc_expr_new(where))) {
+		return NULL;
+	}
+
+	code0 = cc_ir_typecode(ty);
+	tree->_op = IR_MKOP1(IR_COND, code0);
+	tree->_ty = ty;
+	tree->_loc = loc ? *loc : expr0->_loc;
+	tree->_u._kids[0] = expr0;
+	tree->_u._kids[1] = expr1;
+	tree->_u._kids[2] = expr2;
+
+	return tree;
+}
+
+FCCIRTree* cc_expr_bool(FCCType* ty, FCCIRTree* expr, FLocation* loc, enum EMMArea where)
+{
+	FCCIRTree *zero, *right;
+	int op;
+
+	zero = cc_expr_constant(gbuiltintypes._sinttype, cc_ir_typecode(gbuiltintypes._sinttype), loc, where, 0);
+	zero = cc_expr_cast_constant(expr->_ty, zero, loc, where);
+	if (IR_OP(expr->_op) == IR_CONST)
+	{
+		return cc_expr_unequal(ty, expr, zero, loc, where);
+	}
+
+	right = cc_expr_right(expr);
+	op = IR_OP(right->_op);
+	if (op == IR_LOGAND || op == IR_LOGOR
+		|| op == IR_EQUAL || op == IR_UNEQ
+		|| op == IR_LESS || op == IR_GREAT
+		|| op == IR_LEQ || op == IR_GEQ
+		|| op == IR_NOT)
+	{
+		return expr;
+	}
+	if (IsVoid(right->_ty)) {
+		logger_output_s("error: can't convert to bool expression '%t' at %w\n", right->_ty, &right->_loc);
+		return NULL;
+	}
+
+	return cc_expr_unequal(ty, expr, zero, loc, where);
+}
+
+FCCIRTree* cc_expr_right(FCCIRTree* expr)
+{
+	FCCIRTree* right = expr;
+
+	while(IR_OP(right->_op) == IR_SEQ)
+	{
+		right = right->_u._kids[1];
+	}
+
+	return right;
+}
+
+static FCCIRTree* cc_expr_erase_bitfield(FCCIRTree* expr, enum EMMArea where)
+{
+	FCCIRTree* tree;
+
+	if (!(tree = cc_expr_new(where))) {
+		return NULL;
+	}
+
+	*tree = *expr;
+	tree->_field = NULL;
+	tree->_isbitfield = 0;
+	return tree;
+}
+
+static FCCIRTree* cc_expr_read_bitvalue(FCCIRTree* expr, enum EMMArea where)
+{
+	FCCIRTree* t0, *t1, *t2;
+	FCCField* field;
+	FCCType* ty;
+	int bitoffset, shlcnt, shrcnt;
+	
+	assert(expr->_isbitfield);
+	field = expr->_field;
+	bitoffset = field->_lsb - 1;
+
+	/* 1. t1 = t0 << shlcnt
+	 * 2. t2 = t1 >> shrcnt
+	 */
+	if (!(t0 = cc_expr_erase_bitfield(expr, where))) {
+		return NULL;
+	}
+	ty = cc_type_promote(t0->_ty);
+	shlcnt = ty->_size * 8 - (field->_bitsize + bitoffset);
+	shrcnt = ty->_size * 8 - field->_bitsize;
+
+	t1 = t0 = cc_expr_cast(ty, t0, &t0->_loc, where);
+	if (shlcnt > 0 && !(t1 = cc_expr_lshift(ty, t0,
+		cc_expr_constant(gbuiltintypes._sinttype, cc_ir_typecode(gbuiltintypes._sinttype), NULL, where, shlcnt), NULL, where)))
+	{
+		return NULL;
+	}
+	if (!(t2 = cc_expr_rshift(ty, t1,
+		cc_expr_constant(gbuiltintypes._sinttype, cc_ir_typecode(gbuiltintypes._sinttype), NULL, where, shrcnt), NULL, where)))
+	{
+		return NULL;
+	}
+	
+	return t2;
+}
+
+FCCIRTree* cc_expr_value(FCCIRTree* expr, enum EMMArea where)
+{
+	FCCIRTree* right = cc_expr_right(expr);
+
+	if (IR_OP(right->_op) == IR_ASSIGN)
+	{
+		FCCIRTree* addr; 
+
+		addr = right->_u._kids[0];
+		if (!(expr = cc_expr_seq(addr->_ty, expr, addr, &right->_loc, where)))
+		{
+			return NULL;
+		}
+		if (!(expr = cc_expr_indir(expr, NULL, where)))
+		{
+			return NULL;
+		}
+
+		expr->_field = right->_field;
+		expr->_isbitfield = right->_isbitfield;
+	}
+
+	if (expr->_isbitfield) {
+		return cc_expr_read_bitvalue(expr, where);
+	}
+
+	return expr;
+}
+
+FCCIRTree* cc_expr_assign(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
+{
+	FCCIRTree* asgntree, *addr;
+	FCCField* field;
+	int isbitfield, code0;
+
+	if (!(rhs = cc_expr_value(rhs, where))) {
+		return NULL; 
+	}
+	if (!(addr = cc_expr_addr(lhs, loc, where))) {
+		return NULL;
+	}
+	field = lhs->_field;
+	isbitfield = lhs->_isbitfield;
+	/* check if bit-field */
+	if (isbitfield)
+	{
+		FCCIRTree *t, *t0, *t1, *t2, *t3;
+		int32_t bitmask0, bitmask1, bitoffset;
+		FCCType* promotety;
+
+		bitoffset = field->_lsb - 1;
+		bitmask0 = (1 << field->_bitsize) - 1;
+		bitmask1 = ~(bitmask0 << bitoffset);
+
+		if (!(t = cc_expr_erase_bitfield(lhs, where))) {
+			return NULL;
+		}
+		promotety = cc_type_promote(t->_ty);
+		t = cc_expr_cast(promotety, t, loc, where);
+		rhs = cc_expr_cast(promotety, rhs, loc, where);
+
+		/* 1. t0 = rhs & bitmask0
+		 * 2. t1 = t0 << bitoffset
+		 * 3. t2 = t & bitmask1
+		 * 4. t3 = t1 | t2
+		 */
+		if (!(t0 = cc_expr_bitand(promotety, rhs,
+			cc_expr_constant(gbuiltintypes._sinttype, cc_ir_typecode(gbuiltintypes._sinttype), NULL, where, bitmask0), loc, where)))
+		{
+			return NULL;
+		}
+		if (!(t1 = cc_expr_lshift(promotety, t0,
+			cc_expr_constant(gbuiltintypes._sinttype, cc_ir_typecode(gbuiltintypes._sinttype), NULL, where, bitoffset), loc, where)))
+		{
+			return NULL;
+		}
+		if (!(t2 = cc_expr_bitand(promotety, t,
+			cc_expr_constant(gbuiltintypes._sinttype, cc_ir_typecode(gbuiltintypes._sinttype), NULL, where, bitmask1), loc, where)))
+		{
+			return NULL;
+		}
+		if (!(t3 = cc_expr_bitor(promotety, t1, t2, loc, where)) || !(rhs = cc_expr_cast(lhs->_ty, rhs, loc, where)))
+		{
+			return NULL;
+		}
+
+		rhs = t3;
+	}
+
+	if (!(asgntree = cc_expr_new(where))) {
+		return NULL;
+	}
+	
+	rhs = cc_expr_cast(ty, rhs, loc, where);
+	code0 = cc_ir_typecode(ty);
+	asgntree->_op = IR_MKOP1(IR_ASSIGN, code0);
+	asgntree->_ty = ty;
+	asgntree->_loc = loc ? *loc : lhs->_loc;
+	asgntree->_u._kids[0] = addr;
+	asgntree->_u._kids[1] = rhs;
+	asgntree->_field = field;
+	asgntree->_isbitfield = isbitfield;
+
+	return asgntree;
 }

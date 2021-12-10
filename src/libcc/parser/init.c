@@ -90,7 +90,7 @@ static BOOL cc_varinit_check_inner(struct tagCCContext* ctx, struct tagCCType* t
 static BOOL cc_varinit_check_scalar(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock, enum EMMArea where)
 {
 	FVarInitializer* thisinit;
-	FCCExprTree* expr;
+	FCCIRTree* expr;
 
 	assert(!bUsingOuterBlock || init->_isblock);
 	if (bUsingOuterBlock) {
@@ -115,17 +115,21 @@ static BOOL cc_varinit_check_scalar(struct tagCCContext* ctx, struct tagCCType* 
 	}
 
 	assert(!thisinit->_isblock);
-	expr = thisinit->_u._expr;
+	expr = cc_expr_adjust(thisinit->_u._expr, where);
 	if (!(ty = cc_expr_assigntype(ty, expr))) {
 		logger_output_s("error: initialize assign failed at %w.\n", &expr->_loc);
 		return FALSE;
 	}
 	
-	if (!(expr = cc_expr_cast(ctx, ty, expr, where))) {
+	if (!(expr = cc_expr_cast(ty, expr, NULL, where))) {
 		logger_output_s("error: cast failed at %s:%d.\n", __FILE__, __LINE__);
 		return FALSE;
 	}
-	
+	if (!cc_expr_is_constant(expr)) {
+		logger_output_s("error: constant expression expected at %w.\n", &expr->_loc);
+		return FALSE;
+	}
+
 	thisinit->_u._expr = expr;
 
 	return TRUE;
@@ -268,7 +272,7 @@ static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* t
 				for (innerindex = arraysize = 0; ty->_size > arraysize && innerindex < thisinit->_u._kids._cnt; arraysize += elety->_size)
 				{
 					tmpinit = *(thisinit->_u._kids._kids + innerindex);
-					iscnststr = !tmpinit->_isblock && tmpinit->_u._expr->_op == EXPR_CONSTANT_STR;
+					iscnststr = !tmpinit->_isblock && (tmpinit->_u._expr->_op == IR_MKOP1(IR_CONST, IR_STRA) || tmpinit->_u._expr->_op == IR_MKOP1(IR_CONST, IR_STRW));
 
 					if (ischararray && iscnststr)
 					{
@@ -304,7 +308,7 @@ static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* t
 				for (innerindex = arraysize = 0; innerindex < thisinit->_u._kids._cnt; arraysize += elety->_size)
 				{
 					tmpinit = *(thisinit->_u._kids._kids + innerindex);
-					iscnststr = !tmpinit->_isblock && tmpinit->_u._expr->_op == EXPR_CONSTANT_STR;
+					iscnststr = !tmpinit->_isblock && (tmpinit->_u._expr->_op == IR_MKOP1(IR_CONST, IR_STRA) || tmpinit->_u._expr->_op == IR_MKOP1(IR_CONST, IR_STRW));
 
 					if (ischararray && iscnststr)
 					{
@@ -334,7 +338,7 @@ static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* t
 		else
 		{
 			tmpinit = thisinit;
-			iscnststr = !tmpinit->_isblock && tmpinit->_u._expr->_op == EXPR_CONSTANT_STR;
+			iscnststr = !tmpinit->_isblock && (tmpinit->_u._expr->_op == IR_MKOP1(IR_CONST, IR_STRA) || tmpinit->_u._expr->_op == IR_MKOP1(IR_CONST, IR_STRW));
 			if (ischararray && iscnststr)
 			{
 				strty = UnQual(tmpinit->_u._expr->_ty->_type);
@@ -373,7 +377,7 @@ static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* t
 			for (arraysize = 0; ty->_size > arraysize && *outerindex < thisinit->_u._kids._cnt; arraysize += elety->_size)
 			{
 				tmpinit = *(thisinit->_u._kids._kids + *outerindex);
-				iscnststr = !tmpinit->_isblock && tmpinit->_u._expr->_op == EXPR_CONSTANT_STR;
+				iscnststr = !tmpinit->_isblock && (tmpinit->_u._expr->_op == IR_MKOP1(IR_CONST, IR_STRA) || tmpinit->_u._expr->_op == IR_MKOP1(IR_CONST, IR_STRW));
 
 				if (ischararray && iscnststr)
 				{
@@ -399,7 +403,7 @@ static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* t
 			for (arraysize = 0; *outerindex < thisinit->_u._kids._cnt; arraysize += elety->_size)
 			{
 				tmpinit = *(thisinit->_u._kids._kids + *outerindex);
-				iscnststr = !tmpinit->_isblock && tmpinit->_u._expr->_op == EXPR_CONSTANT_STR;
+				iscnststr = !tmpinit->_isblock && (tmpinit->_u._expr->_op == IR_MKOP1(IR_CONST, IR_STRA) || tmpinit->_u._expr->_op == IR_MKOP1(IR_CONST, IR_STRW));
 
 				if (ischararray && iscnststr)
 				{

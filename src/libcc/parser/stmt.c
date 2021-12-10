@@ -266,7 +266,7 @@ BOOL cc_stmt_default(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtct
 BOOL cc_stmt_expression(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, struct tagCCStatement** outstmt)
 {
 	struct tagCCStatement* stmt;
-	FCCExprTree* expr;
+	FCCIRTree* expr;
 
 	if (!(stmt = cc_stmt_new(ESTMT_Expr))) {
 		return FALSE;

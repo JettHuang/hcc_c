@@ -32,8 +32,6 @@ enum COLOR
 
 struct Point {
 	int a:5;
-	char b:3;
-	char c:5;
 	int d: 28;
 	
 	float x;

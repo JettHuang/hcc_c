@@ -36,16 +36,6 @@ void cc_gen_dumpsymbols(struct tagCCContext* ctx)
 	cc_symbol_foreach(ctx, gConstants, SCOPE_CONST, &doconstant);
 }
 
-static void cc_gen_eval_constant_address_inner(struct tagCCContext* ctx, struct tagCCExprTree* expr, struct tagCCSymbol** addrsym, int64_t* offset)
-{
-
-}
-
-void cc_gen_eval_constant_address(struct tagCCContext* ctx, struct tagCCExprTree* expr, struct tagCCSymbol** addrsym, int64_t* offset)
-{
-
-}
-
 static void doglobal(struct tagCCContext* ctx, struct tagCCSymbol* p)
 {
 	if (!IsFunction(p->_type)) 
@@ -61,7 +51,7 @@ static void doglobal(struct tagCCContext* ctx, struct tagCCSymbol* p)
 		}
 		else if (p->_sclass != SC_External) {
 			ctx->_backend->_defglobal_begin(ctx, p, IsConst(ty) ? SEG_CONST : SEG_BSS);
-			ctx->_backend->_defconst_ubyte(ctx, 0, p->_type->_size);
+			ctx->_backend->_defconst_signed(ctx, 1, 0, p->_type->_size);
 			ctx->_backend->_defglobal_end(ctx, p);
 		}
 	}
@@ -85,63 +75,29 @@ static void doconstant(struct tagCCContext* ctx, struct tagCCSymbol* p)
 {
 	FCCType* ty;
 
-	if (p->_x._refcnt > 0) {
-		ctx->_backend->_defglobal_begin(ctx, p, SEG_CONST);
-		
-		ty = UnQual(p->_type);
-		switch (ty->_op)
-		{
-		case Type_SInteger:
-			if (ty->_size == 1) {
-				ctx->_backend->_defconst_sbyte(ctx, (int8_t)p->_u._cnstval._sint, 1);
-			}
-			else if (ty->_size == 2) {
-				ctx->_backend->_defconst_sword(ctx, (int16_t)p->_u._cnstval._sint, 1);
-			}
-			else if (ty->_size == 4) {
-				ctx->_backend->_defconst_sdword(ctx, (int32_t)p->_u._cnstval._sint, 1);
-			}
-			else if (ty->_size == 8) {
-				ctx->_backend->_defconst_sqword(ctx, (int64_t)p->_u._cnstval._sint, 1);
-			}
-			else {
-				assert(0);
-			}
-			break;
-		case Type_UInteger:
-			if (ty->_size == 1) {
-				ctx->_backend->_defconst_ubyte(ctx, (uint8_t)p->_u._cnstval._uint, 1);
-			}
-			else if (ty->_size == 2) {
-				ctx->_backend->_defconst_uword(ctx, (uint16_t)p->_u._cnstval._uint, 1);
-			}
-			else if (ty->_size == 4) {
-				ctx->_backend->_defconst_udword(ctx, (uint32_t)p->_u._cnstval._uint, 1);
-			}
-			else if (ty->_size == 8) {
-				ctx->_backend->_defconst_uqword(ctx, (uint64_t)p->_u._cnstval._uint, 1);
-			}
-			else {
-				assert(0);
-			}
-			break;
-		case Type_Float:
-			if (ty->_size == 4) {
-				ctx->_backend->_defconst_real4(ctx, (float)p->_u._cnstval._float, 1);
-			}
-			else if (ty->_size == 8) {
-				ctx->_backend->_defconst_real8(ctx, p->_u._cnstval._float, 1);
-			}
-			break;
-		case Type_Array:
-			ctx->_backend->_defconst_string(ctx, p->_u._cnstval._payload, ty->_size, ty->_type->_size);
-			break;
-		default:
-			assert(0);
-			break;
-		}
-		ctx->_backend->_defglobal_end(ctx, p);
+
+	ctx->_backend->_defglobal_begin(ctx, p, SEG_CONST);
+
+	ty = UnQual(p->_type);
+	switch (ty->_op)
+	{
+	case Type_SInteger:
+		ctx->_backend->_defconst_signed(ctx, ty->_size, p->_u._cnstval._sint, 1);
+		break;
+	case Type_UInteger:
+		ctx->_backend->_defconst_unsigned(ctx, ty->_size, p->_u._cnstval._uint, 1);
+		break;
+	case Type_Float:
+		ctx->_backend->_defconst_real(ctx, ty->_size, p->_u._cnstval._float, 1);
+		break;
+	case Type_Array:
+		ctx->_backend->_defconst_string(ctx, p->_u._cnstval._payload, ty->_size, ty->_type->_size);
+		break;
+	default:
+		assert(0);
+		break;
 	}
+	ctx->_backend->_defglobal_end(ctx, p);
 }
 
 
@@ -153,7 +109,7 @@ static BOOL cc_gen_dumpinitvalues_inner(struct tagCCContext* ctx, struct tagCCTy
 static BOOL cc_varinit_dump_scalar(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock)
 {
 	FVarInitializer* thisinit;
-	FCCExprTree* expr;
+	FCCIRTree* expr;
 
 	assert(!bUsingOuterBlock || init->_isblock);
 	if (bUsingOuterBlock) {
@@ -179,49 +135,29 @@ static BOOL cc_varinit_dump_scalar(struct tagCCContext* ctx, struct tagCCType* t
 	if (UnQual(ty)->_op == Type_Enum) {
 		ty = UnQual(ty)->_type;
 	}
+
 	switch (UnQual(ty)->_op)
 	{
 	case Type_SInteger:
-		if (ty->_size == 1) {
-			ctx->_backend->_defconst_sbyte(ctx, (int8_t)expr->_u._symbol->_u._cnstval._sint, 1);
+		if (IR_OP(expr->_op) != IR_CONST) {
+			logger_output_s("error: integer constant expected. at %w\n", &expr->_loc);
+			return FALSE;
 		}
-		else if (ty->_size == 2) {
-			ctx->_backend->_defconst_sword(ctx, (int16_t)expr->_u._symbol->_u._cnstval._sint, 1);
-		}
-		else if (ty->_size == 4) {
-			ctx->_backend->_defconst_sdword(ctx, (int32_t)expr->_u._symbol->_u._cnstval._sint, 1);
-		} 
-		else if (ty->_size == 8) {
-			ctx->_backend->_defconst_sqword(ctx, (int64_t)expr->_u._symbol->_u._cnstval._sint, 1);
-		} 
-		else {
-			assert(0);
-		}
+		ctx->_backend->_defconst_signed(ctx, ty->_size, expr->_u._val._sint, 1);
 		break;
 	case Type_UInteger:
-		if (ty->_size == 1) {
-			ctx->_backend->_defconst_ubyte(ctx, (uint8_t)expr->_u._symbol->_u._cnstval._uint, 1);
+		if (IR_OP(expr->_op) != IR_CONST) {
+			logger_output_s("error: integer constant expected. at %w\n", &expr->_loc);
+			return FALSE;
 		}
-		else if (ty->_size == 2) {
-			ctx->_backend->_defconst_uword(ctx, (uint16_t)expr->_u._symbol->_u._cnstval._uint, 1);
-		}
-		else if (ty->_size == 4) {
-			ctx->_backend->_defconst_udword(ctx, (uint32_t)expr->_u._symbol->_u._cnstval._uint, 1);
-		}
-		else if (ty->_size == 8) {
-			ctx->_backend->_defconst_uqword(ctx, (uint64_t)expr->_u._symbol->_u._cnstval._uint, 1);
-		}
-		else {
-			assert(0);
-		}
+		ctx->_backend->_defconst_unsigned(ctx, ty->_size, expr->_u._val._uint, 1);
 		break;
 	case Type_Float:
-		if (ty->_size == 4) {
-			ctx->_backend->_defconst_real4(ctx, (float)expr->_u._symbol->_u._cnstval._float, 1);
+		if (IR_OP(expr->_op) != IR_CONST) {
+			logger_output_s("error: float constant expected. at %w\n", &expr->_loc);
+			return FALSE;
 		}
-		else if (ty->_size == 8) {
-			ctx->_backend->_defconst_real8(ctx, expr->_u._symbol->_u._cnstval._float, 1);
-		}
+		ctx->_backend->_defconst_real(ctx, ty->_size, expr->_u._val._float, 1);
 		break;
 	case Type_Pointer:
 		ctx->_backend->_defconst_address(ctx, expr);
@@ -237,7 +173,7 @@ static BOOL cc_varinit_dump_scalar(struct tagCCContext* ctx, struct tagCCType* t
 static BOOL cc_varinit_get_scalar_int(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock, int *outval)
 {
 	FVarInitializer* thisinit;
-	FCCExprTree* expr;
+	FCCIRTree* expr;
 
 	assert(!bUsingOuterBlock || init->_isblock);
 	if (bUsingOuterBlock) {
@@ -266,10 +202,10 @@ static BOOL cc_varinit_get_scalar_int(struct tagCCContext* ctx, struct tagCCType
 	switch (UnQual(ty)->_op)
 	{
 	case Type_SInteger:
-		*outval = (int32_t)expr->_u._symbol->_u._cnstval._sint;
+		*outval = (int32_t)expr->_u._val._sint;
 		break;
 	case Type_UInteger:
-		*outval = (int32_t)expr->_u._symbol->_u._cnstval._uint;
+		*outval = (int32_t)expr->_u._val._uint;
 		break;
 	default:
 		assert(0);
@@ -314,7 +250,7 @@ static BOOL cc_varinit_dump_union(struct tagCCContext* ctx, struct tagCCType* ty
 			}
 
 			bitsval = bitsval << (first->_lsb - 1);
-			ctx->_backend->_defconst_udword(ctx, (uint32_t)bitsval, 1);
+			ctx->_backend->_defconst_unsigned(ctx, 4, (uint64_t)bitsval, 1);
 		} else {
 			if (!cc_gen_dumpinitvalues_inner(ctx, first->_type, thisinit, &innerindex, TRUE))
 			{
@@ -336,7 +272,7 @@ static BOOL cc_varinit_dump_union(struct tagCCContext* ctx, struct tagCCType* ty
 			}
 
 			bitsval = bitsval << (first->_lsb - 1);
-			ctx->_backend->_defconst_udword(ctx, (uint32_t)bitsval, 1);
+			ctx->_backend->_defconst_unsigned(ctx, 4, (uint64_t)bitsval, 1);
 		}
 		else {
 			if (!cc_gen_dumpinitvalues_inner(ctx, first->_type, thisinit, outerindex, TRUE))
@@ -376,7 +312,7 @@ static BOOL cc_varinit_dump_struct(struct tagCCContext* ctx, struct tagCCType* t
 		for (field = cc_type_fields(ty); field; ) 
 		{
 			if (offset < field->_offset) {
-				ctx->_backend->_defconst_ubyte(ctx, 0, field->_offset - offset);
+				ctx->_backend->_defconst_signed(ctx, 1, 0, field->_offset - offset);
 				offset = field->_offset;
 			}
 
@@ -397,7 +333,7 @@ static BOOL cc_varinit_dump_struct(struct tagCCContext* ctx, struct tagCCType* t
 					}
 				}
 
-				ctx->_backend->_defconst_udword(ctx, bitsval, 1);
+				ctx->_backend->_defconst_unsigned(ctx, 4, bitsval, 1);
 				offset += 4;
 			}
 			else {
@@ -408,7 +344,7 @@ static BOOL cc_varinit_dump_struct(struct tagCCContext* ctx, struct tagCCType* t
 					}
 				}
 				else {
-					ctx->_backend->_defconst_ubyte(ctx, 0, field->_type->_size);
+					ctx->_backend->_defconst_signed(ctx, 1, 0, field->_type->_size);
 				}
 
 				offset += field->_type->_size;
@@ -422,7 +358,7 @@ static BOOL cc_varinit_dump_struct(struct tagCCContext* ctx, struct tagCCType* t
 		for (field = cc_type_fields(ty); field; ) 
 		{
 			if (offset < field->_offset) {
-				ctx->_backend->_defconst_ubyte(ctx, 0, field->_offset - offset);
+				ctx->_backend->_defconst_signed(ctx, 1, 0, field->_offset - offset);
 				offset = field->_offset;
 			}
 
@@ -443,7 +379,7 @@ static BOOL cc_varinit_dump_struct(struct tagCCContext* ctx, struct tagCCType* t
 					}
 				}
 
-				ctx->_backend->_defconst_udword(ctx, bitsval, 1);
+				ctx->_backend->_defconst_unsigned(ctx, 4, bitsval, 1);
 				offset += 4;
 			}
 			else {
@@ -454,7 +390,7 @@ static BOOL cc_varinit_dump_struct(struct tagCCContext* ctx, struct tagCCType* t
 					}
 				}
 				else {
-					ctx->_backend->_defconst_ubyte(ctx, 0, field->_type->_size);
+					ctx->_backend->_defconst_signed(ctx, 1, 0, field->_type->_size);
 				}
 
 				offset += field->_type->_size;
@@ -506,7 +442,7 @@ static BOOL cc_varinit_dump_array(struct tagCCContext* ctx, struct tagCCType* ty
 			for (innerindex = arraysize = 0; ty->_size > arraysize && innerindex < thisinit->_u._kids._cnt; arraysize += elety->_size)
 			{
 				tmpinit = *(thisinit->_u._kids._kids + innerindex);
-				iscnststr = !tmpinit->_isblock && tmpinit->_u._expr->_op == EXPR_CONSTANT_STR;
+				iscnststr = !tmpinit->_isblock && (tmpinit->_u._expr->_op == IR_MKOP1(IR_CONST, IR_STRA) || tmpinit->_u._expr->_op == IR_MKOP1(IR_CONST, IR_STRW));
 
 				if (ischararray && iscnststr)
 				{
@@ -518,13 +454,13 @@ static BOOL cc_varinit_dump_array(struct tagCCContext* ctx, struct tagCCType* ty
 					if (elety == gbuiltintypes._chartype) {
 						for (n = 0; ty->_size > arraysize; n++, arraysize += elety->_size)
 						{
-							ctx->_backend->_defconst_ubyte(ctx, (n < chcnt) ? ((const uint8_t*)str)[n] : 0, 1);
+							ctx->_backend->_defconst_unsigned(ctx, 1, (n < chcnt) ? ((const uint8_t*)str)[n] : 0, 1);
 						}
 					}
 					else {
 						for (n = 0; ty->_size > arraysize; n++, arraysize += elety->_size)
 						{
-							ctx->_backend->_defconst_uword(ctx, (n < chcnt) ? ((const uint16_t*)str)[n] : 0, 1);
+							ctx->_backend->_defconst_unsigned(ctx, 2, (n < chcnt) ? ((const uint16_t*)str)[n] : 0, 1);
 						}
 					}
 
@@ -538,30 +474,30 @@ static BOOL cc_varinit_dump_array(struct tagCCContext* ctx, struct tagCCType* ty
 			} /* end for */
 
 			if (ty->_size > arraysize) {
-				ctx->_backend->_defconst_ubyte(ctx, 0, ty->_size - arraysize); /* un-initialized data */
+				ctx->_backend->_defconst_unsigned(ctx, 1, 0, ty->_size - arraysize); /* un-initialized data */
 			}
 		}
 		else
 		{
 			tmpinit = thisinit;
-			iscnststr = !tmpinit->_isblock && tmpinit->_u._expr->_op == EXPR_CONSTANT_STR;
+			iscnststr = !tmpinit->_isblock && (tmpinit->_u._expr->_op == IR_MKOP1(IR_CONST, IR_STRA) || tmpinit->_u._expr->_op == IR_MKOP1(IR_CONST, IR_STRW));
 			if (ischararray && iscnststr)
 			{
 				int n, chcnt;
 				const void* str;
 
-				str = tmpinit->_u._expr->_u._symbol->_u._cnstval._payload;
+				str = tmpinit->_u._expr->_u._val._payload;
 				chcnt = (tmpinit->_u._expr->_ty->_size) / (tmpinit->_u._expr->_ty->_type->_size);
 				if (elety == gbuiltintypes._chartype) {
 					for (n = 0; n < (ty->_size / ty->_type->_size); n++)
 					{
-						ctx->_backend->_defconst_ubyte(ctx, (n < chcnt) ? ((const uint8_t*)str)[n] : 0, 1);
+						ctx->_backend->_defconst_unsigned(ctx, 1, (n < chcnt) ? ((const uint8_t*)str)[n] : 0, 1);
 					}
 				}
 				else {
 					for (n = 0; n < (ty->_size / ty->_type->_size); n++)
 					{
-						ctx->_backend->_defconst_uword(ctx, (n < chcnt) ? ((const uint16_t*)str)[n] : 0, 1);
+						ctx->_backend->_defconst_unsigned(ctx, 2, (n < chcnt) ? ((const uint16_t*)str)[n] : 0, 1);
 					}
 				}
 			}
@@ -586,7 +522,7 @@ static BOOL cc_varinit_dump_array(struct tagCCContext* ctx, struct tagCCType* ty
 		for (arraysize = 0; ty->_size > arraysize && *outerindex < thisinit->_u._kids._cnt; arraysize += elety->_size)
 		{
 			tmpinit = *(thisinit->_u._kids._kids + *outerindex);
-			iscnststr = !tmpinit->_isblock && tmpinit->_u._expr->_op == EXPR_CONSTANT_STR;
+			iscnststr = !tmpinit->_isblock && (tmpinit->_u._expr->_op == IR_MKOP1(IR_CONST, IR_STRA) || tmpinit->_u._expr->_op == IR_MKOP1(IR_CONST, IR_STRW));
 
 			if (ischararray && iscnststr)
 			{
@@ -603,18 +539,18 @@ static BOOL cc_varinit_dump_array(struct tagCCContext* ctx, struct tagCCType* ty
 				int n, chcnt;
 				const void* str;
 
-				str = tmpinit->_u._expr->_u._symbol->_u._cnstval._payload;
+				str = tmpinit->_u._expr->_u._val._payload;
 				chcnt = (tmpinit->_u._expr->_ty->_size) / (tmpinit->_u._expr->_ty->_type->_size);
 				if (elety == gbuiltintypes._chartype) {
 					for (n = 0; ty->_size > arraysize; n++, arraysize += elety->_size)
 					{
-						ctx->_backend->_defconst_ubyte(ctx, (n < chcnt) ? ((const uint8_t*)str)[n] : 0, 1);
+						ctx->_backend->_defconst_unsigned(ctx, 1, (n < chcnt) ? ((const uint8_t*)str)[n] : 0, 1);
 					}
 				}
 				else {
 					for (n = 0; ty->_size > arraysize; n++, arraysize += elety->_size)
 					{
-						ctx->_backend->_defconst_uword(ctx, (n < chcnt) ? ((const uint16_t*)str)[n] : 0, 1);
+						ctx->_backend->_defconst_unsigned(ctx, 2, (n < chcnt) ? ((const uint16_t*)str)[n] : 0, 1);
 					}
 				}
 
@@ -629,7 +565,7 @@ static BOOL cc_varinit_dump_array(struct tagCCContext* ctx, struct tagCCType* ty
 
 		if (ty->_size > arraysize)
 		{
-			ctx->_backend->_defconst_ubyte(ctx, 0, ty->_size - arraysize); /* un-initialized data */
+			ctx->_backend->_defconst_unsigned(ctx, 1, 0, ty->_size - arraysize); /* un-initialized data */
 		}
 	}
 

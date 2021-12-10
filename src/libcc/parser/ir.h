@@ -8,6 +8,7 @@
 #include "utils.h"
 #include "mm.h"
 #include "cc.h"
+#include "symbols.h"
 
 
 /* types code */
@@ -65,7 +66,7 @@
 
 
 /* format: op | ty0 | ty1 */
-#define IR_MKOP(op)				(op)
+#define IR_MKOP(op)				((op) << 16)
 #define IR_MKOP1(op, ty)		(((op) << 16) | ((ty) << 8))
 #define IR_MKOP2(op, ty0, ty1)	(((op) << 16) | ((ty0) << 8) | (ty1))
 #define IR_OP(op)				((op) >> 16)
@@ -84,13 +85,13 @@ typedef struct tagCCExprTree {
 	union {
 		struct tagCCExprTree* _kids[3];
 		struct tagCCSymbol* _symbol;
-		struct tagStructField* _field;
 		struct {
 			struct tagCCExprTree* _lhs;
 			struct tagCCExprTree** _args; /* end with null */
 		} _f;
 		FCCConstVal _val;
 	} _u;
+	struct tagStructField* _field;
 
 	/* auxiliary flags */
 	int _isbitfield : 1;

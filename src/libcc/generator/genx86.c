@@ -24,16 +24,9 @@ static void importsymbol(struct tagCCContext* ctx, struct tagCCSymbol* sym);
 static void exportsymbol(struct tagCCContext* ctx, struct tagCCSymbol* sym);
 static void defglobal_begin(struct tagCCContext* ctx, struct tagCCSymbol* sym, enum tagCCSegment seg);
 static void defconst_space(struct tagCCContext* ctx, int count);
-static void defconst_ubyte(struct tagCCContext* ctx, uint8_t val, int count);
-static void defconst_sbyte(struct tagCCContext* ctx, int8_t val, int count);
-static void defconst_uword(struct tagCCContext* ctx, uint16_t val, int count);
-static void defconst_sword(struct tagCCContext* ctx, int16_t val, int count);
-static void defconst_udword(struct tagCCContext* ctx, uint32_t val, int count);
-static void defconst_sdword(struct tagCCContext* ctx, int32_t val, int count);
-static void defconst_uqword(struct tagCCContext* ctx, uint64_t val, int count);
-static void defconst_sqword(struct tagCCContext* ctx, int64_t val, int count);
-static void defconst_real4(struct tagCCContext* ctx, float val, int count);
-static void defconst_real8(struct tagCCContext* ctx, double val, int count);
+static void defconst_signed(struct tagCCContext* ctx, int size, int64_t val, int count);
+static void defconst_unsigned(struct tagCCContext* ctx, int size, uint64_t val, int count);
+static void defconst_real(struct tagCCContext* ctx, int size, double val, int count);
 static void defconst_string(struct tagCCContext* ctx, const void* str, int count, int charsize);
 static void defconst_address(struct tagCCContext* ctx, struct tagCCExprTree* expr);
 static void defglobal_end(struct tagCCContext* ctx, struct tagCCSymbol* sym);
@@ -59,16 +52,9 @@ struct tagCCBackend* cc_new_backend()
 	backend->_exportsymbol = &exportsymbol;
 	backend->_defglobal_begin = &defglobal_begin;
 	backend->_defconst_space = &defconst_space;
-	backend->_defconst_ubyte = &defconst_ubyte;
-	backend->_defconst_sbyte = &defconst_sbyte;
-	backend->_defconst_uword = &defconst_uword;
-	backend->_defconst_sword = &defconst_sword;
-	backend->_defconst_udword = &defconst_udword;
-	backend->_defconst_sdword = &defconst_sdword;
-	backend->_defconst_uqword = &defconst_uqword;
-	backend->_defconst_sqword = &defconst_sqword;
-	backend->_defconst_real4 = &defconst_real4;
-	backend->_defconst_real8 = &defconst_real8;
+	backend->_defconst_signed = &defconst_signed;
+	backend->_defconst_unsigned = &defconst_unsigned;
+	backend->_defconst_real = &defconst_real;
 	backend->_defconst_string = &defconst_string;
 	backend->_defconst_address = &defconst_address;
 	backend->_defglobal_end = &defglobal_end;
@@ -156,205 +142,147 @@ static void defconst_space(struct tagCCContext* ctx, int count)
 	}
 }
 
-static void defconst_ubyte(struct tagCCContext* ctx, uint8_t val, int count)
+void defconst_signed(struct tagCCContext* ctx, int size, int64_t val, int count)
 {
 	if (ctx->_backend->_curr_seg != SEG_BSS)
 	{
 		if (count > 1) {
-			fprintf(ctx->_outfp, "    db  %d  dup (%d)\n", count, (uint32_t)val);
+			switch (size)
+			{
+			case 1:
+				fprintf(ctx->_outfp, "    db  %d  dup (%d)\n", count, (int)val); break;
+			case 2:
+				fprintf(ctx->_outfp, "    dw  %d  dup (%d)\n", count, (int)val); break;
+			case 4:
+				fprintf(ctx->_outfp, "    dd  %d  dup (%d)\n", count, (int)val); break;
+			case 8:
+				fprintf(ctx->_outfp, "    dq  %d  dup (0%llxh)\n", count, val); break;
+			default:
+				assert(0); break;
+			}
 		}
 		else {
-			fprintf(ctx->_outfp, "    db  %d\n", (uint32_t)val);
-		}
-	}
-	else 
-	{
-		if (count > 1) {
-			fprintf(ctx->_outfp, "    db  %d  dup (?)\n", count);
-		}
-		else {
-			fprintf(ctx->_outfp, "    db  ?\n");
-		}
-	}
-}
-
-static void defconst_sbyte(struct tagCCContext* ctx, int8_t val, int count)
-{
-	if (ctx->_backend->_curr_seg != SEG_BSS)
-	{
-		if (count > 1) {
-			fprintf(ctx->_outfp, "    sbyte  %d  dup (%d)\n", count, (int32_t)val);
-		}
-		else {
-			fprintf(ctx->_outfp, "    sbyte  %d\n", (int32_t)val);
+			switch (size)
+			{
+			case 1:
+				fprintf(ctx->_outfp, "    db  %d\n", (int)val); break;
+			case 2:
+				fprintf(ctx->_outfp, "    dw  %d\n", (int)val); break;
+			case 4:
+				fprintf(ctx->_outfp, "    dd  %d\n", (int)val); break;
+			case 8:
+				fprintf(ctx->_outfp, "    dq  0%llxh\n", val); break;
+			default:
+				assert(0); break;
+			}
 		}
 	}
 	else
 	{
 		if (count > 1) {
-			fprintf(ctx->_outfp, "    sbyte  %d  dup (?)\n", count);
+			switch (size)
+			{
+			case 1:
+				fprintf(ctx->_outfp, "    db  %d  dup (?)\n", count); break;
+			case 2:
+				fprintf(ctx->_outfp, "    dw  %d  dup (?)\n", count); break;
+			case 4:
+				fprintf(ctx->_outfp, "    dd  %d  dup (?)\n", count); break;
+			case 8:
+				fprintf(ctx->_outfp, "    dq  %d  dup (?)\n", count); break;
+			default:
+				assert(0); break;
+			}
 		}
 		else {
-			fprintf(ctx->_outfp, "    sbyte  ?\n");
+			switch (size)
+			{
+			case 1:
+				fprintf(ctx->_outfp, "    db  ?\n"); break;
+			case 2:
+				fprintf(ctx->_outfp, "    dw  ?\n"); break;
+			case 4:
+				fprintf(ctx->_outfp, "    dd  ?\n"); break;
+			case 8:
+				fprintf(ctx->_outfp, "    dq  ?\n"); break;
+			default:
+				assert(0); break;
+			}
 		}
 	}
 }
 
-static void defconst_uword(struct tagCCContext* ctx, uint16_t val, int count)
+void defconst_unsigned(struct tagCCContext* ctx, int size, uint64_t val, int count)
 {
 	if (ctx->_backend->_curr_seg != SEG_BSS)
 	{
 		if (count > 1) {
-			fprintf(ctx->_outfp, "    dw  %d  dup (%d)\n", count, (int32_t)val);
+			switch (size)
+			{
+			case 1:
+				fprintf(ctx->_outfp, "    db  %d  dup (%u)\n", count, (uint32_t)val); break;
+			case 2:
+				fprintf(ctx->_outfp, "    dw  %d  dup (%u)\n", count, (uint32_t)val); break;
+			case 4:
+				fprintf(ctx->_outfp, "    dd  %d  dup (%u)\n", count, (uint32_t)val); break;
+			case 8:
+				fprintf(ctx->_outfp, "    dq  %d  dup (0%llxh)\n", count, val); break;
+			default:
+				assert(0); break;
+			}
 		}
 		else {
-			fprintf(ctx->_outfp, "    dw  %d\n", (int32_t)val);
+			switch (size)
+			{
+			case 1:
+				fprintf(ctx->_outfp, "    db  %u\n", (uint32_t)val); break;
+			case 2:
+				fprintf(ctx->_outfp, "    dw  %u\n", (uint32_t)val); break;
+			case 4:
+				fprintf(ctx->_outfp, "    dd  %u\n", (uint32_t)val); break;
+			case 8:
+				fprintf(ctx->_outfp, "    dq  0%llxh\n", val); break;
+			default:
+				assert(0); break;
+			}
 		}
 	}
 	else
 	{
 		if (count > 1) {
-			fprintf(ctx->_outfp, "    dw  %d  dup (?)\n", count);
+			switch (size)
+			{
+			case 1:
+				fprintf(ctx->_outfp, "    db  %d  dup (?)\n", count); break;
+			case 2:
+				fprintf(ctx->_outfp, "    dw  %d  dup (?)\n", count); break;
+			case 4:
+				fprintf(ctx->_outfp, "    dd  %d  dup (?)\n", count); break;
+			case 8:
+				fprintf(ctx->_outfp, "    dq  %d  dup (?)\n", count); break;
+			default:
+				assert(0); break;
+			}
 		}
 		else {
-			fprintf(ctx->_outfp, "    dw  ?\n");
+			switch (size)
+			{
+			case 1:
+				fprintf(ctx->_outfp, "    db  ?\n"); break;
+			case 2:
+				fprintf(ctx->_outfp, "    dw  ?\n"); break;
+			case 4:
+				fprintf(ctx->_outfp, "    dd  ?\n"); break;
+			case 8:
+				fprintf(ctx->_outfp, "    dq  ?\n"); break;
+			default:
+				assert(0); break;
+			}
 		}
 	}
 }
 
-static void defconst_sword(struct tagCCContext* ctx, int16_t val, int count)
-{
-	if (ctx->_backend->_curr_seg != SEG_BSS)
-	{
-		if (count > 1) {
-			fprintf(ctx->_outfp, "    sword  %d  dup (%d)\n", count, (int32_t)val);
-		}
-		else {
-			fprintf(ctx->_outfp, "    sword  %d\n", (int32_t)val);
-		}
-	}
-	else
-	{
-		if (count > 1) {
-			fprintf(ctx->_outfp, "    sword  %d  dup (?)\n", count);
-		}
-		else {
-			fprintf(ctx->_outfp, "    sword  ?\n");
-		}
-	}
-}
-
-static void defconst_udword(struct tagCCContext* ctx, uint32_t val, int count)
-{
-	if (ctx->_backend->_curr_seg != SEG_BSS)
-	{
-		if (count > 1) {
-			fprintf(ctx->_outfp, "    dd  %d  dup (%u)\n", count, val);
-		}
-		else {
-			fprintf(ctx->_outfp, "    dd  %u\n", val);
-		}
-	}
-	else
-	{
-		if (count > 1) {
-			fprintf(ctx->_outfp, "    dd  %d  dup (?)\n", count);
-		}
-		else {
-			fprintf(ctx->_outfp, "    dd  ?\n");
-		}
-	}
-}
-
-static void defconst_sdword(struct tagCCContext* ctx, int32_t val, int count)
-{
-	if (ctx->_backend->_curr_seg != SEG_BSS)
-	{
-		if (count > 1) {
-			fprintf(ctx->_outfp, "    sdword  %d  dup (%d)\n", count, (int32_t)val);
-		}
-		else {
-			fprintf(ctx->_outfp, "    sdword  %d\n", (int32_t)val);
-		}
-	}
-	else
-	{
-		if (count > 1) {
-			fprintf(ctx->_outfp, "    sdword  %d  dup (?)\n", count);
-		}
-		else {
-			fprintf(ctx->_outfp, "    sdword  ?\n");
-		}
-	}
-}
-
-static void defconst_uqword(struct tagCCContext* ctx, uint64_t val, int count)
-{
-	if (ctx->_backend->_curr_seg != SEG_BSS)
-	{
-		if (count > 1) {
-			fprintf(ctx->_outfp, "    dq  %d  dup (0%llxh)\n", count, val);
-		}
-		else {
-			fprintf(ctx->_outfp, "    dq  0%llxh\n", val);
-		}
-	}
-	else
-	{
-		if (count > 1) {
-			fprintf(ctx->_outfp, "    dq  %d  dup (?)\n", count);
-		}
-		else {
-			fprintf(ctx->_outfp, "    dq  ?\n");
-		}
-	}
-}
-
-static void defconst_sqword(struct tagCCContext* ctx, int64_t val, int count)
-{
-	if (ctx->_backend->_curr_seg != SEG_BSS)
-	{
-		if (count > 1) {
-			fprintf(ctx->_outfp, "    dq  %d  dup (0%llxh)\n", count, val);
-		}
-		else {
-			fprintf(ctx->_outfp, "    dq  0%llxh\n", val);
-		}
-	}
-	else
-	{
-		if (count > 1) {
-			fprintf(ctx->_outfp, "    dq  %d  dup (?)\n", count);
-		}
-		else {
-			fprintf(ctx->_outfp, "    dq  ?\n");
-		}
-	}
-}
-
-static void defconst_real4(struct tagCCContext* ctx, float val, int count)
-{
-	if (ctx->_backend->_curr_seg != SEG_BSS)
-	{
-		if (count > 1) {
-			fprintf(ctx->_outfp, "    real4  %d  dup (%f)\n", count, val);
-		}
-		else {
-			fprintf(ctx->_outfp, "    real4  %f\n", val);
-		}
-	}
-	else
-	{
-		if (count > 1) {
-			fprintf(ctx->_outfp, "    real4  %d  dup (?)\n", count);
-		}
-		else {
-			fprintf(ctx->_outfp, "    real4  ?\n");
-		}
-	}
-}
-
-static void defconst_real8(struct tagCCContext* ctx, double val, int count)
+void defconst_real(struct tagCCContext* ctx, int size, double val, int count)
 {
 	if (ctx->_backend->_curr_seg != SEG_BSS)
 	{
@@ -401,15 +329,53 @@ static void defconst_string(struct tagCCContext* ctx, const void* str, int count
 }
 
 
+static void output_constant_expr(struct tagCCContext* ctx, struct tagCCExprTree* expr)
+{
+	int ircode, lhscode, rhscode;
+	
+	ircode = IR_OP(expr->_op);
+	switch (ircode)
+	{
+	case IR_ADDRG:
+		fprintf(ctx->_outfp, " %s ", expr->_u._symbol->_x._name); break;
+	case IR_CONST:
+		fprintf(ctx->_outfp, " %d ", (int)expr->_u._val._sint); break;
+	case IR_ADD:
+	case IR_SUB:
+		lhscode = IR_OP(expr->_u._kids[0]->_op);
+		rhscode = IR_OP(expr->_u._kids[1]->_op);
+		if (lhscode == IR_ADD || lhscode == IR_SUB) {
+			fprintf(ctx->_outfp, "(");
+			output_constant_expr(ctx, expr->_u._kids[0]);
+			fprintf(ctx->_outfp, ")");
+		}
+		else {
+			output_constant_expr(ctx, expr->_u._kids[0]);
+		}
+		
+		fprintf(ctx->_outfp, (ircode == IR_ADD) ? "+" : "-");
+
+		if (rhscode == IR_ADD || rhscode == IR_SUB) {
+			fprintf(ctx->_outfp, "(");
+			output_constant_expr(ctx, expr->_u._kids[1]);
+			fprintf(ctx->_outfp, ")");
+		}
+		else {
+			output_constant_expr(ctx, expr->_u._kids[1]);
+		}
+		break;
+	case IR_CVT:
+		output_constant_expr(ctx, expr->_u._kids[0]); break;
+	default:
+		break;
+	}
+}
+
 static void defconst_address(struct tagCCContext* ctx, struct tagCCExprTree* expr)
 {
-	if (expr->_op == EXPR_CONSTANT_STR) { /* "string" */
-		expr->_u._symbol->_x._refcnt++;
-		fprintf(ctx->_outfp, "  dd   %s \n", expr->_u._symbol->_x._name);
-	}
-	else {
-
-	}
+	fprintf(ctx->_outfp, "   dd   ");
+	output_constant_expr(ctx, expr);
+	fprintf(ctx->_outfp, "\n");
 }
 
 static void defglobal_end(struct tagCCContext* ctx, struct tagCCSymbol* sym)

@@ -19,11 +19,11 @@ BOOL cc_expr_parse_expression(FCCContext* ctx, FCCIRTree** outexpr, enum EMMArea
 BOOL cc_expr_parse_constant_expression(FCCContext* ctx, FCCIRTree** outexpr, enum EMMArea where);
 BOOL cc_expr_parse_constant_int(FCCContext* ctx, int* val);
 
-
 /* ir tree operating apis */
 FCCType* cc_expr_assigntype(FCCType* lhs, FCCIRTree* expr);
 BOOL cc_expr_is_modifiable(FCCIRTree* expr);
 BOOL cc_expr_is_nullptr(FCCIRTree* expr);
+BOOL cc_expr_is_constant(FCCIRTree* expr);
 
 /* generate ir tree apis */
 FCCIRTree* cc_expr_change_rettype(FCCIRTree* expr, FCCType* newty, enum EMMArea where);
@@ -55,5 +55,14 @@ FCCIRTree* cc_expr_unequal(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocatio
 FCCIRTree* cc_expr_bitand(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
 FCCIRTree* cc_expr_bitxor(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
 FCCIRTree* cc_expr_bitor(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_logicand(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_logicor(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where);
+FCCIRTree* cc_expr_condition(FCCIRTree* expr0, FCCIRTree* expr1, FCCIRTree* expr2, FLocation *loc, enum EMMArea where);
+/* to bool expression */
+FCCIRTree* cc_expr_bool(FCCType* ty, FCCIRTree* expr, FLocation* loc, enum EMMArea where);
+/* return the last expression of an expr-tree */
+FCCIRTree* cc_expr_right(FCCIRTree* expr);
+/* return value of expression */
+FCCIRTree* cc_expr_value(FCCIRTree* expr, enum EMMArea where);
 
 #endif /* _CC_EXPR_H__ */
