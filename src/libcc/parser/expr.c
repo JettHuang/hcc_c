@@ -1679,9 +1679,9 @@ FCCIRTree* cc_expr_adjust(FCCIRTree* expr, enum EMMArea where)
 		{
 			return NULL;
 		}
-
-		expr = cc_expr_adjust(expr, where);
-	} else if (IsArray(expr->_ty)) {
+	} 
+	
+	if (IsArray(expr->_ty)) {
 		expr = cc_expr_change_rettype(expr, cc_type_arraytoptr(expr->_ty), where);
 	} else if (IsFunction(expr->_ty)) {
 		expr = cc_expr_change_rettype(expr, cc_type_ptr(expr->_ty), where);
