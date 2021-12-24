@@ -1042,9 +1042,37 @@ FCCSymbol* cc_parser_declparam(FCCContext* ctx, int storage, const char* id, con
 	return p;
 }
 
-BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FCCType* ty, const FLocation* loc, FArray* params)
+BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FCCType* fty, const FLocation* loc, FArray* params)
 {
-	// TODO: 
+	FCCSymbol* p;
+
+	if ((p = cc_symbol_lookup(name, gGlobals)))
+	{
+		if (IsFunction(p->_type))
+		{
+			if (p->_defined) {
+				logger_output_s("error: function has defined %w, previous declared at %w\n", loc, &p->_loc);
+				return FALSE;
+			}
+			if (!cc_type_isequal(p->_type, fty, FALSE)) {
+				logger_output_s("error: function protos is not equal at %w, previous declared at %w\n", loc, &p->_loc);
+				return FALSE;
+			}
+		}
+		else
+		{
+			logger_output_s("error: '%s' redeclared as different type at %w, previous declared at %w\n", name, loc, &p->_loc);
+			return FALSE;
+		}
+	}
+	else
+	{
+		p = cc_symbol_install(name, &gGlobals, SCOPE_GLOBAL, CC_MM_PERMPOOL);
+	}
+	p->_sclass = storage;
+	p->_loc = *loc;
+	p->_type = fty;
+	p->_defined = 1;
 
 	cc_parser_expect(ctx, TK_LBRACE);
 	cc_parser_expect(ctx, TK_RBRACE);
@@ -1052,7 +1080,7 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 	/* exit param scope */
 	cc_symbol_exitscope();
 	assert(gCurrentLevel == SCOPE_GLOBAL);
-	return FALSE;
+	return TRUE;
 }
 
 FCCType* cc_parser_declenum(FCCContext* ctx)

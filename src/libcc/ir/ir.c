@@ -3,8 +3,8 @@
  */
 
 #include "ir.h"
-#include "types.h"
-#include "symbols.h"
+#include "parser/types.h"
+#include "parser/symbols.h"
 
 
 int cc_ir_typecode(const struct tagCCType* ty)

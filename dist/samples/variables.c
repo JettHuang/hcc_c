@@ -26,6 +26,10 @@ int* pval = &gs.b;
 char name[] = "123";
 char *pstr = "123456";
 
+void display(int display)
+{
+}
+
 /*
 struct Struct {
 	char ch;

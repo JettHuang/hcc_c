@@ -10,7 +10,7 @@
 #include "cc.h"
 #include "symbols.h"
 #include "types.h"
-#include "ir.h"
+#include "ir/ir.h"
 
 
 /* parsing apis */

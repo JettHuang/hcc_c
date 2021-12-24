@@ -85,6 +85,8 @@ project "libcc"
 		"./src/libcc/lexer/*.c",
 		"./src/libcc/parser/*.h",
 		"./src/libcc/parser/*.c",
+		"./src/libcc/ir/*.h",
+		"./src/libcc/ir/*.c",
 		"./src/libcc/generator/*.h",
 		"./src/libcc/generator/*.c"
     }

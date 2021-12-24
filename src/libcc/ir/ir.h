@@ -8,7 +8,7 @@
 #include "utils.h"
 #include "mm.h"
 #include "cc.h"
-#include "symbols.h"
+#include "parser/symbols.h"
 
 
 /* types code */
@@ -61,8 +61,16 @@
 #define IR_SEQ		0x1E	/* sequence, e1, e2, e3, and final result is e3 */
 #define IR_COND		0x1F	/* ? : */
 
-/* op-codes : code */
-#define IR_JMP		0x20
+/* op-codes : statement */
+#define IR_ARG		0x20
+#define IR_EXP		0x21
+#define IR_JMP		0x22
+#define IR_CJMP		0x23
+#define IR_LABEL	0x24
+#define IR_BLKBEG 	0x25
+#define IR_BLKEND	0x26
+#define IR_ENTER	0x27
+#define IR_EXIT		0x28
 
 
 /* format: op | ty0 | ty1 */
@@ -96,8 +104,49 @@ typedef struct tagCCExprTree {
 	/* auxiliary flags */
 	int _isbitfield : 1;
 	int _islvalue : 1;
+	int _islinearized : 1; /* mark has been linearized in the code list */
 } FCCIRTree;
 
+/* IR dag */
+typedef struct tagCCExprDag {
+	unsigned int _op;
+	FLocation	 _loc;
+
+	/* TODO: */
+} FCCExprDag;
+
+/* IR code */
+typedef struct tagCCIRCode {
+	unsigned int _op;
+	union 
+	{
+		struct tagCCExprTree* _expr;
+		struct tagCCSymbol* _label;
+		struct {
+			struct tagCCExprTree* _cond;
+			struct tagCCSymbol*	  _tlabel;
+		} _jmp;
+
+		struct {
+			struct tagCCSymbol** _localvars; /* end with null. */
+			unsigned int _spacebytes;
+		} _blk;
+	} _u;
+
+	struct tagCCIRCode* _prev, *_next;
+} FCCIRCode;
+
+/* IR Code list */
+typedef struct tagCCIRCodeList {
+	struct tagCCIRCode* _head;
+	struct tagCCIRCode* _tail;
+} FCCIRCodeList;
+
+/* IR Basic Block */
+typedef struct tagCCIRBasicBlock {
+	struct tagCCIRCodeList _codes;
+	struct tagCCIRBasicBlock *_prev, *_next, *_tjmp;
+} FCCIRBasicBlock;
 
 int cc_ir_typecode(const struct tagCCType* ty);
 
