@@ -197,7 +197,7 @@ static BOOL cc_expr_parse_postfix(FCCContext* ctx, FCCIRTree** outexpr, enum EMM
 				tree = cc_expr_change_rettype(tree, tree->_ty->_type, where);
 			}
 			else {
-				tree = cc_expr_indir(expr, &loc, where);
+				tree = cc_expr_indir(tree, &loc, where);
 			}
 			tree->_islvalue = expr->_islvalue;
 
@@ -3188,4 +3188,271 @@ FCCIRTree* cc_expr_assign(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation
 	asgntree->_isbitfield = isbitfield;
 
 	return asgntree;
+}
+
+
+static void cc_expr_internaldisplay(FCCIRTree* expr, int depth, int maxdepth);
+void cc_expr_display(FCCIRTree* expr, int maxdepth)
+{
+	cc_expr_internaldisplay(expr, 0, maxdepth);
+}
+
+static void cc_expr_internaldisplay(FCCIRTree* expr, int depth, int maxdepth)
+{
+	int op;
+	
+	if (!expr || (maxdepth >= 0 && depth > maxdepth))
+	{
+		return;
+	}
+
+	depth++;
+	op = IR_OP(expr->_op);
+	switch (op)
+	{
+	case IR_CONST:
+		logger_output_s(" CONST %d", expr->_u._val._sint); break;
+	case IR_ASSIGN:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s("="); 
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_ADD:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s("+");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_SUB:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s("-");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_MUL:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s("*");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_DIV:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s("/");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_MOD:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s("%");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_LSHIFT:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s("<<");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_RSHIFT:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s(">>");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_BITAND:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s("&");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_BITOR:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s("|");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_BITXOR:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s("^");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_LOGAND:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s("&&");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_LOGOR:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s("||");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_EQUAL:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s("==");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_UNEQ:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s("!=");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_LESS:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s("<");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_GREAT:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s(">");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_LEQ:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s("<=");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_GEQ:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s(">=");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_NEG:
+		logger_output_s("-");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_NOT:
+		logger_output_s("!");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_BCOM:
+		logger_output_s("~");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_CVT:
+		logger_output_s("CVT");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_INDIR:
+		logger_output_s("INDIR");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_ADDRG:
+		logger_output_s("ADDRG %s", expr->_u._symbol->_name);
+		break;
+	case IR_ADDRF:
+		logger_output_s("ADDRF %s", expr->_u._symbol->_name);
+		break;
+	case IR_ADDRL:
+		logger_output_s("ADDRL %s", expr->_u._symbol->_name);
+		break;
+	case IR_CALL:
+		logger_output_s("CALL");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	case IR_SEQ:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s(", ");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s(", ");
+		break;
+	case IR_COND:
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s("?");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
+		logger_output_s(")");
+		logger_output_s(":");
+		logger_output_s("(");
+		cc_expr_internaldisplay(expr->_u._kids[2], depth, maxdepth);
+		logger_output_s(")");
+		break;
+	default:
+		logger_output_s("Unkown");
+		break;
+	}
 }

@@ -164,4 +164,8 @@ void cc_ir_codelist_remove(FCCIRCodeList* l, FCCIRCode* c);
 void cc_ir_codelist_insert_before(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c);
 void cc_ir_codelist_insert_after(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c);
 
+
+/* for debug */
+void cc_ir_codelist_display(FCCIRCodeList* l, int maxdepth);
+
 #endif /* __CC_IR_H__ */

@@ -65,4 +65,8 @@ FCCIRTree* cc_expr_right(FCCIRTree* expr);
 /* return value of expression */
 FCCIRTree* cc_expr_value(FCCIRTree* expr, enum EMMArea where);
 
+
+/* for debug */
+void cc_expr_display(FCCIRTree *expr, int maxdepth);
+
 #endif /* _CC_EXPR_H__ */

@@ -100,7 +100,7 @@ project "hcpp"
 	dependson { "basic", "libcpp" }
 	links { "basic", "libcpp" }
 	
-	debugargs { "-o \"test0.i\" dist/samples/test0.c" }
+	debugargs { "-o \"test0.i\" dist/tests/test0.c" }
 	
     includedirs {
 		"./src/basic",
@@ -124,7 +124,7 @@ project "hcc"
 	dependson { "basic", "libcc" }
 	links { "basic", "libcc" }
 	
-	debugargs { "dist/samples/types.c" }
+	debugargs { "dist/tests/stmts.c" }
 	
     includedirs {
 		"./src/basic",

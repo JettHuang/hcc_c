@@ -139,7 +139,9 @@ BOOL cc_parser_declaration(FCCContext* ctx, FDeclCallback callback)
 					return FALSE;
 				}
 
-				logger_output_s("debug: symbol: %s, %s, %w, %t\n", cc_sclass_displayname(p->_sclass), p->_name, &p->_loc, p->_type);
+				/*
+					logger_output_s("debug: symbol: %s, %s, %w, %t\n", cc_sclass_displayname(p->_sclass), p->_name, &p->_loc, p->_type);
+				*/
 			}
 
 			if (ctx->_currtk._type != TK_COMMA) /* ',' */
@@ -1097,6 +1099,8 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 	p->_type = fty;
 	p->_defined = 1;
 
+	/* clear labels table */
+	cc_symbol_reset(gLabels);
 	/* body */
 	{
 		FCCIRCodeList codelist = { NULL, NULL };
@@ -1118,11 +1122,41 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 		exitlab->_loc = ctx->_currtk._loc;
 		cc_ir_codelist_append(&codelist, cc_ir_newcode_label(exitlab, CC_MM_TEMPPOOL));
 		cc_ir_codelist_append(&codelist, cc_ir_newcode(IR_FEXIT, CC_MM_TEMPPOOL));
+
+		/* check undefined label */
+		{
+			FCCIRCode* c;
+			FCCSymbol* label;
+			int cnt = 0;
+
+			for (c= codelist._head; c; c=c->_next)
+			{
+				if (c->_op == IR_JMP)
+				{
+					label = c->_u._jmp._tlabel;
+					if (!label->_defined) {
+						cnt++;
+						logger_output_s("error: undefined label '%s', used at %w\n", label->_name, &label->_loc);
+					}
+				}
+			} /* end for */
+			if (cnt > 0) {
+				return FALSE;
+			}
+		}
+
+		/* for debug */
+		logger_output_s("function: %s\n", p->_name);
+		cc_ir_codelist_display(&codelist, 5);
+		logger_output_s("\n");
 	}
 	
 	/* exit param scope */
 	cc_symbol_exitscope();
 	assert(gCurrentLevel == SCOPE_GLOBAL);
+	
+	/* free temp mm pool */
+	mm_free_area(CC_MM_TEMPPOOL);
 	return TRUE;
 }
 

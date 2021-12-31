@@ -89,6 +89,7 @@ BOOL cc_stmt_compound(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list,
 	cc_symbol_enterscope();
 
 	cc_ir_codelist_append(list, cc_ir_newcode_blk(TRUE, gCurrentLevel, CC_MM_TEMPPOOL));
+#if 0
 	while (cc_parser_is_typename(&ccctx->_currtk))
 	{
 		if (!cc_parser_declaration(ccctx, &cc_parser_decllocal))
@@ -107,7 +108,32 @@ BOOL cc_stmt_compound(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list,
 			return FALSE;
 		}
 	} /* end while */
-
+#else
+	for (;;) 
+	{
+		/* is a declaration? */
+		if (cc_parser_is_typename(&ccctx->_currtk))
+		{
+			if (!cc_parser_declaration(ccctx, &cc_parser_decllocal))
+			{
+				cc_symbol_exitscope();
+				return FALSE;
+			}
+		} /* end locals */
+		else if (cc_parser_is_stmtspecifier(ccctx->_currtk._type)
+			|| ccctx->_currtk._type == TK_LBRACE
+			|| ccctx->_currtk._type == TK_SEMICOLON)
+		{
+			if (!cc_stmt_statement(ccctx, list, loop, swtch)) {
+				return FALSE;
+			}
+		} /* end statement */
+		else
+		{
+			break;
+		}
+	}
+#endif
 	cc_ir_codelist_append(list, cc_ir_newcode_blk(FALSE, gCurrentLevel, CC_MM_TEMPPOOL));
 	cc_symbol_exitscope();
 	if (!cc_parser_expect(ccctx, TK_RBRACE)) { /* '}' */
@@ -378,6 +404,7 @@ BOOL cc_stmt_switch(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 	 */
 	swend = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
 	swend->_generated = 1;
+	swend->_defined = 1;
 
 	thisswtch._level = 0;
 	thisswtch._lab_exit = swend;

@@ -8,6 +8,7 @@
 #include "logger.h"
 #include "parser/types.h"
 #include "parser/symbols.h"
+#include "parser/expr.h"
 
 
 int cc_ir_typecode(const struct tagCCType* ty)
@@ -203,4 +204,59 @@ void cc_ir_codelist_insert_after(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c)
 
 	t->_next = c;
 	c->_prev = t;
+}
+
+void cc_ir_codelist_display(FCCIRCodeList* l, int maxdepth)
+{
+	FCCIRCode* c = l->_head;
+
+	for (; c; c = c->_next)
+	{
+		switch (c->_op)
+		{
+		case IR_ARG:
+			logger_output_s("\tIR_ARG ");
+			cc_expr_display(c->_u._expr, maxdepth); 
+			logger_output_s("\n");
+			break;
+		case IR_EXP:
+			logger_output_s("\tIR_EXP ");
+			cc_expr_display(c->_u._expr, maxdepth);
+			logger_output_s("\n");
+			break;
+		case IR_JMP:
+			logger_output_s("\tIR_JMP %s\n", c->_u._jmp._tlabel->_name);
+			break;
+		case IR_CJMP:
+			logger_output_s("\tIR_CJMP %s ", c->_u._jmp._tlabel->_name);
+			cc_expr_display(c->_u._jmp._cond, maxdepth);
+			logger_output_s("\n");
+			break;
+		case IR_LABEL:
+			logger_output_s("IR_LABEL %s:\n", c->_u._label->_name);
+			break;
+		case IR_BLKBEG:
+			logger_output_s("\tIR_BLKBEG %d:\n", c->_u._blklevel);
+			break;
+		case IR_BLKEND:
+			logger_output_s("\tIR_BLKEND %d:\n", c->_u._blklevel);
+			break;
+		case IR_LOCVAR:
+			logger_output_s("\tIR_LOCVAR %s\n", c->_u._id->_name);
+			break;
+		case IR_RET:
+			logger_output_s("\tIR_RET ");
+			cc_expr_display(c->_u._expr, maxdepth);
+			logger_output_s("\n");
+			break;
+		case IR_FENTER:
+			logger_output_s("\tIR_FENTER\n");
+			break;
+		case IR_FEXIT:
+			logger_output_s("\tIR_FEXIT\n");
+			break;
+		default:
+			logger_output_s("IR_Unkown"); break;
+		}
+	} /* end for */
 }
