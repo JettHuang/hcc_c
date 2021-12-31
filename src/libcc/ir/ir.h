@@ -69,8 +69,10 @@
 #define IR_LABEL	0x24
 #define IR_BLKBEG 	0x25
 #define IR_BLKEND	0x26
-#define IR_ENTER	0x27
-#define IR_EXIT		0x28
+#define IR_LOCVAR	0x27
+#define IR_RET		0x28
+#define IR_FENTER	0x29
+#define IR_FEXIT	0x30
 
 
 /* format: op | ty0 | ty1 */
@@ -113,24 +115,22 @@ typedef struct tagCCExprDag {
 	FLocation	 _loc;
 
 	/* TODO: */
-} FCCExprDag;
+} FCCIRDag;
 
 /* IR code */
 typedef struct tagCCIRCode {
 	unsigned int _op;
 	union 
 	{
+		struct tagCCSymbol* _id;
 		struct tagCCExprTree* _expr;
 		struct tagCCSymbol* _label;
 		struct {
-			struct tagCCExprTree* _cond;
-			struct tagCCSymbol*	  _tlabel;
+			struct tagCCExprTree* _cond;  /* jump to _tlabel when cond is true */
+			struct tagCCSymbol*	  _tlabel, * _flabel; /* true & false label */
 		} _jmp;
 
-		struct {
-			struct tagCCSymbol** _localvars; /* end with null. */
-			unsigned int _spacebytes;
-		} _blk;
+		int _blklevel;
 	} _u;
 
 	struct tagCCIRCode* _prev, *_next;
@@ -145,10 +145,23 @@ typedef struct tagCCIRCodeList {
 /* IR Basic Block */
 typedef struct tagCCIRBasicBlock {
 	struct tagCCIRCodeList _codes;
-	struct tagCCIRBasicBlock *_prev, *_next, *_tjmp;
+	struct tagCCIRBasicBlock *_prev, *_next, *_tjmp;  /* _tjmp is block of true jump */
 } FCCIRBasicBlock;
 
 int cc_ir_typecode(const struct tagCCType* ty);
 
+FCCIRCode* cc_ir_newcode(unsigned int op, enum EMMArea where);
+FCCIRCode* cc_ir_newcode_arg(struct tagCCExprTree* expr, enum EMMArea where);
+FCCIRCode* cc_ir_newcode_ret(struct tagCCExprTree* expr, enum EMMArea where);
+FCCIRCode* cc_ir_newcode_expr(struct tagCCExprTree* expr, enum EMMArea where);
+FCCIRCode* cc_ir_newcode_var(struct tagCCSymbol* id, enum EMMArea where);
+FCCIRCode* cc_ir_newcode_label(struct tagCCSymbol* lab, enum EMMArea where);
+FCCIRCode* cc_ir_newcode_jump(struct tagCCExprTree* cond, struct tagCCSymbol* tlabel, struct tagCCSymbol* flabel, enum EMMArea where);
+FCCIRCode* cc_ir_newcode_blk(BOOL isbegin, int level, enum EMMArea where);
+
+void cc_ir_codelist_append(FCCIRCodeList* l, FCCIRCode* c);
+void cc_ir_codelist_remove(FCCIRCodeList* l, FCCIRCode* c);
+void cc_ir_codelist_insert_before(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c);
+void cc_ir_codelist_insert_after(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c);
 
 #endif /* __CC_IR_H__ */

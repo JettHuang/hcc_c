@@ -69,6 +69,13 @@ static FCCSymbolTable* cc_new_table(FCCSymbolTable* up, int level)
 	return tp;
 }
 
+void cc_symbol_reset(struct tagCCSymbolTable* tp)
+{
+	tp->_previous = NULL;
+	tp->_all = NULL;
+	memset(tp->_buckets, 0, sizeof(tp->_buckets));
+}
+
 void cc_symbol_init()
 {
 	cc_init_table(&sConstants, SCOPE_CONST);
@@ -86,7 +93,13 @@ int cc_symbol_genlabel(int cnt)
 	return slabelId - cnt;
 }
 
-BOOL cc_symbol_isgenlabel(const char* name)
+int cc_symbol_gentemp(int cnt)
+{
+	stempId += cnt;
+	return stempId - cnt;
+}
+
+BOOL cc_symbol_isgenerated(const char* name)
 {
 	return (*name >= '1' && *name <= '9');
 }

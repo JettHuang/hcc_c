@@ -8,6 +8,7 @@
 #include "logger.h"
 #include "init.h"
 #include "expr.h"
+#include "stmt.h"
 #include "generator/gen.h"
 
 
@@ -160,7 +161,7 @@ BOOL cc_parser_declaration(FCCContext* ctx, FDeclCallback callback)
 	}
 	else
 	{
-		BOOL bStructDecl = IsStruct(basety) && !cc_symbol_isgenlabel(UnQual(basety)->_u._symbol->_name);
+		BOOL bStructDecl = IsStruct(basety) && !cc_symbol_isgenerated(UnQual(basety)->_u._symbol->_name);
 		if (!IsEnum(basety) && !bStructDecl)
 		{
 			logger_output_s("warning: empty declaration. at %s:%d:%d\n", ctx->_cs->_srcfilename, ctx->_cs->_line, ctx->_cs->_col);
@@ -926,7 +927,7 @@ FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, con
 
 	assert(gCurrentLevel >= SCOPE_LOCAL);
 
-	p = cc_symbol_install(id, &gIdentifiers, gCurrentLevel, (storage == SC_Static || storage == SC_External) ? CC_MM_PERMPOOL : CC_MM_TEMPPOOL);
+	p = cc_symbol_install(id, &gIdentifiers, gCurrentLevel, CC_MM_TEMPPOOL);
 	p->_type = ty;
 	p->_sclass = storage;
 	p->_loc = *loc;
@@ -954,6 +955,14 @@ FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, con
 		p->_u._alias = q;
 		break;
 	case SC_Static:
+		q = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gGlobals, SCOPE_GLOBAL, CC_MM_PERMPOOL);
+		q->_type = p->_type;
+		q->_sclass = SC_Static;
+		q->_loc = *loc;
+		q->_generated = 1;
+		q->_defined = 1;
+
+		p->_u._alias = q;
 		p->_defined = 1;
 		break;
 	case SC_Register:
@@ -971,23 +980,37 @@ FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, con
 
 	if (ctx->_currtk._type == TK_ASSIGN) /* '=' */
 	{
+		FVarInitializer* initializer;
+		BOOL bExpectConstant = FALSE;
+
 		if (storage == SC_External) {
 			logger_output_s("error: illegal initialization of 'extern %s' at %w\n", id, loc);
 			return NULL;
 		}
-		FVarInitializer* initializer;
-
+		
+		bExpectConstant = (storage == SC_Static);
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_parser_initializer(ctx, &initializer, FALSE, CC_MM_PERMPOOL)) {
+		if (!cc_parser_initializer(ctx, &initializer, FALSE, storage == SC_Static ? CC_MM_PERMPOOL : CC_MM_TEMPPOOL)) {
 			logger_output_s("error: illegal initialization for '%s' at %w\n", p->_name, loc);
 			return FALSE;
 		}
 
-		if (!cc_varinit_check(ctx, p->_type, initializer, CC_MM_PERMPOOL)) {
+		if (!cc_varinit_check(ctx, p->_type, initializer, storage == SC_Static ? CC_MM_PERMPOOL : CC_MM_TEMPPOOL)) {
 			return FALSE;
 		}
 
-		p->_u._initializer = initializer;
+		if (storage == SC_Static) {
+			p->_u._alias->_u._initializer = initializer;
+		}
+		else {
+			p->_u._initializer = initializer;
+		}
+		
+	}
+
+	assert(ctx->_codes);
+	if (storage != SC_Static && storage != SC_External) {
+		cc_ir_codelist_append(ctx->_codes, cc_ir_newcode_var(p, CC_MM_TEMPPOOL));
 	}
 
 	if (!IsFunction(p->_type) && p->_defined && p->_type->_size <= 0) {
@@ -1074,8 +1097,28 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 	p->_type = fty;
 	p->_defined = 1;
 
-	cc_parser_expect(ctx, TK_LBRACE);
-	cc_parser_expect(ctx, TK_RBRACE);
+	/* body */
+	{
+		FCCIRCodeList codelist = { NULL, NULL };
+		FCCSymbol* exitlab;
+
+		exitlab = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+		exitlab->_generated = 1;
+		exitlab->_defined = 1;
+		ctx->_function = p;
+		ctx->_funcexit = exitlab;
+		ctx->_codes = &codelist;
+
+		cc_ir_codelist_append(&codelist, cc_ir_newcode(IR_FENTER, CC_MM_TEMPPOOL));
+		if (!cc_stmt_compound(ctx, &codelist, NULL, NULL)) 
+		{
+			return FALSE;
+		}
+
+		exitlab->_loc = ctx->_currtk._loc;
+		cc_ir_codelist_append(&codelist, cc_ir_newcode_label(exitlab, CC_MM_TEMPPOOL));
+		cc_ir_codelist_append(&codelist, cc_ir_newcode(IR_FEXIT, CC_MM_TEMPPOOL));
+	}
 	
 	/* exit param scope */
 	cc_symbol_exitscope();

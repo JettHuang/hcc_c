@@ -17,46 +17,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-void printvalue(int kind, ...)
-{
-	char c;
-	short s;
-	int i;
-	int64_t k;
-	float f;
-	double d;
-	long double l;
-
-	va_list vl;
-	va_start(vl, kind);
-
-	switch (kind)
-	{
-	case 'c':
-		c = va_arg(vl, char);
-		break;
-	case 's':
-		s = va_arg(vl, short);
-		break;
-	case 'i':
-		i = va_arg(vl, int);
-		break;
-	case 'k':
-		k = va_arg(vl, int64_t);
-		break;
-	case 'f':
-		f = va_arg(vl, float);
-		break;
-	case 'd':
-		d = va_arg(vl, double);
-		break;
-	case 'l':
-		//l = va_arg(vl, long double);
-		break;
-	}
-
-	va_end(vl);
-}
 
 int main(int argc, char* argv[])
 {
@@ -65,10 +25,6 @@ int main(int argc, char* argv[])
 	struct optparse options;
 	const char* srcfilename, *outfilename;
 	FCCContext cc;
-
-	char c = 0x8F;
-
-	printvalue('c', c);
 	
 	localename = setlocale(LC_ALL, "");
 	logger_output_s("LOCAL %s\n", localename);

@@ -13,6 +13,14 @@
 #define FALSE		0
 typedef int			BOOL;
 
+#ifndef MIN
+#define MIN(x, y)	((x < y) ? x : y)
+#endif
+
+#ifndef MAX
+#define MAX(x, y)	((x > y) ? x : y)
+#endif
+
 typedef struct tagLocation {
 	const char* _filename;
 	unsigned int _line;

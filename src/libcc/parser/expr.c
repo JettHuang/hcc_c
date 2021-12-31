@@ -418,6 +418,9 @@ static BOOL cc_expr_parse_arguments(FCCContext* ctx, FArray* args, enum EMMArea 
 			return FALSE;
 		}
 
+		if (!(expr = cc_expr_adjust(expr, where))) {
+			return FALSE;
+		}
 		array_append(args, &expr);
 
 		if (ctx->_currtk._type != TK_COMMA) /* ',' */
@@ -1124,7 +1127,7 @@ static BOOL cc_expr_parse_equality(FCCContext* ctx, FCCIRTree** outexpr, enum EM
 			return FALSE;
 		}
 
-		tree = (tktype == TK_EQUAL) ? cc_expr_equal(ty, lhs, rhs, &loc, where) : cc_expr_unequal(ty, lhs, rhs, &loc, where);
+		tree = (tktype == TK_EQUAL) ? cc_expr_equal(gbuiltintypes._sinttype, lhs, rhs, &loc, where) : cc_expr_unequal(gbuiltintypes._sinttype, lhs, rhs, &loc, where);
 		lhs = tree;
 	} /* end while */
 
@@ -1377,6 +1380,7 @@ BOOL cc_expr_parse_assignment(FCCContext* ctx, FCCIRTree** outexpr, enum EMMArea
 		FCCType *ty;
 
 		loc = ctx->_currtk._loc;
+		cc_read_token(ctx, &ctx->_currtk);
 		if (!cc_expr_parse_assignment(ctx, &rhs, where)) {
 			return FALSE;
 		}
@@ -2261,7 +2265,7 @@ FCCIRTree* cc_expr_call(FCCType* fty, FCCIRTree* expr, FArray* args, FLocation* 
 
 	/* check arguments */
 	if (!cc_expr_checkarguments(fty, args->_data, where)) {
-		logger_output_s("error: function parameters checking failed at %w\n", &loc);
+		logger_output_s("error: function parameters checking failed at %w\n", loc);
 		return NULL;
 	}
 

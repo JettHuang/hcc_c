@@ -11,70 +11,51 @@
 #include <assert.h>
 
 
-static struct tagCCStatement* cc_find_case(struct tagCCStatement* stmtswitch, int val)
+static struct tagCCSymbol* cc_find_case(struct tagCCSwitchContext* swtch, int val)
 {
-	FArray* cases;
 	int n;
 
-	assert(stmtswitch->_kind == ESTMT_Switch);
-	cases = &(stmtswitch->_u._switch._cases);
-	for (n=0; n<cases->_elecount; n++)
+	for (n = 0; n < swtch->_cases._elecount; n++)
 	{
-		FCCStatement* stmt = *(FCCStatement**)array_element(cases, n);
-		assert(stmt->_kind == ESTMT_Case);
-		if (stmt->_u._case._constval == val) {
-			return stmt;
+		FCCSwitchCase* swcase = array_element(&swtch->_cases, n);
+		if (swcase->_value == val) {
+			return swcase->_label;
 		}
 	} /* end for */
 
 	return NULL;
 }
 
-FCCStatement* cc_stmt_new(enum EStmtType k)
-{
-	FCCStatement* stmt = mm_alloc_area(sizeof(FCCStatement), CC_MM_TEMPPOOL);
-	if (stmt) {
-		memset(stmt, 0, sizeof(FCCStatement));
-		stmt->_kind = k;
-	}
-	else {
-		logger_output_s("error: out of memory at %s:%d\n", __FILE__, __LINE__);
-	}
-
-	return stmt;
-}
-
-BOOL cc_stmt_statement(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, struct tagCCStatement** outstmt)
+BOOL cc_stmt_statement(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch)
 {
 	BOOL bSuccess = FALSE;
 	
-	*outstmt = NULL;
 	switch (ccctx->_currtk._type)
 	{
 	case TK_IF:
-		bSuccess = cc_stmt_ifelse(ccctx, stmtctx, outstmt); break;
+		bSuccess = cc_stmt_ifelse(ccctx, list, loop, swtch); break;
 	case TK_DO:
-		bSuccess = cc_stmt_dowhile(ccctx, stmtctx, outstmt); break;
+		bSuccess = cc_stmt_dowhile(ccctx, list, loop, swtch); break;
 	case TK_WHILE:
-		bSuccess = cc_stmt_while(ccctx, stmtctx, outstmt); break;
+		bSuccess = cc_stmt_while(ccctx, list, loop, swtch); break;
 	case TK_FOR:
-		bSuccess = cc_stmt_for(ccctx, stmtctx, outstmt); break;
+		bSuccess = cc_stmt_for(ccctx, list, loop, swtch); break;
 	case TK_BREAK:
-		bSuccess = cc_stmt_break(ccctx, stmtctx, outstmt); break;
+		bSuccess = cc_stmt_break(ccctx, list, loop, swtch); break;
 	case TK_CONTINUE:
-		bSuccess = cc_stmt_continue(ccctx, stmtctx, outstmt); break;
+		bSuccess = cc_stmt_continue(ccctx, list, loop, swtch); break;
 	case TK_SWITCH:
-		bSuccess = cc_stmt_switch(ccctx, stmtctx, outstmt); break;
+		bSuccess = cc_stmt_switch(ccctx, list, loop, swtch); break;
 	case TK_CASE:
-		bSuccess = cc_stmt_case(ccctx, stmtctx, outstmt); break;
+		bSuccess = cc_stmt_case(ccctx, list, loop, swtch); break;
 	case TK_DEFAULT:
-		bSuccess = cc_stmt_default(ccctx, stmtctx, outstmt); break;
+		bSuccess = cc_stmt_default(ccctx, list, loop, swtch); break;
 	case TK_RETURN:
-		bSuccess = cc_stmt_return(ccctx, stmtctx, outstmt); break;
+		bSuccess = cc_stmt_return(ccctx, list, loop, swtch); break;
 	case TK_GOTO:
-		bSuccess = cc_stmt_goto(ccctx, stmtctx, outstmt); break;
+		bSuccess = cc_stmt_goto(ccctx, list, loop, swtch); break;
 	case TK_LBRACE: /* '{' */
-		bSuccess = cc_stmt_compound(ccctx, stmtctx, outstmt); break;
+		bSuccess = cc_stmt_compound(ccctx, list, loop, swtch); break;
 	case TK_SEMICOLON: /* ';' */
 		bSuccess = cc_read_token(ccctx, &ccctx->_currtk); break;
 	case TK_ID:
@@ -82,14 +63,14 @@ BOOL cc_stmt_statement(struct tagCCContext* ccctx, struct tagCCStmtContext* stmt
 		FCCToken aheadtk;
 		cc_lookahead_token(ccctx, &aheadtk);
 		if (aheadtk._type == TK_COLON) { /* ':' */
-			bSuccess = cc_stmt_label(ccctx, stmtctx, outstmt);
+			bSuccess = cc_stmt_label(ccctx, list, loop, swtch);
 			break;
 		}
 	}
 		/* go through */
 	default:
 		if (cc_parser_is_stmtspecifier(ccctx->_currtk._type)) {
-			bSuccess = cc_stmt_expression(ccctx, stmtctx, outstmt);
+			bSuccess = cc_stmt_expression(ccctx, list, loop, swtch);
 		}
 		else {
 			logger_output_s("error: expect a statement. at %w\n", &ccctx->_currtk._loc);
@@ -99,22 +80,15 @@ BOOL cc_stmt_statement(struct tagCCContext* ccctx, struct tagCCStmtContext* stmt
 	return bSuccess;
 }
 
-BOOL cc_stmt_compound(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, struct tagCCStatement** outstmt)
+BOOL cc_stmt_compound(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch)
 {
-	struct tagCCStatement* stmt;
-
-	if (!(stmt = cc_stmt_new(ESTMT_Compound))) {
-		return FALSE;
-	}
-	stmt->_loc = ccctx->_currtk._loc;
-
 	if (!cc_parser_expect(ccctx, TK_LBRACE)) /* '{' */
 	{
 		return FALSE;
 	}
-
 	cc_symbol_enterscope();
 
+	cc_ir_codelist_append(list, cc_ir_newcode_blk(TRUE, gCurrentLevel, CC_MM_TEMPPOOL));
 	while (cc_parser_is_typename(&ccctx->_currtk))
 	{
 		if (!cc_parser_declaration(ccctx, &cc_parser_decllocal))
@@ -129,93 +103,76 @@ BOOL cc_stmt_compound(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtc
 		|| ccctx->_currtk._type == TK_LBRACE
 		|| ccctx->_currtk._type == TK_SEMICOLON)
 	{
-		FCCStatement* kidstmt;
-		if (!cc_stmt_statement(ccctx, stmtctx, &kidstmt)) {
+		if (!cc_stmt_statement(ccctx, list, loop, swtch)) {
 			return FALSE;
-		}
-
-		if (kidstmt) {
-			if (stmt->_u._compound._last) {
-				stmt->_u._compound._last->_link = kidstmt;
-				stmt->_u._compound._last = kidstmt;
-			}
-			else {
-				assert(stmt->_u._compound._first == NULL);
-				stmt->_u._compound._first = kidstmt;
-				stmt->_u._compound._last = kidstmt;
-			}
 		}
 	} /* end while */
 
+	cc_ir_codelist_append(list, cc_ir_newcode_blk(FALSE, gCurrentLevel, CC_MM_TEMPPOOL));
 	cc_symbol_exitscope();
 	if (!cc_parser_expect(ccctx, TK_RBRACE)) { /* '}' */
 		return FALSE;
 	}
 
-	*outstmt = stmt;
 	return TRUE;
 }
 
-BOOL cc_stmt_label(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, struct tagCCStatement** outstmt)
+BOOL cc_stmt_label(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch)
 {
-	struct tagCCStatement* stmt;
 	FCCSymbol* p;
+	const char* id;
 
 	assert(ccctx->_currtk._type == TK_ID);
-	if (!(stmt = cc_stmt_new(ESTMT_Label))) {
-		return FALSE;
-	}
-	stmt->_loc = ccctx->_currtk._loc;
-
-	p = cc_symbol_lookup(ccctx->_currtk._val._astr._str, gLabels);
+	id = ccctx->_currtk._val._astr._str;
+	p = cc_symbol_lookup(id, gLabels);
 	if (!p) {
-		p = cc_symbol_install(ccctx->_currtk._val._astr._str, &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+		p = cc_symbol_install(id, &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
 		p->_loc = ccctx->_currtk._loc;
 	}
 	if (p->_defined) {
-		logger_output_s("error: redefinition of label '%s' at %w, previously defined at %w.\n", ccctx->_currtk._val._astr._str, &stmt->_loc, &p->_loc);
+		logger_output_s("error: redefinition of label '%s' at %w, previously defined at %w.\n", id, &ccctx->_currtk._loc, &p->_loc);
 		return FALSE;
 	}
 	p->_defined = 1;
-	stmt->_u._label._id = p;
-
+	
 	cc_read_token(ccctx, &ccctx->_currtk);
 	if (!cc_parser_expect(ccctx, TK_COLON)) { /* ':' */
 		return FALSE;
 	}
 
-	if (!cc_stmt_statement(ccctx, stmtctx, &stmt->_link)) {
+	if (!cc_stmt_statement(ccctx, list, loop, swtch)) {
 		logger_output_s("error: expect a statement after label '%s' at %w\n", p->_name, &p->_loc);
 		return FALSE;
 	}
 
-	*outstmt = stmt;
 	return TRUE;
 }
 
-BOOL cc_stmt_case(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, struct tagCCStatement** outstmt)
+BOOL cc_stmt_case(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch)
 {
-	struct tagCCStatement* stmt;
+	FCCSwitchCase swcase;
+	FCCSymbol* p;
+	FLocation loc;
 	int constval;
 
-
-	if (!(stmt = cc_stmt_new(ESTMT_Case))) {
-		return FALSE;
-	}
-	stmt->_loc = ccctx->_currtk._loc;
-
+	loc = ccctx->_currtk._loc;
 	if (!cc_parser_expect(ccctx, TK_CASE)) { /* 'case' */
 		return FALSE;
 	}
 
-	if (!stmtctx->_switch) {
-		logger_output_s("error: 'case' should in a switch statement, at %w.\n", &stmt->_loc);
+	if (!swtch) {
+		logger_output_s("error: 'case' should in a switch statement at %w.\n", &loc);
 		return FALSE;
 	}
 
 	if (!cc_expr_parse_constant_int(ccctx, &constval))
 	{
-		logger_output_s("error: case label must be a constant value, at %w.\n", &stmt->_loc);
+		logger_output_s("error: case label must be a constant value at %w.\n", &loc);
+		return FALSE;
+	}
+
+	if ((p = cc_find_case(swtch, constval))) {
+		logger_output_s("error: case value at %w is same with previous at %w.\n", &loc, &p->_loc);
 		return FALSE;
 	}
 
@@ -223,30 +180,42 @@ BOOL cc_stmt_case(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, 
 		return FALSE;
 	}
 
-	if (!cc_stmt_statement(ccctx, stmtctx, &stmt->_link)) {
-		logger_output_s("error: expect a statement after 'case' at %w\n", &stmt->_loc);
+	/* add label code */
+	p = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+	p->_loc = loc;
+	p->_generated = 1;
+	p->_defined = 1;
+	
+	swcase._label = p;
+	swcase._value = constval;
+	array_append(&swtch->_cases, &swcase);
+	cc_ir_codelist_append(list, cc_ir_newcode_label(p, CC_MM_TEMPPOOL));
+
+	if (!cc_stmt_statement(ccctx, list, loop, swtch)) {
+		logger_output_s("error: expect a statement after 'case' at %w\n", &loc);
 		return FALSE;
 	}
 
-	*outstmt = stmt;
 	return TRUE;
 }
 
-BOOL cc_stmt_default(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, struct tagCCStatement** outstmt)
+BOOL cc_stmt_default(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch)
 {
-	struct tagCCStatement* stmt;
+	FCCSymbol* p;
+	FLocation loc;
 
-	if (!(stmt = cc_stmt_new(ESTMT_Default))) {
-		return FALSE;
-	}
-	stmt->_loc = ccctx->_currtk._loc;
-
+	loc = ccctx->_currtk._loc;
 	if (!cc_parser_expect(ccctx, TK_DEFAULT)) { /* 'default' */
 		return FALSE;
 	}
 
-	if (!stmtctx->_switch) {
-		logger_output_s("error: 'default' should in a switch statement, at %w.\n", &stmt->_loc);
+	if (!swtch) {
+		logger_output_s("error: 'default' should in a switch statement at %w.\n", &loc);
+		return FALSE;
+	}
+
+	if (swtch->_default) {
+		logger_output_s("error: case value at %w is same with previous at %w.\n", &loc, &swtch->_default->_loc);
 		return FALSE;
 	}
 
@@ -254,24 +223,26 @@ BOOL cc_stmt_default(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtct
 		return FALSE;
 	}
 
-	if (!cc_stmt_statement(ccctx, stmtctx, &stmt->_link)) {
-		logger_output_s("error: expect a statement after 'default' at %w\n", &stmt->_loc);
+	/* add label code */
+	p = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+	p->_loc = loc;
+	p->_generated = 1;
+	p->_defined = 1;
+
+	swtch->_default = p;
+	cc_ir_codelist_append(list, cc_ir_newcode_label(p, CC_MM_TEMPPOOL));
+
+	if (!cc_stmt_statement(ccctx, list, loop, swtch)) {
+		logger_output_s("error: expect a statement after 'default' at %w\n", &loc);
 		return FALSE;
 	}
 
-	*outstmt = stmt;
 	return TRUE;
 }
 
-BOOL cc_stmt_expression(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, struct tagCCStatement** outstmt)
+BOOL cc_stmt_expression(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch)
 {
-	struct tagCCStatement* stmt;
 	FCCIRTree* expr;
-
-	if (!(stmt = cc_stmt_new(ESTMT_Expr))) {
-		return FALSE;
-	}
-	stmt->_loc = ccctx->_currtk._loc;
 
 	if (!cc_expr_parse_expression(ccctx, &expr, CC_MM_TEMPPOOL)) {
 		return FALSE;
@@ -281,19 +252,14 @@ BOOL cc_stmt_expression(struct tagCCContext* ccctx, struct tagCCStmtContext* stm
 		return FALSE;
 	}
 
-	stmt->_u._expression._expr = expr;
-	*outstmt = stmt;
+	cc_ir_codelist_append(list, cc_ir_newcode_expr(expr, CC_MM_TEMPPOOL));
 	return TRUE;
 }
 
-BOOL cc_stmt_ifelse(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, struct tagCCStatement** outstmt)
+BOOL cc_stmt_ifelse(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch)
 {
-	struct tagCCStatement* stmt;
-
-	if (!(stmt = cc_stmt_new(ESTMT_If))) {
-		return FALSE;
-	}
-	stmt->_loc = ccctx->_currtk._loc;
+	FCCIRTree* cond;
+	FCCSymbol* ifbody, *elbody, *ifelend;
 
 	if (!cc_parser_expect(ccctx, TK_IF)) { /* if */
 		return FALSE;
@@ -303,7 +269,7 @@ BOOL cc_stmt_ifelse(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx
 		return FALSE;
 	}
 
-	if (!cc_expr_parse_expression(ccctx, &(stmt->_u._ifelse._expr), CC_MM_TEMPPOOL)) {
+	if (!cc_expr_parse_expression(ccctx, &cond, CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
 
@@ -311,37 +277,77 @@ BOOL cc_stmt_ifelse(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx
 		return FALSE;
 	}
 
-	if (!cc_stmt_statement(ccctx, stmtctx, &stmt->_u._ifelse._if)) {
+	/* convert to if (!cond) */
+	if (!(cond = cc_expr_not(cond->_ty, cond, NULL, CC_MM_TEMPPOOL)))
+	{
 		return FALSE;
 	}
 
+	/*    if (cond)
+	 *  _if_body:
+	 *			....
+	 *  _el_body:
+	 *			....
+	 *
+	 *  _end:
+	 */
+
+	ifbody = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+	ifbody->_loc = ccctx->_currtk._loc;
+	ifbody->_generated = 1;
+	ifbody->_defined = 1;
+	elbody = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+	elbody->_generated = 1;
+	elbody->_defined = 1;
+	ifelend = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+	ifelend->_generated = 1;
+	ifelend->_defined = 1;
+
+	cc_ir_codelist_append(list, cc_ir_newcode_jump(cond, elbody, ifbody, CC_MM_TEMPPOOL));
+	cc_ir_codelist_append(list, cc_ir_newcode_label(ifbody, CC_MM_TEMPPOOL));
+	if (!cc_stmt_statement(ccctx, list, loop, swtch)) {
+		return FALSE;
+	}
+	cc_ir_codelist_append(list, cc_ir_newcode_jump(NULL, ifelend, NULL, CC_MM_TEMPPOOL));
+
+	elbody->_loc = ccctx->_currtk._loc;
+	cc_ir_codelist_append(list, cc_ir_newcode_label(elbody, CC_MM_TEMPPOOL));
 	if (ccctx->_currtk._type == TK_ELSE) { /* 'else' */
 		cc_read_token(ccctx, &ccctx->_currtk);
-		if (!cc_stmt_statement(ccctx, stmtctx, &stmt->_u._ifelse._else)) {
+		if (!cc_stmt_statement(ccctx, list, loop, swtch)) {
 			return FALSE;
 		}
 	}
 
-	*outstmt = stmt;
+	/* ending of if-else */
+	ifelend->_loc = ccctx->_currtk._loc;
+	cc_ir_codelist_append(list, cc_ir_newcode_label(ifelend, CC_MM_TEMPPOOL));
+
 	return TRUE;
 }
 
-BOOL cc_stmt_switch(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, struct tagCCStatement** outstmt)
+BOOL cc_stmt_switch(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch)
 {
-	struct tagCCStmtContext currstmtctx;
-	struct tagCCStatement* stmt;
-	
-	currstmtctx = *stmtctx;
-	if (!(stmt = cc_stmt_new(ESTMT_Switch))) {
+	struct tagCCSwitchContext thisswtch;
+	FCCIRTree* intexpr;
+	FCCSymbol* swend;
+	FCCIRCode* iafter, *cjmp;
+	int n, tycode;
+
+	if (!cc_parser_expect(ccctx, TK_SWITCH)) { /* switch */
 		return FALSE;
 	}
-	stmt->_loc = ccctx->_currtk._loc;
 
 	if (!cc_parser_expect(ccctx, TK_LPAREN)) { /* '(' */
 		return FALSE;
 	}
 
-	if (!cc_expr_parse_expression(ccctx, &(stmt->_u._switch._expr), CC_MM_TEMPPOOL)) {
+	if (!cc_expr_parse_expression(ccctx, &intexpr, CC_MM_TEMPPOOL)) {
+		return FALSE;
+	}
+
+	if (!IsInt(intexpr->_ty)) {
+		logger_output_s("error: integer is expected for switch(expr) at %w\n", &intexpr->_loc);
 		return FALSE;
 	}
 
@@ -349,31 +355,93 @@ BOOL cc_stmt_switch(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx
 		return FALSE;
 	}
 
-	currstmtctx._switch = stmt;
-	if (!cc_stmt_statement(ccctx, &currstmtctx, &stmt->_u._switch._stmt)) {
+	if (!(intexpr = cc_expr_cast(gbuiltintypes._sinttype, intexpr, NULL, CC_MM_TEMPPOOL))) {
 		return FALSE;
 	}
 
-	*outstmt = stmt;
+	/*
+	 *   cjmp _case_0
+	 *   cjmp _case_1
+	 *   cjmp _case_2
+	 *   jmp  _default
+	 *
+	 * _case_0:
+	 *       .....
+	 * _case_1:
+	 *       .....
+	 * _case_2:
+	 *       .....
+	 * _default:
+	 *       .....
+	 * _swend:
+	 * 
+	 */
+	swend = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+	swend->_generated = 1;
+
+	thisswtch._level = 0;
+	thisswtch._lab_exit = swend;
+	thisswtch._default = NULL;
+	array_init(&thisswtch._cases, 32, sizeof(struct tagCCSwitchCase), CC_MM_TEMPPOOL);
+	if (loop) { thisswtch._level = loop->_level; }
+	if (swtch) { thisswtch._level = MAX(thisswtch._level, swtch->_level); }
+	thisswtch._level++;
+
+	iafter = list->_tail;
+	if (!cc_stmt_statement(ccctx, list, loop, &thisswtch)) {
+		return FALSE;
+	}
+
+	/* insert compare codes. */
+	tycode = cc_ir_typecode(gbuiltintypes._sinttype);
+	for (n = 0; n < thisswtch._cases._elecount; n++)
+	{
+		FCCIRTree* cmpexpr, *rhs;
+		FCCSwitchCase* swcase;
+
+		swcase = array_element(&thisswtch._cases, n);
+		rhs = cc_expr_constant(gbuiltintypes._sinttype, tycode, NULL, CC_MM_TEMPPOOL, swcase->_value);
+		cmpexpr = cc_expr_equal(gbuiltintypes._sinttype, intexpr, rhs, NULL, CC_MM_TEMPPOOL);
+		
+		cjmp = cc_ir_newcode_jump(cmpexpr, swcase->_label, NULL, CC_MM_TEMPPOOL);
+		cc_ir_codelist_insert_after(list, iafter, cjmp);
+		iafter = cjmp;
+	} /* end for */
+
+	if (thisswtch._default) {
+		cjmp = cc_ir_newcode_jump(NULL, thisswtch._default, NULL, CC_MM_TEMPPOOL);
+		cc_ir_codelist_insert_after(list, iafter, cjmp);
+		iafter = cjmp;
+	}
+	else {
+		cjmp = cc_ir_newcode_jump(NULL, swend, NULL, CC_MM_TEMPPOOL);
+		cc_ir_codelist_insert_after(list, iafter, cjmp);
+		iafter = cjmp;
+	}
+
+/* label of switch ending */
+	swend->_loc = ccctx->_currtk._loc;
+	cc_ir_codelist_append(list, cc_ir_newcode_label(swend, CC_MM_TEMPPOOL));
+
 	return TRUE;
 }
 
-BOOL cc_stmt_while(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, struct tagCCStatement** outstmt)
+BOOL cc_stmt_while(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch)
 {
-	struct tagCCStmtContext currstmtctx;
-	struct tagCCStatement* stmt;
+	struct tagCCLoopContext thisloop;
+	FLocation loc;
+	FCCIRTree* cond;
+	FCCSymbol* test, *body, *end;
 
-	currstmtctx = *stmtctx;
-	if (!(stmt = cc_stmt_new(ESTMT_While))) {
+	loc = ccctx->_currtk._loc;
+	if (!cc_parser_expect(ccctx, TK_WHILE)) { /* 'while' */
 		return FALSE;
 	}
-	stmt->_loc = ccctx->_currtk._loc;
-
 	if (!cc_parser_expect(ccctx, TK_LPAREN)) { /* '(' */
 		return FALSE;
 	}
 
-	if (!cc_expr_parse_expression(ccctx, &(stmt->_u._while._expr), CC_MM_TEMPPOOL)) {
+	if (!cc_expr_parse_expression(ccctx, &cond, CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
 
@@ -381,43 +449,114 @@ BOOL cc_stmt_while(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx,
 		return FALSE;
 	}
 
-	currstmtctx._loop = stmt;
-	if (!cc_stmt_statement(ccctx, &currstmtctx, &stmt->_u._while._stmt)) {
+	/* convert to while(!cond) */
+	if (!(cond = cc_expr_not(cond->_ty, cond, NULL, CC_MM_TEMPPOOL)))
+	{
 		return FALSE;
 	}
 
-	*outstmt = stmt;
+	/*    
+	 *  _label_test:
+	 *			while (cond)
+	 *  _label_body:
+	 *			{
+	 *				....
+	 *			}
+	 *  _label_e:
+	 */
+
+	test = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+	test->_loc = loc;
+	test->_generated = 1;
+	test->_defined = 1;
+	body = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+	body->_loc = ccctx->_currtk._loc;
+	body->_generated = 1;
+	body->_defined = 1;
+	end = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+	end->_generated = 1;
+	end->_defined = 1;
+
+/* label cond testing */
+	cc_ir_codelist_append(list, cc_ir_newcode_label(test, CC_MM_TEMPPOOL));
+	cc_ir_codelist_append(list, cc_ir_newcode_jump(cond, end, body, CC_MM_TEMPPOOL));
+	cc_ir_codelist_append(list, cc_ir_newcode_label(body, CC_MM_TEMPPOOL));
+
+	thisloop._level = 0;
+	thisloop._lab_test = test;
+	thisloop._lab_cont = test;
+	thisloop._lab_exit = end;
+	if (loop) { thisloop._level = loop->_level; }
+	if (swtch) { thisloop._level = MAX(thisloop._level, swtch->_level); }
+	thisloop._level++;
+
+	if (!cc_stmt_statement(ccctx, list, &thisloop, swtch)) {
+		return FALSE;
+	}
+	cc_ir_codelist_append(list, cc_ir_newcode_jump(NULL, test, NULL, CC_MM_TEMPPOOL));
+
+/* label of ending while */
+	end->_loc = ccctx->_currtk._loc;
+	cc_ir_codelist_append(list, cc_ir_newcode_label(end, CC_MM_TEMPPOOL));
+
 	return TRUE;
 }
 
-BOOL cc_stmt_dowhile(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, struct tagCCStatement** outstmt)
+BOOL cc_stmt_dowhile(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch)
 {
-	struct tagCCStmtContext currstmtctx;
-	struct tagCCStatement* stmt;
-
-	currstmtctx = *stmtctx;
-	if (!(stmt = cc_stmt_new(ESTMT_DoWhile))) {
-		return FALSE;
-	}
-	stmt->_loc = ccctx->_currtk._loc;
+	struct tagCCLoopContext thisloop;
+	FCCIRTree* cond;
+	FCCSymbol* test, * body, * end;
 
 	if (!cc_parser_expect(ccctx, TK_DO)) {
 		return FALSE;
 	}
 
-	currstmtctx._loop = stmt;
-	if (!cc_stmt_statement(ccctx, &currstmtctx, &stmt->_u._dowhile._stmt)) {
+	/*
+	*		do {
+	*  _label_body:
+	*			....
+	*		} 
+	*  _label_test:
+	*		while (cond);
+	*  _label_end:
+	*/
+
+	test = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+	test->_generated = 1;
+	test->_defined = 1;
+	body = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+	body->_loc = ccctx->_currtk._loc;
+	body->_generated = 1;
+	body->_defined = 1;
+	end = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+	end->_generated = 1;
+	end->_defined = 1;
+
+	/* label body */
+	cc_ir_codelist_append(list, cc_ir_newcode_label(body, CC_MM_TEMPPOOL));
+
+	thisloop._level = 0;
+	thisloop._lab_test = test;
+	thisloop._lab_cont = test;
+	thisloop._lab_exit = end;
+	if (loop) { thisloop._level = loop->_level; }
+	if (swtch) { thisloop._level = MAX(thisloop._level, swtch->_level); }
+	thisloop._level++;
+
+	if (!cc_stmt_statement(ccctx, list, &thisloop, swtch)) {
 		return FALSE;
 	}
 
+	if (!cc_parser_expect(ccctx, TK_WHILE)) { /* 'while' */
+		return FALSE;
+	}
 	if (!cc_parser_expect(ccctx, TK_LPAREN)) { /* '(' */
 		return FALSE;
 	}
-
-	if (!cc_expr_parse_expression(ccctx, &(stmt->_u._dowhile._expr), CC_MM_TEMPPOOL)) {
+	if (!cc_expr_parse_expression(ccctx, &cond, CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
-
 	if (!cc_parser_expect(ccctx, TK_RPAREN)) { /* ')' */
 		return FALSE;
 	}
@@ -425,20 +564,20 @@ BOOL cc_stmt_dowhile(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtct
 		return FALSE;
 	}
 
-	*outstmt = stmt;
+	/* label test */
+	cc_ir_codelist_append(list, cc_ir_newcode_label(test, CC_MM_TEMPPOOL));
+	cc_ir_codelist_append(list, cc_ir_newcode_jump(cond, body, end, CC_MM_TEMPPOOL));
+	/* label end */
+	cc_ir_codelist_append(list, cc_ir_newcode_label(end, CC_MM_TEMPPOOL));
+
 	return TRUE;
 }
 
-BOOL cc_stmt_for(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, struct tagCCStatement** outstmt)
+BOOL cc_stmt_for(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch)
 {
-	struct tagCCStmtContext currstmtctx;
-	struct tagCCStatement* stmt;
-
-	currstmtctx = *stmtctx;
-	if (!(stmt = cc_stmt_new(ESTMT_For))) {
-		return FALSE;
-	}
-	stmt->_loc = ccctx->_currtk._loc;
+	struct tagCCLoopContext thisloop;
+	FCCIRTree* expr0, * cond, * expr2;
+	FCCSymbol* test, * body, *cont, *end;
 
 	if (!cc_parser_expect(ccctx, TK_FOR)) {
 		return FALSE;
@@ -448,9 +587,9 @@ BOOL cc_stmt_for(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, s
 	}
 
 	if (ccctx->_currtk._type == TK_SEMICOLON) {
-		stmt->_u._for._expr0 = NULL;
+		expr0 = NULL;
 	}
-	else if (!cc_expr_parse_expression(ccctx, &(stmt->_u._for._expr0), CC_MM_TEMPPOOL)) {
+	else if (!cc_expr_parse_expression(ccctx, &expr0, CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
 
@@ -459,9 +598,9 @@ BOOL cc_stmt_for(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, s
 	}
 
 	if (ccctx->_currtk._type == TK_SEMICOLON) {
-		stmt->_u._for._expr1 = NULL;
+		cond = cc_expr_constant(gbuiltintypes._sinttype, cc_ir_typecode(gbuiltintypes._sinttype), &ccctx->_currtk._loc, CC_MM_TEMPPOOL, 1);
 	}
-	else if (!cc_expr_parse_expression(ccctx, &(stmt->_u._for._expr1), CC_MM_TEMPPOOL)) {
+	else if (!cc_expr_parse_expression(ccctx, &cond, CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
 
@@ -469,71 +608,121 @@ BOOL cc_stmt_for(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, s
 		return FALSE;
 	}
 
-	if (ccctx->_currtk._type == TK_SEMICOLON) {
-		stmt->_u._for._expr2 = NULL;
+	if (ccctx->_currtk._type == TK_RPAREN) {
+		expr2 = NULL;
 	}
-	else if (!cc_expr_parse_expression(ccctx, &(stmt->_u._for._expr2), CC_MM_TEMPPOOL)) {
+	else if (!cc_expr_parse_expression(ccctx, &expr2, CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
 	if (!cc_parser_expect(ccctx, TK_RPAREN)) { /* ')' */
 		return FALSE;
 	}
 
-	currstmtctx._loop = stmt;
-	if (!cc_stmt_statement(ccctx, &currstmtctx, &stmt->_u._for._stmt)) {
+	/* convert to if (!cond) */
+	if (!(cond = cc_expr_not(cond->_ty, cond, NULL, CC_MM_TEMPPOOL)))
+	{
 		return FALSE;
 	}
 
-	*outstmt = stmt;
+	test = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+	test->_loc = ccctx->_currtk._loc;
+	test->_generated = 1;
+	test->_defined = 1;
+	cont = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+	cont->_loc = ccctx->_currtk._loc;
+	cont->_generated = 1;
+	cont->_defined = 1;
+	body = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+	body->_loc = ccctx->_currtk._loc;
+	body->_generated = 1;
+	body->_defined = 1;
+	end = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+	end->_generated = 1;
+	end->_defined = 1;
+
+	/*  for (expr0; cond; expr2)
+	 *		...
+	 *=>
+	 * 
+	 *		expr0;
+	 *  _label_test:
+	 *		cond
+	 *  _label_body:
+	 *		...
+	 *  _label_cont:
+	 *		expr2;
+	 *		jmp test;
+	 *  _label_end:
+	 */
+	if (expr0) {
+		cc_ir_codelist_append(list, cc_ir_newcode_expr(expr0, CC_MM_TEMPPOOL));
+	}
+	/* label test */
+	cc_ir_codelist_append(list, cc_ir_newcode_label(test, CC_MM_TEMPPOOL));
+	cc_ir_codelist_append(list, cc_ir_newcode_jump(cond, end, body, CC_MM_TEMPPOOL));
+
+	thisloop._level = 0;
+	thisloop._lab_test = test;
+	thisloop._lab_cont = cont;
+	thisloop._lab_exit = end;
+	if (loop) { thisloop._level = loop->_level; }
+	if (swtch) { thisloop._level = MAX(thisloop._level, swtch->_level); }
+	thisloop._level++;
+
+	/* label body */
+	cc_ir_codelist_append(list, cc_ir_newcode_label(body, CC_MM_TEMPPOOL));
+	if (!cc_stmt_statement(ccctx, list, &thisloop, swtch)) {
+		return FALSE;
+	}
+
+	/* label continue */
+	cc_ir_codelist_append(list, cc_ir_newcode_label(cont, CC_MM_TEMPPOOL));
+	if (expr2) {
+		cc_ir_codelist_append(list, cc_ir_newcode_expr(expr2, CC_MM_TEMPPOOL));
+	}
+	cc_ir_codelist_append(list, cc_ir_newcode_jump(NULL, test, NULL, CC_MM_TEMPPOOL));
+	/* label end */
+	cc_ir_codelist_append(list, cc_ir_newcode_label(end, CC_MM_TEMPPOOL));
+	
 	return TRUE;
 }
 
-BOOL cc_stmt_goto(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, struct tagCCStatement** outstmt)
+BOOL cc_stmt_goto(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch)
 {
-	struct tagCCStatement* stmt;
 	FCCSymbol* p;
+	const char* id;
 
-	if (!(stmt = cc_stmt_new(ESTMT_Goto))) {
+	if (!cc_parser_expect(ccctx, TK_GOTO)) {
 		return FALSE;
 	}
-	stmt->_loc = ccctx->_currtk._loc;
-
-	if (ccctx->_currtk._type == TK_ID) {
-		logger_output_s("error: illegal goto syntax, expect a label at %w\n", &stmt->_loc);
+	if (ccctx->_currtk._type != TK_ID) {
+		logger_output_s("error: illegal goto syntax, expect a label at %w\n", &ccctx->_currtk._loc);
 		return FALSE;
 	}
 	
-	p = cc_symbol_lookup(ccctx->_currtk._val._astr._str, gLabels);
+	id = ccctx->_currtk._val._astr._str;
+	p = cc_symbol_lookup(id, gLabels);
 	if (!p) {
-		p = cc_symbol_install(ccctx->_currtk._val._astr._str, &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+		p = cc_symbol_install(id, &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
+		p->_loc = ccctx->_currtk._loc;
 	}
-	stmt->_u._goto._id = p;
-
+	
 	cc_read_token(ccctx, &ccctx->_currtk);
 	if (!cc_parser_expect(ccctx, TK_SEMICOLON)) { /* ';' */
 		return FALSE;
 	}
 
-	*outstmt = stmt;
+	/* jump label */
+	cc_ir_codelist_append(list, cc_ir_newcode_jump(NULL, p, NULL, CC_MM_TEMPPOOL));
 	return TRUE;
 }
 
-BOOL cc_stmt_continue(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, struct tagCCStatement** outstmt)
+BOOL cc_stmt_continue(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch)
 {
-	struct tagCCStatement* stmt;
-	FCCSymbol* p;
-
-
-	if (!(stmt = cc_stmt_new(ESTMT_Continue))) {
+	if (!loop) {
+		logger_output_s("error: 'continue' should in a iteration statement, at %w.\n", &ccctx->_currtk._loc);
 		return FALSE;
 	}
-	stmt->_loc = ccctx->_currtk._loc;
-
-	if (!stmtctx->_loop) {
-		logger_output_s("error: 'continue' should in a iteration statement, at %w.\n", &stmt->_loc);
-		return FALSE;
-	}
-	// TODO: 根据loop类型, 设置跳转目标
 
 	if (!cc_parser_expect(ccctx, TK_CONTINUE)) { /* 'continue' */
 		return FALSE;
@@ -542,27 +731,21 @@ BOOL cc_stmt_continue(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtc
 		return FALSE;
 	}
 
-	*outstmt = stmt;
+	assert(loop->_lab_cont);
+	/* jump label */
+	cc_ir_codelist_append(list, cc_ir_newcode_jump(NULL, loop->_lab_cont, NULL, CC_MM_TEMPPOOL));
+
 	return TRUE;
 }
 
-BOOL cc_stmt_break(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, struct tagCCStatement** outstmt)
+BOOL cc_stmt_break(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch)
 {
-	struct tagCCStatement* stmt;
-	FCCSymbol* p;
+	FCCSymbol* target = NULL;
 
-
-	if (!(stmt = cc_stmt_new(ESTMT_Break))) {
+	if (!loop && !swtch) {
+		logger_output_s("error: 'break' should in a iteration or switch statement, at %w.\n", &ccctx->_currtk._loc);
 		return FALSE;
 	}
-	stmt->_loc = ccctx->_currtk._loc;
-
-	if (!stmtctx->_loop) {
-		logger_output_s("error: 'break' should in a iteration statement, at %w.\n", &stmt->_loc);
-		return FALSE;
-	}
-	// TODO: 根据loop类型, 设置跳转目标
-
 	if (!cc_parser_expect(ccctx, TK_BREAK)) { /* 'break' */
 		return FALSE;
 	}
@@ -570,29 +753,37 @@ BOOL cc_stmt_break(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx,
 		return FALSE;
 	}
 
-	*outstmt = stmt;
+	/* check the nearest loop or switch */
+	if (loop) {
+		target = loop->_lab_exit;
+	}
+	if (swtch) {
+		if (!loop || loop->_level <= swtch->_level)
+		{
+			assert(!loop || loop->_level != swtch->_level);
+			target = swtch->_lab_exit;
+		}
+	}
+
+	/* jump label */
+	cc_ir_codelist_append(list, cc_ir_newcode_jump(NULL, target, NULL, CC_MM_TEMPPOOL));
 	return TRUE;
 }
 
-BOOL cc_stmt_return(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx, struct tagCCStatement** outstmt)
+BOOL cc_stmt_return(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch)
 {
-	struct tagCCStatement* stmt;
-	FCCSymbol* p;
+	FLocation loc;
+	FCCIRTree* expr;
+	FCCType* rty;
 
-
-	if (!(stmt = cc_stmt_new(ESTMT_Return))) {
-		return FALSE;
-	}
-	stmt->_loc = ccctx->_currtk._loc;
-	// TODO: 设置跳转目标
-
+	loc = ccctx->_currtk._loc;
 	if (!cc_parser_expect(ccctx, TK_RETURN)) {
 		return FALSE;
 	}
 	if (ccctx->_currtk._type == TK_SEMICOLON) { /* ';' */
-		stmt->_u._return._expr = NULL;
+		expr = NULL;
 	}
-	else if(!cc_expr_parse_expression(ccctx, &(stmt->_u._return._expr), CC_MM_TEMPPOOL)) {
+	else if(!cc_expr_parse_expression(ccctx, &expr, CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
 
@@ -600,6 +791,28 @@ BOOL cc_stmt_return(struct tagCCContext* ccctx, struct tagCCStmtContext* stmtctx
 		return FALSE;
 	}
 
-	*outstmt = stmt;
+	rty = ccctx->_function->_type->_type;
+	if (IsVoid(rty)) {
+		if (expr && !IsVoid(expr->_ty)) {
+			logger_output_s("error: return type is invalid at %w, type %t is expected for function '%s'.\n", &loc, rty, ccctx->_function->_name);
+			return FALSE;
+		}
+	}
+	else {
+		FCCType* ty;
+
+		if (!expr || !(ty = cc_expr_assigntype(rty, expr))) {
+			logger_output_s("error: return type is invalid at %w, type %t is expected for function '%s'.\n", &loc, rty, ccctx->_function->_name);
+			return FALSE;
+		}
+
+		if (!(expr = cc_expr_cast(ty, expr, NULL, CC_MM_TEMPPOOL))) {
+			logger_output_s("error: cast failed at %s:%d.\n", __FILE__, __LINE__);
+			return FALSE;
+		}
+	}
+
+	/* jump label */
+	cc_ir_codelist_append(list, cc_ir_newcode_ret(expr, CC_MM_TEMPPOOL));
 	return TRUE;
 }

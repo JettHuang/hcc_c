@@ -105,7 +105,8 @@ void cc_symbol_exitscope();
 
 /* generate n-labels, return the start number */
 int cc_symbol_genlabel(int cnt);
-BOOL cc_symbol_isgenlabel(const char* name);
+int cc_symbol_gentemp(int cnt);
+BOOL cc_symbol_isgenerated(const char* name);
 
 FCCSymbol* cc_symbol_install(const char* name, struct tagCCSymbolTable** tpp, int level, enum EMMArea where);
 FCCSymbol* cc_symbol_relocate(const char* name, struct tagCCSymbolTable* src, struct tagCCSymbolTable* dst);
@@ -115,5 +116,7 @@ void cc_symbol_foreach(struct tagCCContext* ctx, struct tagCCSymbolTable* tp, in
 
 /* new a constant symbol */
 FCCSymbol* cc_symbol_constant(struct tagCCType* ty, FCCConstVal val);
+
+void cc_symbol_reset(struct tagCCSymbolTable* tp);
 
 #endif /* __CC_SYMBOLS_H__ */
