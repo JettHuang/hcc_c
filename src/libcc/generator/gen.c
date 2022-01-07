@@ -449,7 +449,7 @@ static BOOL cc_varinit_dump_array(struct tagCCContext* ctx, struct tagCCType* ty
 					int n, chcnt;
 					const void* str;
 
-					str = tmpinit->_u._expr->_u._symbol->_u._cnstval._payload;
+					str = tmpinit->_u._expr->_u._val._payload;
 					chcnt = (tmpinit->_u._expr->_ty->_size) / (tmpinit->_u._expr->_ty->_type->_size);
 					if (elety == gbuiltintypes._chartype) {
 						for (n = 0; ty->_size > arraysize; n++, arraysize += elety->_size)

@@ -337,7 +337,7 @@ static void output_constant_expr(struct tagCCContext* ctx, struct tagCCExprTree*
 	switch (ircode)
 	{
 	case IR_ADDRG:
-		fprintf(ctx->_outfp, " %s ", expr->_u._symbol->_x._name); break;
+		fprintf(ctx->_outfp, " %s ", expr->_symbol->_x._name); break;
 	case IR_CONST:
 		fprintf(ctx->_outfp, " %d ", (int)expr->_u._val._sint); break;
 	case IR_ADD:

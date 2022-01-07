@@ -117,6 +117,9 @@ void cc_symbol_foreach(struct tagCCContext* ctx, struct tagCCSymbolTable* tp, in
 /* new a constant symbol */
 FCCSymbol* cc_symbol_constant(struct tagCCType* ty, FCCConstVal val);
 
+/* new a temporary symbol */
+FCCSymbol* cc_symbol_temporary(struct tagCCType* ty, int sclass);
+
 void cc_symbol_reset(struct tagCCSymbolTable* tp);
 
 #endif /* __CC_SYMBOLS_H__ */

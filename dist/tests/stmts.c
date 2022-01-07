@@ -2,6 +2,8 @@
  *
  */
 
+char str[] = { "abc" };
+
 void decl()
 {
    int Count;

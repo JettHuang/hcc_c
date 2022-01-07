@@ -91,10 +91,10 @@ typedef struct tagCCExprTree {
 	unsigned int _op;
 	FLocation	 _loc;
 	struct tagCCType* _ty; /* the derivation type of this expression */
+	struct tagCCSymbol* _symbol;
 
 	union {
 		struct tagCCExprTree* _kids[3];
-		struct tagCCSymbol* _symbol;
 		struct {
 			struct tagCCExprTree* _lhs;
 			struct tagCCExprTree** _args; /* end with null */

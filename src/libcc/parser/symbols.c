@@ -290,3 +290,21 @@ FCCSymbol* cc_symbol_constant(struct tagCCType* ty, FCCConstVal val)
 	return &p->_sym;
 }
 
+FCCSymbol* cc_symbol_temporary(struct tagCCType* ty, int sclass)
+{
+	FCCSymbol* p;
+
+	p = mm_alloc_area(sizeof(struct tagCCSymbol), CC_MM_TEMPPOOL);
+	if (!p) { return NULL; }
+
+	memset(p, 0, sizeof(*p));
+	p->_name = hs_hashstr(util_itoa(cc_symbol_gentemp(1)));
+	p->_type = ty;
+	p->_sclass = sclass;
+	p->_scope = gCurrentLevel;
+	p->_generated = 1;
+	p->_temporary = 1;
+	p->_defined = 1;
+
+	return p;
+}

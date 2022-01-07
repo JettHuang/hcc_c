@@ -539,12 +539,12 @@ static BOOL cc_expr_parse_unary(FCCContext* ctx, FCCIRTree** outexpr, enum EMMAr
 		else {
 			tree = cc_expr_addr(expr, &loc, where);
 		}
-		if (IsAddrOp(tree->_op) && tree->_u._symbol->_sclass == SC_Register) {
-			logger_output_s("error: invalid operand of unary '&', '%s' is declared register at %w\n", tree->_u._symbol->_name, &loc);
+		if (IsAddrOp(tree->_op) && tree->_symbol->_sclass == SC_Register) {
+			logger_output_s("error: invalid operand of unary '&', '%s' is declared register at %w\n", tree->_symbol->_name, &loc);
 			return FALSE;
 		}
 		else if (IsAddrOp(tree->_op)) {
-			tree->_u._symbol->_addressed = 1;
+			tree->_symbol->_addressed = 1;
 		}
 
 		*outexpr = tree;
@@ -1721,7 +1721,7 @@ FCCIRTree* cc_expr_id(FCCSymbol* p, FLocation* loc, enum EMMArea where)
 
 	tree->_op = IR_MKOP(op);
 	if (loc) { tree->_loc = *loc; }
-	tree->_u._symbol = p;
+	tree->_symbol = p;
 
 	if (IsArray(ty) || IsFunction(ty)) {
 		tree->_ty = p->_type;
@@ -2937,6 +2937,7 @@ FCCIRTree* cc_expr_condition(FCCIRTree* expr0, FCCIRTree* expr1, FCCIRTree* expr
 {
 	FCCType* ty, *xty = expr1->_ty, *yty = expr2->_ty;
 	FCCIRTree* tree;
+	FCCSymbol* tmp;
 	int code0;
 
 	expr0 = cc_expr_bool(gbuiltintypes._sinttype, expr0, loc, where);
@@ -2972,11 +2973,16 @@ FCCIRTree* cc_expr_condition(FCCIRTree* expr0, FCCIRTree* expr1, FCCIRTree* expr
 		ty = cc_type_ptr(ty);
 	}
 
-	if (IR_OP(expr0->_op) == IR_CONST)
+	tmp = NULL;
+	if (!IsVoid(ty) && ty->_size > 0)
 	{
-		return expr0->_u._val._sint ? expr1 : expr2;
-	}
+		if (!(tmp = cc_symbol_temporary(ty, SC_Auto))) {
+			return NULL;
+		}
 
+		expr1 = cc_expr_assign(ty, cc_expr_id(tmp, &expr1->_loc, where), expr1, &expr1->_loc, where);
+		expr2 = cc_expr_assign(ty, cc_expr_id(tmp, &expr2->_loc, where), expr2, &expr2->_loc, where);
+	}
 	if (!(tree = cc_expr_new(where))) {
 		return NULL;
 	}
@@ -3086,9 +3092,19 @@ static FCCIRTree* cc_expr_read_bitvalue(FCCIRTree* expr, enum EMMArea where)
 
 FCCIRTree* cc_expr_value(FCCIRTree* expr, enum EMMArea where)
 {
-	FCCIRTree* right = cc_expr_right(expr);
+	FCCIRTree* right, ** replace;
+	int op;
 
-	if (IR_OP(right->_op) == IR_ASSIGN)
+	right = expr;
+	replace = NULL;
+	while (IR_OP(right->_op) == IR_SEQ)
+	{
+		replace = &(right->_u._kids[1]);
+		right = *replace;
+	}
+
+	op = IR_OP(right->_op);
+	if (op == IR_ASSIGN)
 	{
 		FCCIRTree* addr; 
 
@@ -3104,6 +3120,24 @@ FCCIRTree* cc_expr_value(FCCIRTree* expr, enum EMMArea where)
 
 		expr->_field = right->_field;
 		expr->_isbitfield = right->_isbitfield;
+	}
+	else if (op == IR_LOGAND || op == IR_LOGOR || op == IR_EQUAL
+		|| op == IR_UNEQ || op == IR_LESS || op == IR_GREAT || op == IR_LEQ
+		|| op == IR_GEQ || op == IR_NOT)
+	{
+		FCCIRTree* cond;
+		int tycode;
+
+		tycode = cc_ir_typecode(gbuiltintypes._sinttype);
+		cond = cc_expr_condition(right, cc_expr_constant(gbuiltintypes._sinttype, tycode, &right->_loc, where, 1),
+					cc_expr_constant(gbuiltintypes._sinttype, tycode, &right->_loc, where, 0), &right->_loc, where);
+
+		if (replace) {
+			*replace = cond;
+		}
+		else {
+			expr = cond;
+		}
 	}
 
 	if (expr->_isbitfield) {
@@ -3189,7 +3223,6 @@ FCCIRTree* cc_expr_assign(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation
 
 	return asgntree;
 }
-
 
 static void cc_expr_internaldisplay(FCCIRTree* expr, int depth, int maxdepth);
 void cc_expr_display(FCCIRTree* expr, int maxdepth)
@@ -3414,13 +3447,13 @@ static void cc_expr_internaldisplay(FCCIRTree* expr, int depth, int maxdepth)
 		logger_output_s(")");
 		break;
 	case IR_ADDRG:
-		logger_output_s("ADDRG %s", expr->_u._symbol->_name);
+		logger_output_s("ADDRG %s", expr->_symbol->_name);
 		break;
 	case IR_ADDRF:
-		logger_output_s("ADDRF %s", expr->_u._symbol->_name);
+		logger_output_s("ADDRF %s", expr->_symbol->_name);
 		break;
 	case IR_ADDRL:
-		logger_output_s("ADDRL %s", expr->_u._symbol->_name);
+		logger_output_s("ADDRL %s", expr->_symbol->_name);
 		break;
 	case IR_CALL:
 		logger_output_s("CALL");
