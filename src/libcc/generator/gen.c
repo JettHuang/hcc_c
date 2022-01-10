@@ -14,6 +14,8 @@
 static void doglobal(struct tagCCContext* ctx, struct tagCCSymbol* p);
 static void doexternal(struct tagCCContext* ctx, struct tagCCSymbol* p);
 static void doconstant(struct tagCCContext* ctx, struct tagCCSymbol* p);
+static void doexport(struct tagCCContext* ctx, struct tagCCSymbol* p);
+
 static void cc_gen_dumpinitvalues(struct tagCCContext* ctx, struct tagCCSymbol* p);
 
 void cc_gen_internalname(struct tagCCSymbol* sym)
@@ -32,8 +34,11 @@ void cc_gen_internalname(struct tagCCSymbol* sym)
 void cc_gen_dumpsymbols(struct tagCCContext* ctx)
 {
 	cc_symbol_foreach(ctx, gGlobals, SCOPE_GLOBAL, &doglobal);
-	cc_symbol_foreach(ctx, gExternals, SCOPE_GLOBAL, &doexternal);
 	cc_symbol_foreach(ctx, gConstants, SCOPE_CONST, &doconstant);
+
+	ctx->_backend->_comment(ctx, "--------export & import-----------");
+	cc_symbol_foreach(ctx, gGlobals, SCOPE_GLOBAL, &doexport);
+	cc_symbol_foreach(ctx, gExternals, SCOPE_GLOBAL, &doexternal);
 }
 
 static void doglobal(struct tagCCContext* ctx, struct tagCCSymbol* p)
@@ -55,7 +60,10 @@ static void doglobal(struct tagCCContext* ctx, struct tagCCSymbol* p)
 			ctx->_backend->_defglobal_end(ctx, p);
 		}
 	}
+}
 
+static void doexport(struct tagCCContext* ctx, struct tagCCSymbol* p)
+{
 	if (!p->_defined && (p->_sclass == SC_External
 		|| (IsFunction(p->_type) && p->_sclass == SC_Auto)))
 	{

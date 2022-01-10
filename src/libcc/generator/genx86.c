@@ -16,9 +16,7 @@
 static void program_begin(struct tagCCContext* ctx);
 static void program_end(struct tagCCContext* ctx);
 
-static void block_begin(struct tagCCContext* ctx);
-static void block_end(struct tagCCContext* ctx);
-
+static void comment(struct tagCCContext* ctx, const char* szstr);
 static void switchsegment(struct tagCCContext* ctx, enum tagCCSegment seg);
 static void importsymbol(struct tagCCContext* ctx, struct tagCCSymbol* sym);
 static void exportsymbol(struct tagCCContext* ctx, struct tagCCSymbol* sym);
@@ -46,8 +44,7 @@ struct tagCCBackend* cc_new_backend()
 
 	backend->_program_begin = &program_begin;
 	backend->_program_end = &program_end;
-	backend->_block_begin = &block_begin;
-	backend->_block_end = &block_end;
+	backend->_comment = &comment;
 	backend->_importsymbol = &importsymbol;
 	backend->_exportsymbol = &exportsymbol;
 	backend->_defglobal_begin = &defglobal_begin;
@@ -74,19 +71,13 @@ static void program_begin(struct tagCCContext* ctx)
 
 static void program_end(struct tagCCContext* ctx)
 {
-	fprintf(ctx->_outfp, "end");
+	fprintf(ctx->_outfp, "\nend");
 }
 
-static void block_begin(struct tagCCContext* ctx)
+static void comment(struct tagCCContext* ctx, const char* szstr)
 {
-
+	fprintf(ctx->_outfp, "\n;%s\n", szstr);
 }
-
-static void block_end(struct tagCCContext* ctx)
-{
-
-}
-
 
 static void importsymbol(struct tagCCContext* ctx, struct tagCCSymbol* sym)
 {
@@ -125,7 +116,7 @@ static void defglobal_begin(struct tagCCContext* ctx, struct tagCCSymbol* sym, e
 {
 	switchsegment(ctx, seg);
 
-	fprintf(ctx->_outfp, "align %d\n", sym->_type->_align);
+	/* fprintf(ctx->_outfp, "align %d\n", sym->_type->_align); */
 	fprintf(ctx->_outfp, "%s  ", sym->_x._name);
 }
 

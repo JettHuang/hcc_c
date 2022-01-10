@@ -10,6 +10,7 @@
 #include "ir.h"
 
 
+BOOL cc_canon_linearize();
 
 
 #endif /* __CANON_H__ */

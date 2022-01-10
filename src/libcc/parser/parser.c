@@ -947,6 +947,8 @@ FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, con
 				q->_type = p->_type;
 				q->_sclass = SC_External;
 				q->_loc = *loc;
+
+				cc_gen_internalname(q);
 			}
 		}
 		if (!cc_type_isequal(p->_type, q->_type, TRUE)) {
@@ -963,6 +965,7 @@ FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, con
 		q->_loc = *loc;
 		q->_generated = 1;
 		q->_defined = 1;
+		cc_gen_internalname(q);
 
 		p->_u._alias = q;
 		p->_defined = 1;
@@ -1098,6 +1101,8 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 	p->_loc = *loc;
 	p->_type = fty;
 	p->_defined = 1;
+
+	cc_gen_internalname(p);
 
 	/* clear labels table */
 	cc_symbol_reset(gLabels);

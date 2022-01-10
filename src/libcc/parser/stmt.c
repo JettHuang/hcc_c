@@ -7,6 +7,7 @@
 #include "lexer/token.h"
 #include "logger.h"
 #include "parser.h"
+#include "generator/gen.h"
 #include <string.h>
 #include <assert.h>
 
@@ -135,6 +136,7 @@ BOOL cc_stmt_label(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, st
 	if (!p) {
 		p = cc_symbol_install(id, &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
 		p->_loc = ccctx->_currtk._loc;
+		cc_gen_internalname(p);
 	}
 	if (p->_defined) {
 		logger_output_s("error: redefinition of label '%s' at %w, previously defined at %w.\n", id, &ccctx->_currtk._loc, &p->_loc);
@@ -192,6 +194,7 @@ BOOL cc_stmt_case(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, str
 	p->_loc = loc;
 	p->_generated = 1;
 	p->_defined = 1;
+	cc_gen_internalname(p);
 	
 	swcase._label = p;
 	swcase._value = constval;
@@ -235,6 +238,7 @@ BOOL cc_stmt_default(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, 
 	p->_loc = loc;
 	p->_generated = 1;
 	p->_defined = 1;
+	cc_gen_internalname(p);
 
 	swtch->_default = p;
 	cc_ir_codelist_append(list, cc_ir_newcode_label(p, CC_MM_TEMPPOOL));
@@ -297,12 +301,16 @@ BOOL cc_stmt_ifelse(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 	ifbody->_loc = ccctx->_currtk._loc;
 	ifbody->_generated = 1;
 	ifbody->_defined = 1;
+	cc_gen_internalname(ifbody);
 	elbody = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
 	elbody->_generated = 1;
 	elbody->_defined = 1;
+	cc_gen_internalname(elbody);
 	ifelend = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
 	ifelend->_generated = 1;
 	ifelend->_defined = 1;
+	cc_gen_internalname(ifelend);
+	
 
 	cc_ir_codelist_append(list, cc_ir_newcode_jump(cond, ifbody, elbody, CC_MM_TEMPPOOL));
 	cc_ir_codelist_append(list, cc_ir_newcode_label(ifbody, CC_MM_TEMPPOOL));
@@ -380,6 +388,7 @@ BOOL cc_stmt_switch(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 	swend = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
 	swend->_generated = 1;
 	swend->_defined = 1;
+	cc_gen_internalname(swend);
 
 	thisswtch._level = 0;
 	thisswtch._lab_exit = swend;
@@ -465,13 +474,16 @@ BOOL cc_stmt_while(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, st
 	test->_loc = loc;
 	test->_generated = 1;
 	test->_defined = 1;
+	cc_gen_internalname(test);
 	body = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
 	body->_loc = ccctx->_currtk._loc;
 	body->_generated = 1;
 	body->_defined = 1;
+	cc_gen_internalname(body);
 	end = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
 	end->_generated = 1;
 	end->_defined = 1;
+	cc_gen_internalname(end);
 
 /* label cond testing */
 	cc_ir_codelist_append(list, cc_ir_newcode_label(test, CC_MM_TEMPPOOL));
@@ -521,13 +533,16 @@ BOOL cc_stmt_dowhile(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, 
 	test = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
 	test->_generated = 1;
 	test->_defined = 1;
+	cc_gen_internalname(test);
 	body = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
 	body->_loc = ccctx->_currtk._loc;
 	body->_generated = 1;
 	body->_defined = 1;
+	cc_gen_internalname(body);
 	end = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
 	end->_generated = 1;
 	end->_defined = 1;
+	cc_gen_internalname(end);
 
 	/* label body */
 	cc_ir_codelist_append(list, cc_ir_newcode_label(body, CC_MM_TEMPPOOL));
@@ -618,17 +633,21 @@ BOOL cc_stmt_for(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, stru
 	test->_loc = ccctx->_currtk._loc;
 	test->_generated = 1;
 	test->_defined = 1;
+	cc_gen_internalname(test);
 	cont = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
 	cont->_loc = ccctx->_currtk._loc;
 	cont->_generated = 1;
 	cont->_defined = 1;
+	cc_gen_internalname(cont);
 	body = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
 	body->_loc = ccctx->_currtk._loc;
 	body->_generated = 1;
 	body->_defined = 1;
+	cc_gen_internalname(body);
 	end = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
 	end->_generated = 1;
 	end->_defined = 1;
+	cc_gen_internalname(end);
 
 	/*  for (expr0; cond; expr2)
 	 *		...

@@ -26,9 +26,7 @@ typedef struct tagCCBackend {
 	void (*_program_begin)(struct tagCCContext* ctx);
 	void (*_program_end)(struct tagCCContext* ctx);
 
-	void (*_block_begin)(struct tagCCContext* ctx);
-	void (*_block_end)(struct tagCCContext* ctx);
-
+	void (*_comment)(struct tagCCContext* ctx, const char* szstr);
 	void (*_importsymbol)(struct tagCCContext* ctx, struct tagCCSymbol* sym);
 	void (*_exportsymbol)(struct tagCCContext* ctx, struct tagCCSymbol* sym);
 
