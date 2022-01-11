@@ -2994,6 +2994,7 @@ FCCIRTree* cc_expr_condition(FCCIRTree* expr0, FCCIRTree* expr1, FCCIRTree* expr
 	tree->_u._kids[0] = expr0;
 	tree->_u._kids[1] = expr1;
 	tree->_u._kids[2] = expr2;
+	tree->_symbol = tmp;
 
 	return tree;
 }
@@ -3132,6 +3133,9 @@ FCCIRTree* cc_expr_value(FCCIRTree* expr, enum EMMArea where)
 		cond = cc_expr_condition(right, cc_expr_constant(gbuiltintypes._sinttype, tycode, &right->_loc, where, 1),
 					cc_expr_constant(gbuiltintypes._sinttype, tycode, &right->_loc, where, 0), &right->_loc, where);
 
+		if (cond->_symbol) {
+			cond = cc_expr_seq(cond->_ty, cond, cc_expr_id(cond->_symbol, NULL, where), &cond->_loc, where);
+		}
 		if (replace) {
 			*replace = cond;
 		}
@@ -3416,14 +3420,14 @@ static void cc_expr_internaldisplay(FCCIRTree* expr, int depth, int maxdepth)
 		cc_expr_internaldisplay(expr->_u._kids[1], depth, maxdepth);
 		logger_output_s(")");
 		break;
-	case IR_NEG:
-		logger_output_s("-");
+	case IR_NOT:
+		logger_output_s("!");
 		logger_output_s("(");
 		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
 		logger_output_s(")");
 		break;
-	case IR_NOT:
-		logger_output_s("!");
+	case IR_NEG:
+		logger_output_s("-");
 		logger_output_s("(");
 		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
 		logger_output_s(")");

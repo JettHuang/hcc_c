@@ -134,9 +134,7 @@ BOOL cc_stmt_label(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, st
 	id = ccctx->_currtk._val._astr._str;
 	p = cc_symbol_lookup(id, gLabels);
 	if (!p) {
-		p = cc_symbol_install(id, &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-		p->_loc = ccctx->_currtk._loc;
-		cc_gen_internalname(p);
+		p = cc_symbol_label(id, &(ccctx->_currtk._loc), CC_MM_TEMPPOOL);
 	}
 	if (p->_defined) {
 		logger_output_s("error: redefinition of label '%s' at %w, previously defined at %w.\n", id, &ccctx->_currtk._loc, &p->_loc);
@@ -190,11 +188,7 @@ BOOL cc_stmt_case(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, str
 	}
 
 	/* add label code */
-	p = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-	p->_loc = loc;
-	p->_generated = 1;
-	p->_defined = 1;
-	cc_gen_internalname(p);
+	p = cc_symbol_label(NULL, &loc, CC_MM_TEMPPOOL);
 	
 	swcase._label = p;
 	swcase._value = constval;
@@ -234,11 +228,7 @@ BOOL cc_stmt_default(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, 
 	}
 
 	/* add label code */
-	p = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-	p->_loc = loc;
-	p->_generated = 1;
-	p->_defined = 1;
-	cc_gen_internalname(p);
+	p = cc_symbol_label(NULL, &loc, CC_MM_TEMPPOOL);
 
 	swtch->_default = p;
 	cc_ir_codelist_append(list, cc_ir_newcode_label(p, CC_MM_TEMPPOOL));
@@ -283,6 +273,9 @@ BOOL cc_stmt_ifelse(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 	if (!cc_expr_parse_expression(ccctx, &cond, CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
+	if (!(cond = cc_expr_bool(gbuiltintypes._sinttype, cond, NULL, CC_MM_TEMPPOOL))) {
+		return FALSE;
+	}
 
 	if (!cc_parser_expect(ccctx, TK_RPAREN)) { /* ')' */
 		return FALSE;
@@ -297,20 +290,9 @@ BOOL cc_stmt_ifelse(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 	 *  _end:
 	 */
 
-	ifbody = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-	ifbody->_loc = ccctx->_currtk._loc;
-	ifbody->_generated = 1;
-	ifbody->_defined = 1;
-	cc_gen_internalname(ifbody);
-	elbody = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-	elbody->_generated = 1;
-	elbody->_defined = 1;
-	cc_gen_internalname(elbody);
-	ifelend = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-	ifelend->_generated = 1;
-	ifelend->_defined = 1;
-	cc_gen_internalname(ifelend);
-	
+	ifbody = cc_symbol_label(NULL, &(ccctx->_currtk._loc), CC_MM_TEMPPOOL);
+	elbody = cc_symbol_label(NULL, &(ccctx->_currtk._loc), CC_MM_TEMPPOOL);
+	ifelend = cc_symbol_label(NULL, &(ccctx->_currtk._loc), CC_MM_TEMPPOOL);
 
 	cc_ir_codelist_append(list, cc_ir_newcode_jump(cond, ifbody, elbody, CC_MM_TEMPPOOL));
 	cc_ir_codelist_append(list, cc_ir_newcode_label(ifbody, CC_MM_TEMPPOOL));
@@ -340,7 +322,7 @@ BOOL cc_stmt_switch(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 	struct tagCCSwitchContext thisswtch;
 	FCCIRTree* intexpr;
 	FCCSymbol* swend;
-	FCCIRCode* iafter, *cjmp;
+	FCCIRCode* iafter, *cjmp, *cflab;
 	int n, tycode;
 
 	if (!cc_parser_expect(ccctx, TK_SWITCH)) { /* switch */
@@ -385,10 +367,8 @@ BOOL cc_stmt_switch(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 	 * _swend:
 	 * 
 	 */
-	swend = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-	swend->_generated = 1;
-	swend->_defined = 1;
-	cc_gen_internalname(swend);
+
+	swend = cc_symbol_label(NULL, &(ccctx->_currtk._loc), CC_MM_TEMPPOOL);
 
 	thisswtch._level = 0;
 	thisswtch._lab_exit = swend;
@@ -409,14 +389,19 @@ BOOL cc_stmt_switch(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 	{
 		FCCIRTree* cmpexpr, *rhs;
 		FCCSwitchCase* swcase;
+		FCCSymbol* flab;
 
 		swcase = array_element(&thisswtch._cases, n);
 		rhs = cc_expr_constant(gbuiltintypes._sinttype, tycode, NULL, CC_MM_TEMPPOOL, swcase->_value);
 		cmpexpr = cc_expr_equal(gbuiltintypes._sinttype, intexpr, rhs, NULL, CC_MM_TEMPPOOL);
 		
-		cjmp = cc_ir_newcode_jump(cmpexpr, swcase->_label, NULL, CC_MM_TEMPPOOL);
+		flab = cc_symbol_label(NULL, NULL, CC_MM_TEMPPOOL);
+
+		cjmp = cc_ir_newcode_jump(cmpexpr, swcase->_label, flab, CC_MM_TEMPPOOL);
 		cc_ir_codelist_insert_after(list, iafter, cjmp);
-		iafter = cjmp;
+		cflab = cc_ir_newcode_label(flab, CC_MM_TEMPPOOL);
+		cc_ir_codelist_insert_after(list, cjmp, cflab);
+		iafter = cflab;
 	} /* end for */
 
 	if (thisswtch._default) {
@@ -455,6 +440,9 @@ BOOL cc_stmt_while(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, st
 	if (!cc_expr_parse_expression(ccctx, &cond, CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
+	if (!(cond = cc_expr_bool(gbuiltintypes._sinttype, cond, NULL, CC_MM_TEMPPOOL))) {
+		return FALSE;
+	}
 
 	if (!cc_parser_expect(ccctx, TK_RPAREN)) { /* ')' */
 		return FALSE;
@@ -470,20 +458,9 @@ BOOL cc_stmt_while(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, st
 	 *  _label_e:
 	 */
 
-	test = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-	test->_loc = loc;
-	test->_generated = 1;
-	test->_defined = 1;
-	cc_gen_internalname(test);
-	body = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-	body->_loc = ccctx->_currtk._loc;
-	body->_generated = 1;
-	body->_defined = 1;
-	cc_gen_internalname(body);
-	end = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-	end->_generated = 1;
-	end->_defined = 1;
-	cc_gen_internalname(end);
+	test = cc_symbol_label(NULL, &loc, CC_MM_TEMPPOOL);
+	body = cc_symbol_label(NULL, &loc, CC_MM_TEMPPOOL);
+	end = cc_symbol_label(NULL, &loc, CC_MM_TEMPPOOL);
 
 /* label cond testing */
 	cc_ir_codelist_append(list, cc_ir_newcode_label(test, CC_MM_TEMPPOOL));
@@ -530,19 +507,9 @@ BOOL cc_stmt_dowhile(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, 
 	*  _label_end:
 	*/
 
-	test = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-	test->_generated = 1;
-	test->_defined = 1;
-	cc_gen_internalname(test);
-	body = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-	body->_loc = ccctx->_currtk._loc;
-	body->_generated = 1;
-	body->_defined = 1;
-	cc_gen_internalname(body);
-	end = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-	end->_generated = 1;
-	end->_defined = 1;
-	cc_gen_internalname(end);
+	test = cc_symbol_label(NULL, &(ccctx->_currtk._loc), CC_MM_TEMPPOOL);
+	body = cc_symbol_label(NULL, &(ccctx->_currtk._loc), CC_MM_TEMPPOOL);
+	end = cc_symbol_label(NULL, &(ccctx->_currtk._loc), CC_MM_TEMPPOOL);
 
 	/* label body */
 	cc_ir_codelist_append(list, cc_ir_newcode_label(body, CC_MM_TEMPPOOL));
@@ -566,6 +533,9 @@ BOOL cc_stmt_dowhile(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, 
 		return FALSE;
 	}
 	if (!cc_expr_parse_expression(ccctx, &cond, CC_MM_TEMPPOOL)) {
+		return FALSE;
+	}
+	if (!(cond = cc_expr_bool(gbuiltintypes._sinttype, cond, NULL, CC_MM_TEMPPOOL))) {
 		return FALSE;
 	}
 	if (!cc_parser_expect(ccctx, TK_RPAREN)) { /* ')' */
@@ -615,6 +585,10 @@ BOOL cc_stmt_for(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, stru
 		return FALSE;
 	}
 
+	if (!(cond = cc_expr_bool(gbuiltintypes._sinttype, cond, NULL, CC_MM_TEMPPOOL))) {
+		return FALSE;
+	}
+
 	if (!cc_parser_expect(ccctx, TK_SEMICOLON)) { /* ';' */
 		return FALSE;
 	}
@@ -629,25 +603,10 @@ BOOL cc_stmt_for(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, stru
 		return FALSE;
 	}
 
-	test = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-	test->_loc = ccctx->_currtk._loc;
-	test->_generated = 1;
-	test->_defined = 1;
-	cc_gen_internalname(test);
-	cont = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-	cont->_loc = ccctx->_currtk._loc;
-	cont->_generated = 1;
-	cont->_defined = 1;
-	cc_gen_internalname(cont);
-	body = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-	body->_loc = ccctx->_currtk._loc;
-	body->_generated = 1;
-	body->_defined = 1;
-	cc_gen_internalname(body);
-	end = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-	end->_generated = 1;
-	end->_defined = 1;
-	cc_gen_internalname(end);
+	test = cc_symbol_label(NULL, &(ccctx->_currtk._loc), CC_MM_TEMPPOOL);
+	cont = cc_symbol_label(NULL, &(ccctx->_currtk._loc), CC_MM_TEMPPOOL);
+	body = cc_symbol_label(NULL, &(ccctx->_currtk._loc), CC_MM_TEMPPOOL);
+	end = cc_symbol_label(NULL, &(ccctx->_currtk._loc), CC_MM_TEMPPOOL);
 
 	/*  for (expr0; cond; expr2)
 	 *		...
@@ -691,6 +650,7 @@ BOOL cc_stmt_for(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, stru
 	}
 	cc_ir_codelist_append(list, cc_ir_newcode_jump(NULL, test, NULL, CC_MM_TEMPPOOL));
 	/* label end */
+	end->_loc = ccctx->_currtk._loc;
 	cc_ir_codelist_append(list, cc_ir_newcode_label(end, CC_MM_TEMPPOOL));
 	
 	return TRUE;
@@ -793,6 +753,10 @@ BOOL cc_stmt_return(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 		expr = NULL;
 	}
 	else if(!cc_expr_parse_expression(ccctx, &expr, CC_MM_TEMPPOOL)) {
+		return FALSE;
+	}
+
+	if (!(expr = cc_expr_value(expr, CC_MM_TEMPPOOL))) {
 		return FALSE;
 	}
 

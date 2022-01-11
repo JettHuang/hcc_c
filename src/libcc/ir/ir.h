@@ -49,8 +49,8 @@
 #define IR_GREAT	0x12	/* >  */
 #define IR_LEQ		0x13	/* <= */
 #define IR_GEQ		0x14	/* >= */
-#define IR_NEG		0x15	/* -  */
-#define IR_NOT		0x16	/* !  */
+#define IR_NOT		0x15	/* !  */
+#define IR_NEG		0x16	/* -  */
 #define IR_BCOM		0x17	/* ~  */
 #define IR_CVT		0x18	/* type convert */
 #define IR_INDIR	0x19	/* indirect visit */
@@ -82,6 +82,7 @@
 #define IR_OP(op)				((op) >> 16)
 #define IR_OPTY0(op)			(((op) >> 8) & 0x00FF)
 #define IR_OPTY1(op)			((op) & 0x00FF)
+#define IR_MODOP(op, newop)		(((op) & 0x0FFFF) | ((newop) << 16))		
 
 #define IsAddrOp(op)	((IR_OP(op) == IR_ADDRG) || (IR_OP(op) == IR_ADDRF) || (IR_OP(op) == IR_ADDRL))
 

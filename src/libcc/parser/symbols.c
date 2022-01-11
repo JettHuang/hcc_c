@@ -308,3 +308,22 @@ FCCSymbol* cc_symbol_temporary(struct tagCCType* ty, int sclass)
 
 	return p;
 }
+
+FCCSymbol* cc_symbol_label(const char* id, const FLocation* loc, enum EMMArea where)
+{
+	FCCSymbol* p;
+	BOOL isgenerated;
+
+	isgenerated = !id;
+	if (isgenerated) {
+		id = hs_hashstr(util_itoa(cc_symbol_genlabel(1)));
+	}
+	p = cc_symbol_install(id, &gLabels, SCOPE_LABEL, where);
+	p->_generated = isgenerated;
+	p->_defined = isgenerated;
+	if (loc) { p->_loc = *loc; }
+
+	cc_gen_internalname(p);
+	return p;
+}
+

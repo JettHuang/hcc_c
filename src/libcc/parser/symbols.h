@@ -120,6 +120,9 @@ FCCSymbol* cc_symbol_constant(struct tagCCType* ty, FCCConstVal val);
 /* new a temporary symbol */
 FCCSymbol* cc_symbol_temporary(struct tagCCType* ty, int sclass);
 
+/* new a label symbol */
+FCCSymbol* cc_symbol_label(const char* id, const FLocation *loc, enum EMMArea where);
+
 void cc_symbol_reset(struct tagCCSymbolTable* tp);
 
 #endif /* __CC_SYMBOLS_H__ */

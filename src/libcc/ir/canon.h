@@ -10,7 +10,7 @@
 #include "ir.h"
 
 
-BOOL cc_canon_linearize();
+BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tlab, FCCSymbol* flab, FCCIRTree** outexpr, enum EMMArea where);
 
 
 #endif /* __CANON_H__ */
