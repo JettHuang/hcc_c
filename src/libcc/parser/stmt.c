@@ -8,6 +8,7 @@
 #include "logger.h"
 #include "parser.h"
 #include "generator/gen.h"
+#include "ir/canon.h"
 #include <string.h>
 #include <assert.h>
 
@@ -253,8 +254,7 @@ BOOL cc_stmt_expression(struct tagCCContext* ccctx,  struct tagCCIRCodeList* lis
 		return FALSE;
 	}
 
-	cc_ir_codelist_append(list, cc_ir_newcode_expr(expr, CC_MM_TEMPPOOL));
-	return TRUE;
+	return cc_canon_expr_linearize(list, expr, NULL, NULL, NULL, CC_MM_TEMPPOOL);
 }
 
 BOOL cc_stmt_ifelse(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch)
@@ -294,7 +294,10 @@ BOOL cc_stmt_ifelse(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 	elbody = cc_symbol_label(NULL, &(ccctx->_currtk._loc), CC_MM_TEMPPOOL);
 	ifelend = cc_symbol_label(NULL, &(ccctx->_currtk._loc), CC_MM_TEMPPOOL);
 
-	cc_ir_codelist_append(list, cc_ir_newcode_jump(cond, ifbody, elbody, CC_MM_TEMPPOOL));
+	if (!cc_canon_expr_linearize(list, cond, ifbody, elbody, NULL, CC_MM_TEMPPOOL)) {
+		return FALSE;
+	}
+
 	cc_ir_codelist_append(list, cc_ir_newcode_label(ifbody, CC_MM_TEMPPOOL));
 	if (!cc_stmt_statement(ccctx, list, loop, swtch)) {
 		return FALSE;
@@ -322,7 +325,7 @@ BOOL cc_stmt_switch(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 	struct tagCCSwitchContext thisswtch;
 	FCCIRTree* intexpr;
 	FCCSymbol* swend;
-	FCCIRCode* iafter, *cjmp, *cflab;
+	FCCIRCode* iafter;
 	int n, tycode;
 
 	if (!cc_parser_expect(ccctx, TK_SWITCH)) { /* switch */
@@ -346,6 +349,9 @@ BOOL cc_stmt_switch(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 		return FALSE;
 	}
 
+	if (!(intexpr = cc_expr_value(intexpr, CC_MM_TEMPPOOL))) {
+		return FALSE;
+	}
 	if (!(intexpr = cc_expr_cast(gbuiltintypes._sinttype, intexpr, NULL, CC_MM_TEMPPOOL))) {
 		return FALSE;
 	}
@@ -384,35 +390,34 @@ BOOL cc_stmt_switch(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 	}
 
 	/* insert compare codes. */
+	{
+		FCCIRCodeList tmplist = { NULL, NULL };
+		
+		if (!cc_canon_expr_linearize(list, intexpr, NULL, NULL, &intexpr, CC_MM_TEMPPOOL)) {
+			return FALSE;
+		}
+
+		iafter = cc_ir_codelist_insert_list_after(list, iafter, &tmplist);
+	}
+
 	tycode = cc_ir_typecode(gbuiltintypes._sinttype);
 	for (n = 0; n < thisswtch._cases._elecount; n++)
 	{
 		FCCIRTree* cmpexpr, *rhs;
 		FCCSwitchCase* swcase;
-		FCCSymbol* flab;
 
 		swcase = array_element(&thisswtch._cases, n);
 		rhs = cc_expr_constant(gbuiltintypes._sinttype, tycode, NULL, CC_MM_TEMPPOOL, swcase->_value);
 		cmpexpr = cc_expr_equal(gbuiltintypes._sinttype, intexpr, rhs, NULL, CC_MM_TEMPPOOL);
 		
-		flab = cc_symbol_label(NULL, NULL, CC_MM_TEMPPOOL);
-
-		cjmp = cc_ir_newcode_jump(cmpexpr, swcase->_label, flab, CC_MM_TEMPPOOL);
-		cc_ir_codelist_insert_after(list, iafter, cjmp);
-		cflab = cc_ir_newcode_label(flab, CC_MM_TEMPPOOL);
-		cc_ir_codelist_insert_after(list, cjmp, cflab);
-		iafter = cflab;
+		iafter = cc_ir_codelist_insert_after(list, iafter, cc_ir_newcode_jump(cmpexpr, swcase->_label, NULL, CC_MM_TEMPPOOL));
 	} /* end for */
 
 	if (thisswtch._default) {
-		cjmp = cc_ir_newcode_jump(NULL, thisswtch._default, NULL, CC_MM_TEMPPOOL);
-		cc_ir_codelist_insert_after(list, iafter, cjmp);
-		iafter = cjmp;
+		iafter = cc_ir_codelist_insert_after(list, iafter, cc_ir_newcode_jump(NULL, thisswtch._default, NULL, CC_MM_TEMPPOOL));
 	}
 	else {
-		cjmp = cc_ir_newcode_jump(NULL, swend, NULL, CC_MM_TEMPPOOL);
-		cc_ir_codelist_insert_after(list, iafter, cjmp);
-		iafter = cjmp;
+		iafter = cc_ir_codelist_insert_after(list, iafter, cc_ir_newcode_jump(NULL, swend, NULL, CC_MM_TEMPPOOL));
 	}
 
 /* label of switch ending */
@@ -464,7 +469,9 @@ BOOL cc_stmt_while(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, st
 
 /* label cond testing */
 	cc_ir_codelist_append(list, cc_ir_newcode_label(test, CC_MM_TEMPPOOL));
-	cc_ir_codelist_append(list, cc_ir_newcode_jump(cond, body, end, CC_MM_TEMPPOOL));
+	if (!cc_canon_expr_linearize(list, cond, body, end, NULL, CC_MM_TEMPPOOL)) {
+		return FALSE;
+	}
 	cc_ir_codelist_append(list, cc_ir_newcode_label(body, CC_MM_TEMPPOOL));
 
 	thisloop._level = 0;
@@ -547,8 +554,11 @@ BOOL cc_stmt_dowhile(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, 
 
 	/* label test */
 	cc_ir_codelist_append(list, cc_ir_newcode_label(test, CC_MM_TEMPPOOL));
-	cc_ir_codelist_append(list, cc_ir_newcode_jump(cond, body, end, CC_MM_TEMPPOOL));
+	if (!cc_canon_expr_linearize(list, cond, body, end, NULL, CC_MM_TEMPPOOL)) {
+		return FALSE;
+	}
 	/* label end */
+	end->_loc = ccctx->_currtk._loc;
 	cc_ir_codelist_append(list, cc_ir_newcode_label(end, CC_MM_TEMPPOOL));
 
 	return TRUE;
@@ -623,11 +633,15 @@ BOOL cc_stmt_for(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, stru
 	 *  _label_end:
 	 */
 	if (expr0) {
-		cc_ir_codelist_append(list, cc_ir_newcode_expr(expr0, CC_MM_TEMPPOOL));
+		if (!cc_canon_expr_linearize(list, expr0, NULL, NULL, NULL, CC_MM_TEMPPOOL)) {
+			return FALSE;
+		}
 	}
 	/* label test */
 	cc_ir_codelist_append(list, cc_ir_newcode_label(test, CC_MM_TEMPPOOL));
-	cc_ir_codelist_append(list, cc_ir_newcode_jump(cond, body, end, CC_MM_TEMPPOOL));
+	if (!cc_canon_expr_linearize(list, cond, body, end, NULL, CC_MM_TEMPPOOL)) {
+		return FALSE;
+	}
 
 	thisloop._level = 0;
 	thisloop._lab_test = test;
@@ -646,7 +660,9 @@ BOOL cc_stmt_for(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, stru
 	/* label continue */
 	cc_ir_codelist_append(list, cc_ir_newcode_label(cont, CC_MM_TEMPPOOL));
 	if (expr2) {
-		cc_ir_codelist_append(list, cc_ir_newcode_expr(expr2, CC_MM_TEMPPOOL));
+		if (!cc_canon_expr_linearize(list, expr2, NULL, NULL, NULL, CC_MM_TEMPPOOL)) {
+			return FALSE;
+		}
 	}
 	cc_ir_codelist_append(list, cc_ir_newcode_jump(NULL, test, NULL, CC_MM_TEMPPOOL));
 	/* label end */
@@ -756,7 +772,7 @@ BOOL cc_stmt_return(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 		return FALSE;
 	}
 
-	if (!(expr = cc_expr_value(expr, CC_MM_TEMPPOOL))) {
+	if (expr && !(expr = cc_expr_value(expr, CC_MM_TEMPPOOL))) {
 		return FALSE;
 	}
 
@@ -786,6 +802,9 @@ BOOL cc_stmt_return(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 	}
 
 	/* jump label */
+	if (expr && !cc_canon_expr_linearize(list, expr, NULL, NULL, &expr, CC_MM_TEMPPOOL)) {
+		return FALSE;
+	}
 	cc_ir_codelist_append(list, cc_ir_newcode_ret(expr, CC_MM_TEMPPOOL));
 	return TRUE;
 }

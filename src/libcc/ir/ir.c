@@ -178,7 +178,7 @@ void cc_ir_codelist_remove(FCCIRCodeList* l, FCCIRCode* c)
 	c->_prev = c->_next = NULL;
 }
 
-void cc_ir_codelist_insert_before(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c)
+FCCIRCode* cc_ir_codelist_insert_before(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c)
 {
 	if (t->_prev) {
 		t->_prev->_next = c;
@@ -190,9 +190,11 @@ void cc_ir_codelist_insert_before(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c)
 
 	c->_next = t;
 	t->_prev = c;
+
+	return c;
 }
 
-void cc_ir_codelist_insert_after(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c)
+FCCIRCode* cc_ir_codelist_insert_after(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c)
 {
 	if (t->_next) {
 		t->_next->_prev = c;
@@ -204,6 +206,56 @@ void cc_ir_codelist_insert_after(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c)
 
 	t->_next = c;
 	c->_prev = t;
+
+	return c;
+}
+
+FCCIRCode* cc_ir_codelist_insert_list_before(FCCIRCodeList* l, FCCIRCode* t, FCCIRCodeList* c)
+{
+	FCCIRCode* head, * tail;
+
+	head = c->_head;
+	tail = c->_tail;
+	if (!head || !tail) { 
+		return t; 
+	}
+
+	if (t->_prev) {
+		t->_prev->_next = head;
+		head->_prev = t->_prev;
+	}
+	else {
+		l->_head = head;
+	}
+
+	tail->_next = t;
+	t->_prev = tail;
+
+	return head;
+}
+
+FCCIRCode* cc_ir_codelist_insert_list_after(FCCIRCodeList* l, FCCIRCode* t, FCCIRCodeList* c)
+{
+	FCCIRCode* head, * tail;
+
+	head = c->_head;
+	tail = c->_tail;
+	if (!head || !tail) {
+		return t;
+	}
+
+	if (t->_next) {
+		t->_next->_prev = tail;
+		tail->_next = t->_next;
+	}
+	else {
+		l->_tail = tail;
+	}
+
+	t->_next = head;
+	head->_prev = t;
+
+	return tail;
 }
 
 void cc_ir_codelist_display(FCCIRCodeList* l, int maxdepth)

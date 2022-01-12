@@ -107,7 +107,7 @@ typedef struct tagCCExprTree {
 	/* auxiliary flags */
 	int _isbitfield : 1;
 	int _islvalue : 1;
-	int _islinearized : 1; /* mark has been linearized in the code list */
+	int _isvisited : 1; /* mark has been visited when code linearize */
 } FCCIRTree;
 
 /* IR dag */
@@ -162,9 +162,12 @@ FCCIRCode* cc_ir_newcode_blk(BOOL isbegin, int level, enum EMMArea where);
 
 void cc_ir_codelist_append(FCCIRCodeList* l, FCCIRCode* c);
 void cc_ir_codelist_remove(FCCIRCodeList* l, FCCIRCode* c);
-void cc_ir_codelist_insert_before(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c);
-void cc_ir_codelist_insert_after(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c);
 
+/* return the new sentry */
+FCCIRCode* cc_ir_codelist_insert_before(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c);
+FCCIRCode* cc_ir_codelist_insert_after(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c);
+FCCIRCode* cc_ir_codelist_insert_list_before(FCCIRCodeList* l, FCCIRCode* t, FCCIRCodeList* c);
+FCCIRCode* cc_ir_codelist_insert_list_after(FCCIRCodeList* l, FCCIRCode* t, FCCIRCodeList* c);
 
 /* for debug */
 void cc_ir_codelist_display(FCCIRCodeList* l, int maxdepth);

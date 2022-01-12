@@ -10,12 +10,13 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
 {
     FCCIRTree* result, *lhs, *rhs;
 
-    if (expr->_islinearized) 
+    if (expr->_isvisited)
     {
-        if (outexpr) { *outexpr = expr; }
+        if (outexpr) { *outexpr = cc_expr_right(expr); }
         return TRUE;
     }
 
+    expr->_isvisited = 1;
     result = lhs = rhs = NULL;
 	switch (IR_OP(expr->_op))
 	{
@@ -30,7 +31,6 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
         assert(lhs && rhs);
         expr->_u._kids[0] = lhs;
         expr->_u._kids[1] = rhs;
-        expr->_islinearized = 1;
 		cc_ir_codelist_append(list, cc_ir_newcode_expr(expr, where));
     }
         break;
@@ -58,6 +58,7 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
     {
         FCCSymbol* tlab0;
 
+        assert(tlab && flab);
         tlab0 = cc_symbol_label(NULL, &expr->_loc, where);
         if (!cc_canon_expr_linearize(list, expr->_u._kids[0], tlab0, flab, NULL, where)) { return FALSE; }
         cc_ir_codelist_append(list, cc_ir_newcode_label(tlab0, where));
@@ -68,6 +69,7 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
     {
 		FCCSymbol* flab0;
 
+        assert(tlab && flab);
 		flab0 = cc_symbol_label(NULL, &expr->_loc, where);
         if (!cc_canon_expr_linearize(list, expr->_u._kids[0], tlab, flab0, NULL, where)) { return FALSE; }
 		cc_ir_codelist_append(list, cc_ir_newcode_label(flab0, where));
@@ -81,20 +83,24 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
     case IR_LEQ:
     case IR_GEQ:
 	{
-        int invop;
+        int invop = IR_OP(expr->_op);
 
-        switch (IR_OP(expr->_op))
-        {
-        case IR_EQUAL: invop = IR_UNEQ; break;
-        case IR_UNEQ: invop = IR_EQUAL; break;
-        case IR_LESS: invop = IR_GEQ; break;
-        case IR_GREAT: invop = IR_LEQ; break;
-        case IR_LEQ: invop = IR_GREAT; break;
-        case IR_GEQ: invop = IR_LESS; break;
-        default: assert(0); break;
+        if (flab) { /* if flab != NULL, invert op */
+            FCCSymbol* tmp;
+
+            tmp = tlab; tlab = flab; flab = tmp;
+            switch (IR_OP(expr->_op))
+            {
+            case IR_EQUAL: invop = IR_UNEQ; break;
+            case IR_UNEQ: invop = IR_EQUAL; break;
+            case IR_LESS: invop = IR_GEQ; break;
+            case IR_GREAT: invop = IR_LEQ; break;
+            case IR_LEQ: invop = IR_GREAT; break;
+            case IR_GEQ: invop = IR_LESS; break;
+            default: assert(0); break;
+            }
         }
 
-        assert(tlab && flab);
 		if (!cc_canon_expr_linearize(list, expr->_u._kids[0], NULL, NULL, &lhs, where)) { return FALSE; }
 		if (!cc_canon_expr_linearize(list, expr->_u._kids[1], NULL, NULL, &rhs, where)) { return FALSE; }
 
@@ -102,13 +108,13 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
 		expr->_u._kids[0] = lhs;
 		expr->_u._kids[1] = rhs;
 		expr->_op = IR_MODOP(expr->_op, invop);
-		cc_ir_codelist_append(list, cc_ir_newcode_jump(expr, flab, tlab, where));
+		cc_ir_codelist_append(list, cc_ir_newcode_jump(expr, tlab, flab, where));
 	}
 	    break;
 	case IR_NOT:
 	{
         assert(tlab && flab);
-        if (cc_canon_expr_linearize(list, expr->_u._kids[0], flab, tlab, NULL, where)) { return FALSE; }
+        if (!cc_canon_expr_linearize(list, expr->_u._kids[0], flab, tlab, NULL, where)) { return FALSE; }
 	}
         break;
     case IR_NEG:
@@ -116,7 +122,7 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
     case IR_CVT:
     case IR_INDIR:
 	{
-		if (cc_canon_expr_linearize(list, expr->_u._kids[0], NULL, NULL, &lhs, where)) { return FALSE; }
+		if (!cc_canon_expr_linearize(list, expr->_u._kids[0], NULL, NULL, &lhs, where)) { return FALSE; }
 
 		assert(lhs);
 		expr->_u._kids[0] = lhs;
@@ -145,15 +151,14 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
             cc_ir_codelist_append(list, cc_ir_newcode_arg(param, where));
         }
         expr->_u._f._lhs = lhs;
-        expr->_islinearized = 1;
         cc_ir_codelist_append(list, cc_ir_newcode_expr(expr, where));
         result = expr;
     }
         break;
     case IR_SEQ:
     {
-        if (cc_canon_expr_linearize(list, expr->_u._kids[0], NULL, NULL, &lhs, where)) { return FALSE; }
-        if (cc_canon_expr_linearize(list, expr->_u._kids[1], NULL, NULL, &rhs, where)) { return FALSE; }
+        if (!cc_canon_expr_linearize(list, expr->_u._kids[0], NULL, NULL, &lhs, where)) { return FALSE; }
+        if (!cc_canon_expr_linearize(list, expr->_u._kids[1], NULL, NULL, &rhs, where)) { return FALSE; }
         result = rhs;
     }
         break;
