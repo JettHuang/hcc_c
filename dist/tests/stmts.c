@@ -2,6 +2,22 @@
  *
  */
 
+struct S {
+    int a, b;
+};
+
+int main()
+{
+    struct S s1, s2;
+    
+
+    const char * cstr = "abc";
+    char * str = "efg";
+    
+}
+
+extern int account;
+
 char str[] = { "abc" };
 
 void decl()
@@ -12,6 +28,33 @@ void decl()
    Array[Count-1] = Count;
 }
 
+struct S {
+	int id;
+	int age;
+};
+
+struct S getStudentInfo()
+{
+	struct S s;
+	return s;
+}
+
+void booltest()
+{
+	struct S s0, s1, s2;
+	int a, b;
+	
+	s0.id = 100;
+	s0.age = 19;
+	
+	s1 = a > b ? s0 : getStudentInfo(); 
+	
+	s2 = getStudentInfo();
+	
+	getStudentInfo();
+}
+
+/*
 struct fred
 {
    int boris;
@@ -20,7 +63,7 @@ struct fred
 
 void printf(const char* format, ...)
 {
-	/* do nothing */
+	
 }
 
 void assignment()
@@ -334,3 +377,6 @@ outer:
 
    printf("done\n");
 }
+*/
+
+

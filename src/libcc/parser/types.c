@@ -371,6 +371,11 @@ FCCField* cc_type_fields(FCCType* sty)
 	return sty->_u._symbol->_u._s._fields;
 }
 
+BOOL cc_type_has_cfields(FCCType* sty)
+{
+	return sty->_u._symbol->_u._s._cfields;
+}
+
 FCCType* cc_type_func(FCCType* ret, FCCType** proto)
 {
 	FCCType* ty = NULL;

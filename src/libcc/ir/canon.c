@@ -138,21 +138,37 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
     case IR_CALL:
     {
         int n;
-        FCCIRTree* param, ** args;
+        FCCIRTree* param, ** args, *ret;
 
+        ret = expr->_u._f._ret;
         args = expr->_u._f._args;
         for (n = 0; *args; ++args, ++n); /* get count of args */
 
-        if (!cc_canon_expr_linearize(list, expr->_u._f._lhs, NULL, NULL, &lhs, where)) { return FALSE; }
+        /* evaluate arguments */
         for (--args; n > 0; --n, --args)
         {
             if (!cc_canon_expr_linearize(list, *args, NULL, NULL, &param, where)) { return FALSE; }
             assert(param);
             cc_ir_codelist_append(list, cc_ir_newcode_arg(param, where));
         }
+        
+		/* evaluate function designator */
+		if (!cc_canon_expr_linearize(list, expr->_u._f._lhs, NULL, NULL, &lhs, where)) { return FALSE; }
+
+        /* evaluate side-effect address */
+		if (ret && !cc_canon_expr_linearize(list, ret, NULL, NULL, &ret, where)) {
+			return FALSE;
+		}
+
         expr->_u._f._lhs = lhs;
+        expr->_u._f._ret = ret;
         cc_ir_codelist_append(list, cc_ir_newcode_expr(expr, where));
+
         result = expr;
+        if (ret && outexpr) {
+            result = cc_expr_indir(ret, &expr->_loc, where);
+            if (!cc_canon_expr_linearize(list, ret, NULL, NULL, &result, where)) { return FALSE; }
+        }
     }
         break;
     case IR_SEQ:

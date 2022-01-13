@@ -179,6 +179,8 @@ FCCField* cc_type_newfield(const char* name, const FLocation* loc, FCCType* sty,
 FCCField* cc_type_findfield(const char* name, FCCType* sty);
 /* get fields list */
 FCCField* cc_type_fields(FCCType* sty);
+/* if has cfields */
+BOOL cc_type_has_cfields(FCCType* sty);
 
 /* new a function type */
 FCCType* cc_type_func(FCCType* ret, FCCType** proto);

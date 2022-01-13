@@ -1439,6 +1439,10 @@ BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
 				sty->_u._symbol->_u._s._vfields = 1;
 			}
 
+			if (IsStruct(field->_type)) {
+				sty->_u._symbol->_u._s._cfields = cc_type_has_cfields(UnQual(field->_type));
+			}
+
 			cnt++;
 			*where = field;
 			where = &field->_next;

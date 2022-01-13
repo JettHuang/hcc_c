@@ -99,6 +99,7 @@ typedef struct tagCCExprTree {
 		struct {
 			struct tagCCExprTree* _lhs;
 			struct tagCCExprTree** _args; /* end with null */
+			struct tagCCExprTree* _ret;   /* for receive returned block data */
 		} _f;
 		FCCConstVal _val;
 	} _u;

@@ -1618,11 +1618,17 @@ BOOL cc_expr_is_modifiable(FCCIRTree* expr)
 	  4. not function
 	  5. for union/struct, there is not any const field.
 	*/
+	BOOL cfields = FALSE;
+
+	if (IsStruct(expr->_ty)) {
+		cfields = cc_type_has_cfields(UnQual(expr->_ty));
+	}
+
 	return expr->_islvalue
 		&& !IsConst(expr->_ty)
 		&& !IsArray(expr->_ty)
 		&& !IsFunction(expr->_ty)
-		&& (IsStruct(expr->_ty) ? UnQual(expr->_ty)->_u._symbol->_u._s._cfields : TRUE);
+		&& !cfields;
 }
 
 BOOL cc_expr_is_nullptr(FCCIRTree* expr)
@@ -2287,6 +2293,7 @@ static BOOL cc_expr_checkarguments(FCCType* functy, FCCIRTree** args, enum EMMAr
 FCCIRTree* cc_expr_call(FCCType* fty, FCCIRTree* expr, FArray* args, FLocation* loc, enum EMMArea where)
 {
 	FCCIRTree* tree;
+	FCCType* rty;
 	int code0;
 
 	/* check arguments */
@@ -2299,12 +2306,18 @@ FCCIRTree* cc_expr_call(FCCType* fty, FCCIRTree* expr, FArray* args, FLocation* 
 		return NULL;
 	}
 
-	code0 = cc_ir_typecode(fty);
+	rty = fty->_type;
+	code0 = cc_ir_typecode(rty);
 	tree->_op = IR_MKOP1(IR_CALL, code0);
-	tree->_ty = fty;
+	tree->_ty = rty;
 	tree->_loc = loc ? *loc : expr->_loc;
 	tree->_u._f._lhs = expr;
 	tree->_u._f._args = args->_data;
+
+	if (code0 == IR_BLK) {
+		FCCSymbol* rettmp = cc_symbol_temporary(rty, SC_Auto);
+		tree->_u._f._ret = cc_expr_addr(cc_expr_id(rettmp, &tree->_loc, where), &tree->_loc, where);
+	}
 
 	return tree;
 }
@@ -2925,10 +2938,15 @@ FCCIRTree* cc_expr_condition(FCCIRTree* expr0, FCCIRTree* expr1, FCCIRTree* expr
 	expr0 = cc_expr_bool(gbuiltintypes._sinttype, expr0, &expr0->_loc, where);
 	if (!expr0) { return NULL; }
 
+	xty = UnQual(xty);
+	yty = UnQual(yty);
 	if (IsArith(xty) && IsArith(yty))
 		ty = cc_type_select(xty, yty);
 	else if (cc_type_isequal(xty, yty, TRUE))
 		ty = UnQual(xty);
+	else if ((IsPtr(xty) && IsPtr(yty)
+		&& cc_type_isequal(UnQual(xty->_type), UnQual(yty->_type), TRUE)))
+		ty = xty;
 	else if (IsPtr(xty) && cc_expr_is_nullptr(expr2))
 		ty = xty;
 	else if (cc_expr_is_nullptr(expr1) && IsPtr(yty))
@@ -2936,9 +2954,6 @@ FCCIRTree* cc_expr_condition(FCCIRTree* expr0, FCCIRTree* expr1, FCCIRTree* expr
 	else if (IsPtr(xty) && !IsFunction(xty->_type) && IsVoidptr(yty)
 		|| IsPtr(yty) && !IsFunction(yty->_type) && IsVoidptr(xty))
 		ty = gbuiltintypes._voidtype;
-	else if ((IsPtr(xty) && IsPtr(yty)
-		&& cc_type_isequal(UnQual(xty->_type), UnQual(yty->_type), TRUE)))
-		ty = xty;
 	else {
 		logger_output_s("error: invalid operands for '?:' '%t' : '%t' at %w\n", xty, yty, loc);
 		return NULL;
@@ -3129,7 +3144,7 @@ FCCIRTree* cc_expr_value(FCCIRTree* expr, enum EMMArea where)
 
 FCCIRTree* cc_expr_assign(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* loc, enum EMMArea where)
 {
-	FCCIRTree* asgntree, *addr;
+	FCCIRTree* asgntree, *addr, *right;
 	FCCField* field;
 	int isbitfield, code0;
 
@@ -3137,6 +3152,15 @@ FCCIRTree* cc_expr_assign(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation
 	if (!(addr = cc_expr_addr(lhs, loc, where))) {
 		return NULL;
 	}
+
+	/* check if assign block value from call() */
+	right = cc_expr_right(rhs);
+	if (IR_OP(right->_op) == IR_CALL && IR_OPTY0(right->_op) == IR_BLK)
+	{
+		right->_u._f._ret = addr;
+		return rhs;
+	}
+
 	field = lhs->_field;
 	isbitfield = lhs->_isbitfield;
 	/* check if bit-field */
@@ -3434,9 +3458,13 @@ static void cc_expr_internaldisplay(FCCIRTree* expr, int depth, int maxdepth)
 		logger_output_s("ADDRL %s", expr->_symbol->_name);
 		break;
 	case IR_CALL:
+		if (expr->_u._f._ret) {
+			cc_expr_internaldisplay(expr->_u._f._ret, depth, maxdepth);
+			logger_output_s("=");
+		}
 		logger_output_s("CALL");
 		logger_output_s("(");
-		cc_expr_internaldisplay(expr->_u._kids[0], depth, maxdepth);
+		cc_expr_internaldisplay(expr->_u._f._lhs, depth, maxdepth);
 		logger_output_s(")");
 		break;
 	case IR_SEQ:
