@@ -565,6 +565,7 @@ static BOOL cc_expr_parse_unary(FCCContext* ctx, FCCIRTree** outexpr, enum EMMAr
 			tree->_symbol->_addressed = 1;
 		}
 
+		tree->_islvalue = 0;
 		*outexpr = tree;
 		return TRUE;
 	}
