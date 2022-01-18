@@ -1117,9 +1117,7 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 		FCCIRCodeList codelist = { NULL, NULL };
 		FCCSymbol* exitlab;
 
-		exitlab = cc_symbol_install(hs_hashstr(util_itoa(cc_symbol_genlabel(1))), &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-		exitlab->_generated = 1;
-		exitlab->_defined = 1;
+		exitlab = cc_symbol_label(NULL, NULL, CC_MM_TEMPPOOL);
 		ctx->_function = p;
 		ctx->_funcexit = exitlab;
 		ctx->_codes = &codelist;

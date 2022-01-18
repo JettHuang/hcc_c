@@ -9,8 +9,11 @@
 
 #include "ir.h"
 
-
+/* linearize expression to code list */
 BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tlab, FCCSymbol* flab, FCCIRTree** outexpr, enum EMMArea where);
+
+/* simplify code list */
+BOOL cc_canon_codelist_simplify(FCCIRCodeList* list, enum EMMArea where);
 
 
 #endif /* __CANON_H__ */

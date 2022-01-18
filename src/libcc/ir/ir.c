@@ -82,11 +82,12 @@ FCCIRCode* cc_ir_newcode_arg(struct tagCCExprTree* expr, enum EMMArea where)
 	return c;
 }
 
-FCCIRCode* cc_ir_newcode_ret(struct tagCCExprTree* expr, enum EMMArea where)
+FCCIRCode* cc_ir_newcode_ret(struct tagCCExprTree* expr, struct tagCCSymbol* exitlab, enum EMMArea where)
 {
 	FCCIRCode* c = cc_ir_newcode(IR_RET, where);
 	if (c) {
-		c->_u._expr = expr;
+		c->_u._ret._expr = expr;
+		c->_u._ret._exitlab = exitlab;
 	}
 
 	return c;

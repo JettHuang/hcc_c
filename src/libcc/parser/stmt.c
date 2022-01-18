@@ -805,6 +805,6 @@ BOOL cc_stmt_return(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 	if (expr && !cc_canon_expr_linearize(list, expr, NULL, NULL, &expr, CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
-	cc_ir_codelist_append(list, cc_ir_newcode_ret(expr, CC_MM_TEMPPOOL));
+	cc_ir_codelist_append(list, cc_ir_newcode_ret(expr, ccctx->_funcexit, CC_MM_TEMPPOOL));
 	return TRUE;
 }

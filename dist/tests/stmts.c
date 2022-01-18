@@ -28,27 +28,14 @@ int test_init()
 	char a[10] = { 0 };
 	struct Struct tmp = { 1, 2, 4, 3, 'a', 'b', 'c', 'd', 0, { 1000, 0 }	};
 	
+	int flag = 5;
+	tmp.d = flag;
+	
 	return 0;
 }
 
-/*
-struct S {
-    int a, b;
-};
-
-int main()
-{
-    struct S s1, s2;
-    
-
-    const char * cstr = "abc";
-    char * str = "efg";
-    
-}
 
 extern int account;
-
-char str[] = { "abc" };
 
 void decl()
 {
@@ -407,6 +394,6 @@ outer:
 
    printf("done\n");
 }
-*/
+
 
 

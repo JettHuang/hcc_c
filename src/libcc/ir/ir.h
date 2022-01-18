@@ -134,10 +134,16 @@ typedef struct tagCCIRCode {
 		} _jmp;
 
 		int _blklevel;
+
 		struct {
 			struct tagCCExprTree* _addr;
 			int	_bytes;
 		} _zero;
+
+		struct {
+			struct tagCCExprTree* _expr;
+			struct tagCCSymbol* _exitlab;
+		} _ret;
 	} _u;
 
 	struct tagCCIRCode* _prev, *_next;
@@ -159,7 +165,7 @@ int cc_ir_typecode(const struct tagCCType* ty);
 
 FCCIRCode* cc_ir_newcode(unsigned int op, enum EMMArea where);
 FCCIRCode* cc_ir_newcode_arg(struct tagCCExprTree* expr, enum EMMArea where);
-FCCIRCode* cc_ir_newcode_ret(struct tagCCExprTree* expr, enum EMMArea where);
+FCCIRCode* cc_ir_newcode_ret(struct tagCCExprTree* expr, struct tagCCSymbol* exitlab, enum EMMArea where);
 FCCIRCode* cc_ir_newcode_expr(struct tagCCExprTree* expr, enum EMMArea where);
 FCCIRCode* cc_ir_newcode_var(struct tagCCSymbol* id, enum EMMArea where);
 FCCIRCode* cc_ir_newcode_label(struct tagCCSymbol* lab, enum EMMArea where);

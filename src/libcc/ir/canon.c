@@ -205,3 +205,13 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
     return TRUE;
 }
 
+/* 1. merge nearest labels
+ * 2. remove unnecessary labels
+ * 3. remove unnecessary jump code
+ * 4. convert c-jump to jump if possible
+ */
+BOOL cc_canon_codelist_simplify(FCCIRCodeList* list, enum EMMArea where)
+{
+    //TODO:
+    return FALSE;
+}
