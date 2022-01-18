@@ -511,7 +511,7 @@ static BOOL cc_varinit_dump_array(struct tagCCContext* ctx, struct tagCCType* ty
 			}
 			else
 			{
-				logger_output_s("error: initializer for struct need brace '{', at %w\n", &tmpinit->_loc);
+				logger_output_s("error: initializer for array need brace '{', at %w\n", &tmpinit->_loc);
 				return FALSE;
 			}
 		}
@@ -546,6 +546,10 @@ static BOOL cc_varinit_dump_array(struct tagCCContext* ctx, struct tagCCType* ty
 
 				int n, chcnt;
 				const void* str;
+
+				if (arraysize > 0) {
+					break; /* "ABC" will be ignore for str[4]. */
+				}
 
 				str = tmpinit->_u._expr->_u._val._payload;
 				chcnt = (tmpinit->_u._expr->_ty->_size) / (tmpinit->_u._expr->_ty->_type->_size);

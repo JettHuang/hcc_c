@@ -1016,6 +1016,12 @@ FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, con
 	assert(ctx->_codes);
 	if (storage != SC_Static && storage != SC_External) {
 		cc_ir_codelist_append(ctx->_codes, cc_ir_newcode_var(p, CC_MM_TEMPPOOL));
+		/* generate initialization codes */
+		if (p->_u._initializer && !cc_gen_localvar_initcodes(ctx->_codes, p))
+		{
+			logger_output_s("error: generate local variable initialization codes failed for '%s' at %w\n", id, loc);
+			return NULL;
+		}
 	}
 
 	if (!IsFunction(p->_type) && p->_defined && p->_type->_size <= 0) {

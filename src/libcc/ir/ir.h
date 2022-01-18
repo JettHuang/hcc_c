@@ -71,8 +71,9 @@
 #define IR_BLKEND	0x26
 #define IR_LOCVAR	0x27
 #define IR_RET		0x28
-#define IR_FENTER	0x29
-#define IR_FEXIT	0x30
+#define IR_ZERO		0x29	/* zero initialization */
+#define IR_FENTER	0x30
+#define IR_FEXIT	0x31
 
 
 /* format: op | ty0 | ty1 */
@@ -133,6 +134,10 @@ typedef struct tagCCIRCode {
 		} _jmp;
 
 		int _blklevel;
+		struct {
+			struct tagCCExprTree* _addr;
+			int	_bytes;
+		} _zero;
 	} _u;
 
 	struct tagCCIRCode* _prev, *_next;
@@ -160,6 +165,7 @@ FCCIRCode* cc_ir_newcode_var(struct tagCCSymbol* id, enum EMMArea where);
 FCCIRCode* cc_ir_newcode_label(struct tagCCSymbol* lab, enum EMMArea where);
 FCCIRCode* cc_ir_newcode_jump(struct tagCCExprTree* cond, struct tagCCSymbol* tlabel, struct tagCCSymbol* flabel, enum EMMArea where);
 FCCIRCode* cc_ir_newcode_blk(BOOL isbegin, int level, enum EMMArea where);
+FCCIRCode* cc_ir_newcode_setzero(struct tagCCExprTree* addr, int bytes, enum EMMArea where);
 
 void cc_ir_codelist_append(FCCIRCodeList* l, FCCIRCode* c);
 void cc_ir_codelist_remove(FCCIRCodeList* l, FCCIRCode* c);

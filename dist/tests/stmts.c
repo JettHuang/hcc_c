@@ -2,6 +2,36 @@
  *
  */
 
+/* ie: "ABC" will be ignore for str[4]. */
+
+struct FBlock {
+	int id;
+	int data[32];
+};
+
+struct Struct {
+	int a;
+	int b;
+	int c:4;
+	int d:5;
+	char str[5];
+	
+	struct FBlock blk;
+};
+
+char str[4] = { 'a', 'b', "ABC" };
+struct Struct s = { 1, 2, 4, 3, 'a', 'b' };
+					
+
+int test_init()
+{
+	char a[10] = { 0 };
+	struct Struct tmp = { 1, 2, 4, 3, 'a', 'b', 'c', 'd', 0, { 1000, 0 }	};
+	
+	return 0;
+}
+
+/*
 struct S {
     int a, b;
 };
@@ -54,7 +84,7 @@ void booltest()
 	getStudentInfo();
 }
 
-/*
+
 struct fred
 {
    int boris;

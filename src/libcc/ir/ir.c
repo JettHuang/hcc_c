@@ -144,6 +144,17 @@ FCCIRCode* cc_ir_newcode_blk(BOOL isbegin, int level, enum EMMArea where)
 	return c;
 }
 
+FCCIRCode* cc_ir_newcode_setzero(struct tagCCExprTree* addr, int bytes, enum EMMArea where)
+{
+	FCCIRCode* c = cc_ir_newcode(IR_ZERO, where);
+	if (c) {
+		c->_u._zero._addr = addr;
+		c->_u._zero._bytes = bytes;
+	}
+
+	return c;
+}
+
 void cc_ir_codelist_append(FCCIRCodeList* l, FCCIRCode* c)
 {
 	if (l->_tail) {
@@ -300,6 +311,11 @@ void cc_ir_codelist_display(FCCIRCodeList* l, int maxdepth)
 			logger_output_s("\tIR_RET ");
 			cc_expr_display(c->_u._expr, maxdepth);
 			logger_output_s("\n");
+			break;
+		case IR_ZERO:
+			logger_output_s("\tIR_ZERO ");
+			cc_expr_display(c->_u._zero._addr, maxdepth);
+			logger_output_s(" bytes=%d\n", c->_u._zero._bytes);
 			break;
 		case IR_FENTER:
 			logger_output_s("\tIR_FENTER\n");

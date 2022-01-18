@@ -29,5 +29,7 @@ FVarInitializer* cc_varinit_new(enum EMMArea where);
 BOOL cc_parser_initializer(struct tagCCContext* ctx, FVarInitializer** outinit, BOOL bExpectConstant, enum EMMArea where);
 BOOL cc_varinit_check(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, enum EMMArea where);
 
+/* generate initialization codes for local variable */
+BOOL cc_gen_localvar_initcodes(struct tagCCIRCodeList* list, struct tagCCSymbol* p);
 
 #endif /* __CC_INITIALIZER_H__ */
