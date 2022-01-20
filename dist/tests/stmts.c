@@ -23,6 +23,21 @@ char str[4] = { 'a', 'b', "ABC" };
 struct Struct s = { 1, 2, 4, 3, 'a', 'b' };
 					
 
+int test_emptyifelse()
+{
+	int a;
+	
+	a = 10;
+	if (a > 10) {
+		a = 100;
+	} else {
+		a = 200;
+	}
+	
+	return 0;
+}
+
+
 int test_init()
 {
 	char a[10] = { 0 };
@@ -33,7 +48,6 @@ int test_init()
 	
 	return 0;
 }
-
 
 extern int account;
 

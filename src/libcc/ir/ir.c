@@ -169,8 +169,10 @@ void cc_ir_codelist_append(FCCIRCodeList* l, FCCIRCode* c)
 	l->_tail = c;
 }
 
-void cc_ir_codelist_remove(FCCIRCodeList* l, FCCIRCode* c)
+FCCIRCode* cc_ir_codelist_remove(FCCIRCodeList* l, FCCIRCode* c)
 {
+	FCCIRCode* next = NULL;
+
 	if (c->_prev) {
 		c->_prev->_next = c->_next;
 	}
@@ -187,7 +189,9 @@ void cc_ir_codelist_remove(FCCIRCodeList* l, FCCIRCode* c)
 		l->_tail = c->_prev;
 	}
 
+	next = c->_next;
 	c->_prev = c->_next = NULL;
+	return next;
 }
 
 FCCIRCode* cc_ir_codelist_insert_before(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c)
@@ -292,7 +296,7 @@ void cc_ir_codelist_display(FCCIRCodeList* l, int maxdepth)
 			logger_output_s("\tIR_JMP %s\n", c->_u._jmp._tlabel->_name);
 			break;
 		case IR_CJMP:
-			logger_output_s("\tIR_CJMP %s ", c->_u._jmp._tlabel->_name);
+			logger_output_s("\tIR_CJMP %s %s ", c->_u._jmp._tlabel->_name, c->_u._jmp._flabel ? c->_u._jmp._flabel->_name : "");
 			cc_expr_display(c->_u._jmp._cond, maxdepth);
 			logger_output_s("\n");
 			break;
@@ -311,6 +315,7 @@ void cc_ir_codelist_display(FCCIRCodeList* l, int maxdepth)
 		case IR_RET:
 			logger_output_s("\tIR_RET ");
 			cc_expr_display(c->_u._expr, maxdepth);
+			if (c->_u._ret._exitlab) { logger_output_s(" label %s", c->_u._ret._exitlab->_name); }
 			logger_output_s("\n");
 			break;
 		case IR_ZERO:

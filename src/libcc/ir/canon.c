@@ -210,8 +210,300 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
  * 3. remove unnecessary jump code
  * 4. convert c-jump to jump if possible
  */
+/* return true if need re-scan the code list */
+static BOOL cc_canon_codelist_simplify_inner(FCCIRCodeList* list, enum EMMArea where)
+{
+    FArray adjacentlabs;
+    FCCIRCode* code, *tmp;
+    FCCSymbol* p, *q;
+    BOOL iscontnext,  ismodified;
+
+    ismodified = FALSE;
+	for (code = list->_head; code; code = code->_next)
+	{
+		if (code->_op == IR_LABEL)
+		{
+            code->_u._label->_x._redirect = NULL;
+            code->_u._label->_x._refcnt = 0;
+		}
+	} /* end for */
+
+    /* pass 1: */
+    array_init(&adjacentlabs, 32, sizeof(FCCSymbol*), CC_MM_TEMPPOOL);
+    for (code = list->_head; code; code = iscontnext ? code->_next : code)
+    {
+        iscontnext = TRUE;
+        switch (code->_op)
+        {
+        case IR_CJMP:
+        {
+            /* ie:
+             *      cjmp constant  label_0   label_1
+             *      xxx
+             *  label_0:
+             *      yyy
+             *  label_1:
+             *      zzz
+             */
+            if (IR_OP(code->_u._jmp._cond->_op) != IR_CONST)
+            {
+                if (code->_u._jmp._tlabel) {
+                    code->_u._jmp._tlabel->_x._refcnt++;
+                }
+                if (code->_u._jmp._flabel) 
+                {
+                    p = code->_u._jmp._flabel;
+                    p->_x._refcnt++;
+					for (tmp = code->_next; tmp; tmp = tmp->_next)
+					{
+						if (tmp->_op != IR_LABEL
+							&& tmp->_op != IR_BLKBEG
+							&& tmp->_op != IR_BLKEND)
+						{
+							break;
+						}
+
+						if (tmp->_op == IR_LABEL && tmp->_u._label == p)
+						{
+                            p->_x._refcnt--;
+                            code->_u._jmp._flabel = NULL;
+							ismodified = TRUE;
+							break;
+						}
+					} /* end for */
+                }
+
+                if (code->_u._jmp._tlabel && !code->_u._jmp._flabel)
+                {
+					p = code->_u._jmp._tlabel;
+					for (tmp = code->_next; tmp; tmp = tmp->_next)
+					{
+						if (tmp->_op != IR_LABEL
+							&& tmp->_op != IR_BLKBEG
+							&& tmp->_op != IR_BLKEND)
+						{
+							break;
+						}
+
+						if (tmp->_op == IR_LABEL && tmp->_u._label == p)
+						{
+							p->_x._refcnt--;
+							code = cc_ir_codelist_remove(list, code);
+							iscontnext = FALSE;
+							ismodified = TRUE;
+							break;
+						}
+					} /* end for */
+                }
+
+                break;
+            }
+
+            p = (code->_u._jmp._cond->_u._val._sint) ? code->_u._jmp._tlabel : code->_u._jmp._flabel;
+            code->_op = IR_JMP;
+            code->_u._jmp._cond = NULL;
+            code->_u._jmp._tlabel = p;
+            code->_u._jmp._flabel = NULL;
+
+            ismodified = TRUE;
+        }
+            /* go through */
+        case IR_JMP:
+        {
+            /* ie:
+             *       jmp  label_0
+             *   label_x:
+             *   label_0:
+             *       xxx
+             */
+            p = code->_u._jmp._tlabel;
+            if (p) {
+				p->_x._refcnt++;
+				for (tmp = code->_next; tmp; tmp = tmp->_next)
+				{
+					if (tmp->_op != IR_LABEL
+						&& tmp->_op != IR_BLKBEG
+						&& tmp->_op != IR_BLKEND)
+					{
+						break;
+					}
+
+					if (tmp->_op == IR_LABEL && tmp->_u._label == p)
+					{
+						p->_x._refcnt--;
+						code = cc_ir_codelist_remove(list, code);
+						iscontnext = FALSE;
+                        ismodified = TRUE;
+						break;
+					}
+				} /* end for */
+            }
+            else {
+				code = cc_ir_codelist_remove(list, code);
+				iscontnext = FALSE;
+                ismodified = TRUE;
+            }
+        }
+            break;
+        case IR_LABEL:
+        {
+            /* ie:
+			 *   label_0:
+			 *   label_1:
+			 *   label_2:
+			 *       xxx
+			 */
+            array_clear(&adjacentlabs);
+            for (; code; code = code->_next)
+            {
+				if (code->_op != IR_LABEL
+					&& code->_op != IR_BLKBEG
+					&& code->_op != IR_BLKEND)
+				{
+					break;
+				}
+
+                if (code->_op == IR_LABEL)
+                {
+                    array_append(&adjacentlabs, &(code->_u._label));
+                }
+            } /* end for */
+
+            if (adjacentlabs._elecount >= 2) {
+                int n;
+
+                p = *(FCCSymbol**)array_element(&adjacentlabs, adjacentlabs._elecount - 1);
+                for (n = 0; n<adjacentlabs._elecount - 1; ++n)
+                {
+                    q = *(FCCSymbol**)array_element(&adjacentlabs, n);
+                    q->_x._redirect = p;
+                }
+
+                ismodified = TRUE;
+            }
+            
+            iscontnext = FALSE;
+        }
+            break;
+        case IR_RET:
+        {
+            /* ie:
+             *       ret  exit_0
+             *   label_x:
+             *   label_0:
+             *    exit_0:
+             */
+            p = code->_u._ret._exitlab;
+            if (p) {
+                p->_x._refcnt++;
+                for (tmp = code->_next; tmp; tmp = tmp->_next)
+                {
+                    if (tmp->_op != IR_LABEL
+                        && tmp->_op != IR_BLKBEG
+                        && tmp->_op != IR_BLKEND)
+                    {
+                        break;
+                    }
+
+                    if (tmp->_op == IR_LABEL && tmp->_u._label == p)
+                    {
+                        p->_x._refcnt--;
+                        code->_u._ret._exitlab = NULL;
+                        ismodified = TRUE;
+                        break;
+                    }
+                } /* end for */
+            }
+        }
+            break;
+        default:
+            break;
+        }
+    } /* end for */
+
+    if (!ismodified) { return FALSE; }
+    /* pass 2: adjust to redirect label */
+    for (code = list->_head; code; code = code->_next)
+    {
+        switch (code->_op)
+        {
+        case IR_CJMP:
+        {
+            p = code->_u._jmp._tlabel;
+			if (p && p->_x._redirect) {
+				code->_u._jmp._tlabel = p->_x._redirect;
+			}
+			p = code->_u._jmp._flabel;
+			if (p && p->_x._redirect) {
+				code->_u._jmp._flabel = p->_x._redirect;
+			}
+
+            if (code->_u._jmp._tlabel == code->_u._jmp._flabel)
+            {
+                code->_u._jmp._flabel->_x._refcnt--;
+				code->_op = IR_JMP;
+				code->_u._jmp._cond = NULL;
+				code->_u._jmp._flabel = NULL;
+            }
+        }
+            break;
+        case IR_JMP:
+        {
+            p = code->_u._jmp._tlabel;
+            if (p->_x._redirect) {
+                code->_u._jmp._tlabel = p->_x._redirect;
+            }
+        }
+            break;
+		case IR_LABEL:
+		{
+			p = code->_u._label->_x._redirect;
+			if (p) {
+				p->_x._refcnt += code->_u._label->_x._refcnt;
+				code->_u._label->_x._refcnt = 0;
+			}
+		}
+		    break;
+        case IR_RET:
+        {
+            p = code->_u._ret._exitlab;
+            if (p && p->_x._redirect) {
+                code->_u._ret._exitlab = p->_x._redirect;
+            }
+        }
+            break;
+        default:
+            break;
+        }
+    } /* end for */
+
+    /* pass 3: remove unnecessary label */
+    for (code = list->_head; code; )
+    {
+        if (code->_op == IR_LABEL && code->_u._label->_x._refcnt == 0)
+        {
+            code = cc_ir_codelist_remove(list, code);
+            continue;
+        }
+
+        code = code->_next;
+    } /* end for */
+
+    return TRUE;
+}
+
 BOOL cc_canon_codelist_simplify(FCCIRCodeList* list, enum EMMArea where)
 {
-    //TODO:
-    return FALSE;
+    int loopcnt = 1;
+    while (cc_canon_codelist_simplify_inner(list, where))
+    {
+#if 0 /* for debug */
+        logger_output_s("pass %d:\n", loopcnt);
+        cc_ir_codelist_display(list, 5);
+#endif
+        loopcnt++;
+        /* do nothing */
+    }
+
+    return TRUE;
 }

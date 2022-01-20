@@ -64,8 +64,8 @@
 /* op-codes : statement */
 #define IR_ARG		0x20
 #define IR_EXP		0x21
-#define IR_JMP		0x22
-#define IR_CJMP		0x23
+#define IR_CJMP		0x22
+#define IR_JMP		0x23
 #define IR_LABEL	0x24
 #define IR_BLKBEG 	0x25
 #define IR_BLKEND	0x26
@@ -130,7 +130,7 @@ typedef struct tagCCIRCode {
 		struct tagCCSymbol* _label;
 		struct {
 			struct tagCCExprTree* _cond;  /* jump to _tlabel when cond is true */
-			struct tagCCSymbol*	  _tlabel, * _flabel; /* true & false label */
+			struct tagCCSymbol*	  _tlabel, * _flabel; /* true & false label, _flabel maybe NULL */
 		} _jmp;
 
 		int _blklevel;
@@ -142,7 +142,7 @@ typedef struct tagCCIRCode {
 
 		struct {
 			struct tagCCExprTree* _expr;
-			struct tagCCSymbol* _exitlab;
+			struct tagCCSymbol* _exitlab; /* exitlab maybe NULL */
 		} _ret;
 	} _u;
 
@@ -174,7 +174,8 @@ FCCIRCode* cc_ir_newcode_blk(BOOL isbegin, int level, enum EMMArea where);
 FCCIRCode* cc_ir_newcode_setzero(struct tagCCExprTree* addr, int bytes, enum EMMArea where);
 
 void cc_ir_codelist_append(FCCIRCodeList* l, FCCIRCode* c);
-void cc_ir_codelist_remove(FCCIRCodeList* l, FCCIRCode* c);
+/* remove & return next item */
+FCCIRCode* cc_ir_codelist_remove(FCCIRCodeList* l, FCCIRCode* c);
 
 /* return the new sentry */
 FCCIRCode* cc_ir_codelist_insert_before(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c);
