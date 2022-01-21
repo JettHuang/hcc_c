@@ -1156,16 +1156,25 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 			}
 		}
 
-		/* for debug */
-		logger_output_s("function: %s\n", p->_name);
-		cc_ir_codelist_display(&codelist, 5);
-		logger_output_s("\n");
+		{
+			FCCIRBasicBlock* first;
+			
+			logger_output_s("function: %s\n", p->_name);
+			cc_ir_codelist_display(&codelist, 5);
+			logger_output_s("\n");
 
-		logger_output_s("========== after simplify ==========\n");
-		cc_canon_codelist_simplify(&codelist, CC_MM_TEMPPOOL);
-		logger_output_s("function: %s\n", p->_name);
-		cc_ir_codelist_display(&codelist, 5);
-		logger_output_s("\n");
+			cc_canon_codelist_simplify(&codelist, CC_MM_TEMPPOOL);
+
+			/* for debug */
+			logger_output_s("function: %s\n", p->_name);
+			cc_ir_codelist_display(&codelist, 5);
+			logger_output_s("\n");
+
+			first = cc_canon_gen_basicblocks(&codelist, CC_MM_PERMPOOL);
+			logger_output_s("------------basic blocks --------------\n");
+			cc_ir_basicblock_display(first, 5);
+			logger_output_s("\n");
+		}
 	}
 	
 	/* exit param scope */

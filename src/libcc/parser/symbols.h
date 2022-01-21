@@ -85,7 +85,10 @@ typedef struct tagCCSymbol
 	/* for back-end */
 	struct tagXSymbol {
 		const char* _name;
-		struct tagCCSymbol* _redirect;
+		union {
+			struct tagCCSymbol* _redirect;
+			struct tagCCIRBasicBlock* _basicblock;
+		} _u;
 		int _refcnt;
 	} _x;
 } FCCSymbol;

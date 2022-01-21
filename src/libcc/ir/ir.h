@@ -157,11 +157,18 @@ typedef struct tagCCIRCodeList {
 
 /* IR Basic Block */
 typedef struct tagCCIRBasicBlock {
+	const char* _name;
+	int _withlabel : 1;
+	int _reachable : 1;
+	int _visited : 1;
 	struct tagCCIRCodeList _codes;
-	struct tagCCIRBasicBlock *_prev, *_next, *_tjmp;  /* _tjmp is block of true jump */
+	struct tagCCIRBasicBlock *_prev, *_next;  /*_prev and _next are the link of blocks chain */
+	struct tagCCIRBasicBlock *_tjmp, *_fjmp;  /* _tjmp is block of true jump */
 } FCCIRBasicBlock;
 
 int cc_ir_typecode(const struct tagCCType* ty);
+
+FCCIRBasicBlock* cc_ir_newbasicblock(enum EMMArea where);
 
 FCCIRCode* cc_ir_newcode(unsigned int op, enum EMMArea where);
 FCCIRCode* cc_ir_newcode_arg(struct tagCCExprTree* expr, enum EMMArea where);
@@ -185,5 +192,6 @@ FCCIRCode* cc_ir_codelist_insert_list_after(FCCIRCodeList* l, FCCIRCode* t, FCCI
 
 /* for debug */
 void cc_ir_codelist_display(FCCIRCodeList* l, int maxdepth);
+void cc_ir_basicblock_display(FCCIRBasicBlock* bb, int maxdepth);
 
 #endif /* __CC_IR_H__ */

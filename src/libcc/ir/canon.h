@@ -15,6 +15,8 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
 /* simplify code list */
 BOOL cc_canon_codelist_simplify(FCCIRCodeList* list, enum EMMArea where);
 
+/* generate basic blocks, basic block is begin with label(maybe implicit) end with jump(maybe implicit) */
+FCCIRBasicBlock* cc_canon_gen_basicblocks(FCCIRCodeList* list, enum EMMArea where);
 
 #endif /* __CANON_H__ */
 

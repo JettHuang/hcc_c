@@ -21,6 +21,14 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
 	switch (IR_OP(expr->_op))
 	{
 	case IR_CONST: 
+        if (tlab || flab)
+        {
+            tlab = expr->_u._val._sint ? tlab : flab;
+            if (tlab) {
+                cc_ir_codelist_append(list, cc_ir_newcode_jump(NULL, tlab, NULL, where));
+            }
+        }
+
         result = expr; 
         break;
     case IR_ASSIGN:
@@ -223,7 +231,7 @@ static BOOL cc_canon_codelist_simplify_inner(FCCIRCodeList* list, enum EMMArea w
 	{
 		if (code->_op == IR_LABEL)
 		{
-            code->_u._label->_x._redirect = NULL;
+            code->_u._label->_x._u._redirect = NULL;
             code->_u._label->_x._refcnt = 0;
 		}
 	} /* end for */
@@ -376,7 +384,7 @@ static BOOL cc_canon_codelist_simplify_inner(FCCIRCodeList* list, enum EMMArea w
                 for (n = 0; n<adjacentlabs._elecount - 1; ++n)
                 {
                     q = *(FCCSymbol**)array_element(&adjacentlabs, n);
-                    q->_x._redirect = p;
+                    q->_x._u._redirect = p;
                 }
 
                 ismodified = TRUE;
@@ -430,12 +438,12 @@ static BOOL cc_canon_codelist_simplify_inner(FCCIRCodeList* list, enum EMMArea w
         case IR_CJMP:
         {
             p = code->_u._jmp._tlabel;
-			if (p && p->_x._redirect) {
-				code->_u._jmp._tlabel = p->_x._redirect;
+			if (p && p->_x._u._redirect) {
+				code->_u._jmp._tlabel = p->_x._u._redirect;
 			}
 			p = code->_u._jmp._flabel;
-			if (p && p->_x._redirect) {
-				code->_u._jmp._flabel = p->_x._redirect;
+			if (p && p->_x._u._redirect) {
+				code->_u._jmp._flabel = p->_x._u._redirect;
 			}
 
             if (code->_u._jmp._tlabel == code->_u._jmp._flabel)
@@ -450,14 +458,14 @@ static BOOL cc_canon_codelist_simplify_inner(FCCIRCodeList* list, enum EMMArea w
         case IR_JMP:
         {
             p = code->_u._jmp._tlabel;
-            if (p->_x._redirect) {
-                code->_u._jmp._tlabel = p->_x._redirect;
+            if (p->_x._u._redirect) {
+                code->_u._jmp._tlabel = p->_x._u._redirect;
             }
         }
             break;
 		case IR_LABEL:
 		{
-			p = code->_u._label->_x._redirect;
+			p = code->_u._label->_x._u._redirect;
 			if (p) {
 				p->_x._refcnt += code->_u._label->_x._refcnt;
 				code->_u._label->_x._refcnt = 0;
@@ -467,8 +475,8 @@ static BOOL cc_canon_codelist_simplify_inner(FCCIRCodeList* list, enum EMMArea w
         case IR_RET:
         {
             p = code->_u._ret._exitlab;
-            if (p && p->_x._redirect) {
-                code->_u._ret._exitlab = p->_x._redirect;
+            if (p && p->_x._u._redirect) {
+                code->_u._ret._exitlab = p->_x._u._redirect;
             }
         }
             break;
@@ -507,3 +515,109 @@ BOOL cc_canon_codelist_simplify(FCCIRCodeList* list, enum EMMArea where)
 
     return TRUE;
 }
+
+static void cc_canon_checkreachable(FCCIRBasicBlock* bb)
+{
+    if (bb->_visited) { return; }
+    bb->_visited = 1;
+    bb->_reachable = 1;
+
+    if (bb->_tjmp) {
+        cc_canon_checkreachable(bb->_tjmp);
+    }
+    if (bb->_fjmp) {
+        cc_canon_checkreachable(bb->_fjmp);
+    }
+    if (!bb->_tjmp && !bb->_fjmp && bb->_next) {
+        cc_canon_checkreachable(bb->_next);
+    }
+}
+
+FCCIRBasicBlock* cc_canon_gen_basicblocks(FCCIRCodeList* list, enum EMMArea where)
+{
+    FCCIRBasicBlock* first, *last, *bb;
+    FCCIRCode* code, *next;
+
+    /* generate basic blocks */
+    first = last = cc_ir_newbasicblock(where);
+    for (code = list->_head; code; code = next)
+    {
+        if (code->_op != IR_LABEL && !last->_name)
+        {
+            last->_name = hs_hashstr(util_itoa(cc_symbol_genlabel(1)));
+        }
+
+        if (code->_op == IR_CJMP || code->_op == IR_JMP)
+        {
+			next = cc_ir_codelist_remove(list, code);
+			cc_ir_codelist_append(&last->_codes, code);
+            
+            bb = cc_ir_newbasicblock(where);
+            last->_next = bb;
+            bb->_prev = last;
+            last = bb;
+        }
+        else if (code->_op == IR_LABEL)
+        {
+            if (last->_codes._head != NULL) 
+            {
+				bb = cc_ir_newbasicblock(where);
+				last->_next = bb;
+				bb->_prev = last;
+				last = bb;
+            }
+            code->_u._label->_x._u._basicblock = last;
+            last->_name = code->_u._label->_name;
+            last->_withlabel = 1;
+            
+			next = cc_ir_codelist_remove(list, code);
+			cc_ir_codelist_append(&last->_codes, code);
+        }
+        else if (code->_op == IR_RET)
+        {
+			next = cc_ir_codelist_remove(list, code);
+			cc_ir_codelist_append(&last->_codes, code);
+
+            if (code->_u._ret._exitlab) {
+                bb = cc_ir_newbasicblock(where);
+                last->_next = bb;
+                bb->_prev = last;
+                last = bb;
+            }
+        }
+        else
+        {
+			next = cc_ir_codelist_remove(list, code);
+			cc_ir_codelist_append(&last->_codes, code);
+        }
+    } /* end for code */
+
+    for (bb = first; bb; bb = bb->_next)
+    {
+        code = bb->_codes._tail;
+        if (code)
+        {
+            switch (code->_op)
+            {
+            case IR_JMP:
+                bb->_tjmp = code->_u._jmp._tlabel->_x._u._basicblock;
+                break;
+            case IR_CJMP:
+                bb->_tjmp = code->_u._jmp._tlabel->_x._u._basicblock;
+                bb->_fjmp = code->_u._jmp._flabel ? code->_u._jmp._flabel->_x._u._basicblock : bb->_next;
+                break;
+            case IR_RET:
+                bb->_tjmp = code->_u._ret._exitlab ? code->_u._ret._exitlab->_x._u._basicblock : NULL;
+                break;
+            default:
+                break;
+            }
+        }
+    } /* end for bb */
+
+    /* set reachable */
+    cc_canon_checkreachable(first);
+
+    return first;
+}
+

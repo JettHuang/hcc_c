@@ -22,6 +22,20 @@ struct Struct {
 char str[4] = { 'a', 'b', "ABC" };
 struct Struct s = { 1, 2, 4, 3, 'a', 'b' };
 					
+int test_reachable()
+{
+	int a, b;
+	
+	a = b = 10;
+	
+	if (1 || (a > 10 && b < 10)) {
+		a = 1000;
+	}
+	
+	if (0) {
+		b = 10000;
+	}
+}
 
 int test_emptyifelse()
 {

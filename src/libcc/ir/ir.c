@@ -59,6 +59,18 @@ int cc_ir_typecode(const struct tagCCType* ty)
 	return IR_VOID;
 }
 
+FCCIRBasicBlock* cc_ir_newbasicblock(enum EMMArea where)
+{
+	FCCIRBasicBlock* bb = mm_alloc_area(sizeof(FCCIRBasicBlock), where);
+	if (!bb) {
+		logger_output_s("error: out of memory at %s:%d\n", __FILE__, __LINE__);
+		return NULL;
+	}
+
+	memset(bb, 0, sizeof(FCCIRBasicBlock));
+	return bb;
+}
+
 FCCIRCode* cc_ir_newcode(unsigned int op, enum EMMArea where)
 {
 	FCCIRCode* code = mm_alloc_area(sizeof(FCCIRCode), where);
@@ -178,7 +190,7 @@ FCCIRCode* cc_ir_codelist_remove(FCCIRCodeList* l, FCCIRCode* c)
 	}
 	else {
 		assert(l->_head == c);
-		l->_head = NULL;
+		l->_head = c->_next;
 	}
 
 	if (c->_next) {
@@ -333,4 +345,14 @@ void cc_ir_codelist_display(FCCIRCodeList* l, int maxdepth)
 			logger_output_s("IR_Unkown"); break;
 		}
 	} /* end for */
+}
+
+void cc_ir_basicblock_display(FCCIRBasicBlock* bb, int maxdepth)
+{
+	for (;bb; bb = bb->_next)
+	{
+		logger_output_s("BASIC BLOCK: %s, reachable: %s\n", bb->_name, bb->_reachable ? "TRUE" : "FALSE");
+		cc_ir_codelist_display(&bb->_codes, maxdepth);
+		logger_output_s("\n");
+	} /* end for bb */
 }
