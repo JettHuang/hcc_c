@@ -176,7 +176,7 @@ static FMmArea g_areas[MMA_Area_Max] = { { NULL } };
 
 void* mm_alloc_area(size_t size, enum EMMArea where)
 {
-	if (size <= 0) {
+	if (size == 0) {
 		return NULL;
 	}
 

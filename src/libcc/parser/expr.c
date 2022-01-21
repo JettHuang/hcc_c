@@ -2120,7 +2120,7 @@ FCCIRTree* cc_expr_add(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* l
 	
 	code0 = cc_ir_typecode(ty);
 	code1 = cc_ir_typecode(rhs->_ty);
-	tree->_op = IR_MKOP2(IR_ADD, code0, code0);
+	tree->_op = IR_MKOP2(IR_ADD, code0, code1);
 	tree->_ty = ty;
 	tree->_loc = loc ? *loc : lhs->_loc;
 	tree->_u._kids[0] = lhs;
@@ -2161,7 +2161,7 @@ FCCIRTree* cc_expr_sub(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation* l
 
 	code0 = cc_ir_typecode(ty);
 	code1 = cc_ir_typecode(rhs->_ty);
-	tree->_op = IR_MKOP2(IR_SUB, code0, code0);
+	tree->_op = IR_MKOP2(IR_SUB, code0, code1);
 	tree->_ty = ty;
 	tree->_loc = loc ? *loc : lhs->_loc;
 	tree->_u._kids[0] = lhs;

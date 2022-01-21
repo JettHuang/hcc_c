@@ -586,8 +586,6 @@ static BOOL cc_varinit_dump_array(struct tagCCContext* ctx, struct tagCCType* ty
 
 static BOOL cc_gen_dumpinitvalues_inner(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock)
 {
-	int tmp = 0;
-
 	if (IsScalar(ty)) {
 		return cc_varinit_dump_scalar(ctx, ty, init, outerindex, bUsingOuterBlock);
 	}

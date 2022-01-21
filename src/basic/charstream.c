@@ -39,7 +39,10 @@ FCharStream* cs_create_fromfile(const char* filename)
 	}
 
 	cs = (FCharStream*)mm_alloc(sizeof(FCharStream));
-	if (!cs) { return NULL; }
+	if (!cs) { 
+		fclose(fp);
+		return NULL; 
+	}
 
 	cs->_streamtype = EST_FILE;
 	cs->_charsource._file = fp;

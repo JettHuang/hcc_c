@@ -997,7 +997,7 @@ FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, con
 		
 		bExpectConstant = (storage == SC_Static);
 		cc_read_token(ctx, &ctx->_currtk);
-		if (!cc_parser_initializer(ctx, &initializer, FALSE, storage == SC_Static ? CC_MM_PERMPOOL : CC_MM_TEMPPOOL)) {
+		if (!cc_parser_initializer(ctx, &initializer, bExpectConstant, storage == SC_Static ? CC_MM_PERMPOOL : CC_MM_TEMPPOOL)) {
 			logger_output_s("error: illegal initialization for '%s' at %w\n", p->_name, loc);
 			return FALSE;
 		}

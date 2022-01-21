@@ -445,8 +445,6 @@ static BOOL cc_varinit_check_array(struct tagCCContext* ctx, struct tagCCType* t
 
 static BOOL cc_varinit_check_inner(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock, enum EMMArea where)
 {
-	int tmp = 0;
-
 	if (IsScalar(ty)) {
 		return cc_varinit_check_scalar(ctx, ty, init, outerindex, bUsingOuterBlock, where);
 	}
@@ -965,8 +963,6 @@ static BOOL cc_gen_localvar_initcodes_array(struct tagCCIRCodeList* list, FCCIRT
 
 static BOOL cc_gen_localvar_initcodes_inner(struct tagCCIRCodeList* list, FCCIRTree* baseAddr, int offset, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock)
 {
-	int tmp = 0;
-
 	if (IsScalar(ty)) {
 		return cc_gen_localvar_initcodes_scalar(list, baseAddr, offset, ty, init, outerindex, bUsingOuterBlock);
 	}

@@ -553,7 +553,6 @@ static int calc_tokens_count(FTKListNode* tklist)
 /* 计算中缀表达式算法 */
 BOOL cpp_eval_constexpr(FCppContext* ctx, FTKListNode* tklist, int* result)
 {
-	FSourceCodeContext* top = ctx->_sourcestack;
 	BOOL bSyntaxError = FALSE;
 	BOOL bPrevHasOperand = FALSE;
 
