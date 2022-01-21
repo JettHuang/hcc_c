@@ -286,6 +286,27 @@ FCCIRCode* cc_ir_codelist_insert_list_after(FCCIRCodeList* l, FCCIRCode* t, FCCI
 	return tail;
 }
 
+FCCIRCodeList* cc_ir_codeblocks_to_codelist(FCCIRBasicBlock* first, enum EMMArea where)
+{
+	FCCIRBasicBlock* bb;
+	FCCIRCodeList* list;
+
+	if (!first) { return NULL; }
+	list = mm_alloc_area(sizeof(FCCIRCodeList), where);
+	if (!list) {
+		logger_output_s("error: out of memory at %s:%d\n", __FILE__, __LINE__);
+		return NULL;
+	}
+
+	*list = first->_codes;
+	for (bb = first->_next; bb; bb = bb->_next)
+	{
+		cc_ir_codelist_insert_list_after(list, list->_tail, &bb->_codes);
+	} /* end for bb */
+
+	return list;
+}
+
 void cc_ir_codelist_display(FCCIRCodeList* l, int maxdepth)
 {
 	FCCIRCode* c = l->_head;

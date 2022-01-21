@@ -18,5 +18,8 @@ BOOL cc_canon_codelist_simplify(FCCIRCodeList* list, enum EMMArea where);
 /* generate basic blocks, basic block is begin with label(maybe implicit) end with jump(maybe implicit) */
 FCCIRBasicBlock* cc_canon_gen_basicblocks(FCCIRCodeList* list, enum EMMArea where);
 
+/* erase the unreachable basic blocks */
+FCCIRBasicBlock* cc_canon_erease_deadbasicblocks(FCCIRBasicBlock* first, enum EMMArea where);
+
 #endif /* __CANON_H__ */
 

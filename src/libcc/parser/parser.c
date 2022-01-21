@@ -1174,6 +1174,11 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 			logger_output_s("------------basic blocks --------------\n");
 			cc_ir_basicblock_display(first, 5);
 			logger_output_s("\n");
+
+			first = cc_canon_erease_deadbasicblocks(first, CC_MM_PERMPOOL);
+			logger_output_s("------------after erase basic blocks --------------\n");
+			cc_ir_basicblock_display(first, 5);
+			logger_output_s("\n");
 		}
 	}
 	

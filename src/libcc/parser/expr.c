@@ -1853,7 +1853,7 @@ static FCCIRTree* cc_expr_cast_constant(FCCType* ty, FCCIRTree* expr, FLocation*
 {
 	/* begin define */
 #define XX_CAST_CNST(type)		\
-		switch (dstty)			\
+		switch (srcty)			\
 		{						\
 		case IR_S8:				\
 		case IR_S16:			\

@@ -184,11 +184,13 @@ void cc_ir_codelist_append(FCCIRCodeList* l, FCCIRCode* c);
 /* remove & return next item */
 FCCIRCode* cc_ir_codelist_remove(FCCIRCodeList* l, FCCIRCode* c);
 
-/* return the new sentry */
+/* return the new entry */
 FCCIRCode* cc_ir_codelist_insert_before(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c);
 FCCIRCode* cc_ir_codelist_insert_after(FCCIRCodeList* l, FCCIRCode* t, FCCIRCode* c);
 FCCIRCode* cc_ir_codelist_insert_list_before(FCCIRCodeList* l, FCCIRCode* t, FCCIRCodeList* c);
 FCCIRCode* cc_ir_codelist_insert_list_after(FCCIRCodeList* l, FCCIRCode* t, FCCIRCodeList* c);
+
+FCCIRCodeList* cc_ir_codeblocks_to_codelist(FCCIRBasicBlock* first, enum EMMArea where);
 
 /* for debug */
 void cc_ir_codelist_display(FCCIRCodeList* l, int maxdepth);

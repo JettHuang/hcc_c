@@ -621,3 +621,50 @@ FCCIRBasicBlock* cc_canon_gen_basicblocks(FCCIRCodeList* list, enum EMMArea wher
     return first;
 }
 
+FCCIRBasicBlock* cc_canon_erease_deadbasicblocks(FCCIRBasicBlock* first, enum EMMArea where)
+{
+    FCCIRBasicBlock * bb;
+
+    for (bb = first; bb;)
+    {
+        FCCIRCode* code;
+
+        if (bb->_reachable) 
+        {
+            bb = bb->_next;
+            continue;
+        }
+
+        for (code = bb->_codes._head; code;)
+        {
+            if (code->_op != IR_BLKBEG && code->_op != IR_BLKEND)
+            {
+                code = cc_ir_codelist_remove(&bb->_codes, code);
+            }
+            else
+            {
+                code = code->_next;
+            }
+        }
+
+        if (bb->_codes._head == NULL)
+        {
+            /* remove this bb */
+            if (bb->_prev == NULL) {
+                first = bb->_next;
+            }
+            else {
+                bb->_prev->_next = bb->_next;
+            }
+
+            if (bb->_next) {
+                bb->_next->_prev = bb->_prev;
+            }
+        }
+
+        bb = bb->_next;
+    } /* end for bb */
+
+    return first;
+}
+
