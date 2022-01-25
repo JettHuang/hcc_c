@@ -3,6 +3,7 @@
  */
 
 #include "canon.h"
+#include "logger.h"
 #include "parser/expr.h"
 
 
@@ -28,13 +29,28 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
                 cc_ir_codelist_append(list, cc_ir_newcode_jump(NULL, tlab, NULL, where));
             }
         }
+        else if (expr->_ty->_u._symbol->_addressed && outexpr)
+        {
+			FCCSymbol* p;
+
+			if (!(p = cc_symbol_constant(expr->_ty, expr->_u._val)))
+			{
+				logger_output_s("error install constant symbol failed at %s:%d\n", __FILE__, __LINE__);
+				return FALSE;
+			}
+
+			if (!(expr = cc_expr_id(p, NULL, where)))
+			{
+				return FALSE;
+			}
+        }
 
         result = expr; 
         break;
     case IR_ASSIGN:
     {
-        if (!cc_canon_expr_linearize(list, expr->_u._kids[0], NULL, NULL, &lhs, where)) { return FALSE; }
         if (!cc_canon_expr_linearize(list, expr->_u._kids[1], NULL, NULL, &rhs, where)) { return FALSE; }
+        if (!cc_canon_expr_linearize(list, expr->_u._kids[0], NULL, NULL, &lhs, where)) { return FALSE; }
         
         assert(lhs && rhs);
         expr->_u._kids[0] = lhs;
@@ -152,6 +168,11 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
         args = expr->_u._f._args;
         for (n = 0; *args; ++args, ++n); /* get count of args */
 
+		/* evaluate side-effect address */
+		if (ret && !cc_canon_expr_linearize(list, ret, NULL, NULL, &ret, where)) {
+			return FALSE;
+		}
+
         /* evaluate arguments */
         for (--args; n > 0; --n, --args)
         {
@@ -162,11 +183,6 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
         
 		/* evaluate function designator */
 		if (!cc_canon_expr_linearize(list, expr->_u._f._lhs, NULL, NULL, &lhs, where)) { return FALSE; }
-
-        /* evaluate side-effect address */
-		if (ret && !cc_canon_expr_linearize(list, ret, NULL, NULL, &ret, where)) {
-			return FALSE;
-		}
 
         expr->_u._f._lhs = lhs;
         expr->_u._f._ret = ret;
@@ -668,3 +684,37 @@ FCCIRBasicBlock* cc_canon_erease_deadbasicblocks(FCCIRBasicBlock* first, enum EM
     return first;
 }
 
+FCCIRBasicBlock* cc_canon_uber(FCCIRCodeList* list, enum EMMArea where)
+{
+	FCCIRBasicBlock* first;
+
+	cc_canon_codelist_simplify(list, where);
+
+	/* for debug */
+	logger_output_s("After Simplify:\n");
+	cc_ir_codelist_display(list, 5);
+	logger_output_s("\n");
+
+	first = cc_canon_gen_basicblocks(list, where);
+	logger_output_s("Generate Basic Blocks:\n");
+	cc_ir_basicblock_display(first, 5);
+	logger_output_s("\n");
+
+	first = cc_canon_erease_deadbasicblocks(first, where);
+	logger_output_s("Erase Dead Blocks:\n");
+	cc_ir_basicblock_display(first, 5);
+	logger_output_s("\n");
+
+    list = cc_ir_codeblocks_to_codelist(first, where);
+    if (!list) { return NULL; }
+
+    /* simplify again */
+    cc_canon_codelist_simplify(list, where);
+
+	first = cc_canon_gen_basicblocks(list, where);
+	logger_output_s("Final Canon Result:\n");
+	cc_ir_basicblock_display(first, 5);
+	logger_output_s("\n");
+
+    return first;
+}

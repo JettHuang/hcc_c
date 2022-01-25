@@ -55,7 +55,6 @@ typedef struct tagCCSymbol
 	
 	/* flags */
 	uint16_t _addressed : 1;
-	uint16_t _computed : 1;
 	uint16_t _temporary : 1;
 	uint16_t _generated : 1;
 	uint16_t _defined : 1;

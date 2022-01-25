@@ -110,15 +110,17 @@ typedef struct tagCCExprTree {
 	int _isbitfield : 1;
 	int _islvalue : 1;
 	int _isvisited : 1; /* mark has been visited when code linearize */
+
+	struct tagCCDagNode* _dagnode;
 } FCCIRTree;
 
-/* IR dag */
-typedef struct tagCCExprDag {
+/* IR DAG node */
+typedef struct tagCCDagNode {
 	unsigned int _op;
-	FLocation	 _loc;
-
-	/* TODO: */
-} FCCIRDag;
+	struct tagCCSymbol* _symbol; /* for constant */
+	struct tagCCDagNode* _kids[2];
+	int _refcnt;
+} FCCIRDagNode;
 
 /* IR code */
 typedef struct tagCCIRCode {

@@ -1833,7 +1833,7 @@ FCCIRTree* cc_expr_constant(FCCType* ty, int tycode, FLocation* loc, enum EMMAre
 	case IR_U32: tree->_u._val._uint = va_arg(arg, uint32_t); break;
 	case IR_S64: tree->_u._val._sint = va_arg(arg, int64_t); break;
 	case IR_U64: tree->_u._val._uint = va_arg(arg, uint64_t); break;
-	case IR_F32: tree->_u._val._float = va_arg(arg, float); break;
+	case IR_F32: tree->_u._val._float = va_arg(arg, double); break;
 	case IR_F64: tree->_u._val._float = va_arg(arg, double); break;
 	case IR_PTR: tree->_u._val._pointer = va_arg(arg, uint32_t); break;
 	case IR_STRA:
@@ -3240,6 +3240,11 @@ static void cc_expr_internaldisplay(FCCIRTree* expr, int depth, int maxdepth)
 	if (!expr || (maxdepth >= 0 && depth > maxdepth))
 	{
 		return;
+	}
+
+	if (expr->_dagnode) 
+	{
+		logger_output_s("DAG(0x%p)_", expr->_dagnode);
 	}
 
 	depth++;

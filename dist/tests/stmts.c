@@ -24,19 +24,25 @@ struct Struct s = { 1, 2, 4, 3, 'a', 'b' };
 					
 int test_reachable()
 {
-	int a, b;
+	int a, b, c;
+	float f;
+	
+	f = 100.f;
+	f = 200 * 100.f;
 	
 	a = b = 10;
-	
-	if (1 || (a > 10 && b < 10)) {
+	c = (a + b) + (a + b);
+	if (1 || ((a+b) > 10 && b < 10)) {
 		a = 1000;
 	}
 	
 	if (0) {
 		b = 10000;
 	}
+
 }
 
+/*
 int test_emptyifelse()
 {
 	int a;
@@ -423,5 +429,5 @@ outer:
    printf("done\n");
 }
 
-
+*/
 

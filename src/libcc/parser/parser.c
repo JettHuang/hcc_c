@@ -11,6 +11,7 @@
 #include "stmt.h"
 #include "ir/ir.h"
 #include "ir/canon.h"
+#include "ir/dag.h"
 #include "generator/gen.h"
 
 
@@ -1157,28 +1158,21 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 		}
 
 		{
-			FCCIRBasicBlock* first;
-			
-			logger_output_s("function: %s\n", p->_name);
-			cc_ir_codelist_display(&codelist, 5);
-			logger_output_s("\n");
+			FCCIRBasicBlock* basicblocks;
 
-			cc_canon_codelist_simplify(&codelist, CC_MM_TEMPPOOL);
+			logger_output_s("== function: %s ================ \n", p->_name);
+			basicblocks = cc_canon_uber(&codelist, CC_MM_TEMPPOOL);
+			assert(basicblocks);
 
-			/* for debug */
-			logger_output_s("function: %s\n", p->_name);
-			cc_ir_codelist_display(&codelist, 5);
-			logger_output_s("\n");
+			if (!cc_dag_translate_basicblocks(basicblocks, CC_MM_TEMPPOOL)) {
+				logger_output_s("translate DAG failed.\n");
+			}
+			else {
+				logger_output_s("After DAG :\n");
+				cc_ir_basicblock_display(basicblocks, 5);
+				logger_output_s("\n");
+			}
 
-			first = cc_canon_gen_basicblocks(&codelist, CC_MM_PERMPOOL);
-			logger_output_s("------------basic blocks --------------\n");
-			cc_ir_basicblock_display(first, 5);
-			logger_output_s("\n");
-
-			first = cc_canon_erease_deadbasicblocks(first, CC_MM_PERMPOOL);
-			logger_output_s("------------after erase basic blocks --------------\n");
-			cc_ir_basicblock_display(first, 5);
-			logger_output_s("\n");
 		}
 	}
 	

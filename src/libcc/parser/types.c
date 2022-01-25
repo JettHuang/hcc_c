@@ -153,6 +153,7 @@ void cc_type_init(const FCCTypeMetrics* m)
 		p->_type = gbuiltintypes._floattype;
 		p->_u._limits._max._float = FLT_MAX;
 		p->_u._limits._min._float = FLT_MIN;
+		p->_addressed = 1;
 	}
 	{
 		p = cc_symbol_install("double", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
@@ -160,6 +161,7 @@ void cc_type_init(const FCCTypeMetrics* m)
 		p->_type = gbuiltintypes._doubletype;
 		p->_u._limits._max._float = DBL_MAX;
 		p->_u._limits._min._float = DBL_MIN;
+		p->_addressed = 1;
 	}
 	{
 		p = cc_symbol_install("long double", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
@@ -167,6 +169,7 @@ void cc_type_init(const FCCTypeMetrics* m)
 		p->_type = gbuiltintypes._ldoubletype;
 		p->_u._limits._max._float = LDBL_MAX;
 		p->_u._limits._min._float = LDBL_MIN;
+		p->_addressed = 1;
 	}
 	{
 		p = cc_symbol_install("void", &gTypes, SCOPE_GLOBAL, CC_MM_PERMPOOL);
