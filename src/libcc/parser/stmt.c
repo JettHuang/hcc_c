@@ -758,7 +758,7 @@ BOOL cc_stmt_break(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, st
 BOOL cc_stmt_return(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch)
 {
 	FLocation loc;
-	FCCIRTree* expr;
+	FCCIRTree* expr, *lhs;
 	FCCType* rty;
 
 	loc = ccctx->_currtk._loc;
@@ -801,10 +801,24 @@ BOOL cc_stmt_return(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 		}
 	}
 
-	/* jump label */
+	/* linearize return value */
 	if (expr && !cc_canon_expr_linearize(list, expr, NULL, NULL, &expr, CC_MM_TEMPPOOL)) {
 		return FALSE;
 	}
+	
+	/* if return block(struct or union) */
+	if (ccctx->_funcretb) {
+		lhs = cc_expr_id(ccctx->_funcretb, NULL , CC_MM_TEMPPOOL);
+		lhs = cc_expr_indir(lhs, NULL, CC_MM_TEMPPOOL);
+		expr = cc_expr_assign(lhs->_ty, lhs, expr, NULL, CC_MM_TEMPPOOL);
+
+		if (expr && !cc_canon_expr_linearize(list, expr, NULL, NULL, &expr, CC_MM_TEMPPOOL)) {
+			return FALSE;
+		}
+
+		expr = NULL; /* CLEAN IT! has assigned to outside-receiver */
+	}
+
 	cc_ir_codelist_append(list, cc_ir_newcode_ret(expr, ccctx->_funcexit, CC_MM_TEMPPOOL));
 	return TRUE;
 }

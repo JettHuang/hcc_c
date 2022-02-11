@@ -181,6 +181,10 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
             cc_ir_codelist_append(list, cc_ir_newcode_arg(param, where));
         }
         
+        if (ret) { /* push receiver address as argument 0 */
+            cc_ir_codelist_append(list, cc_ir_newcode_arg(ret, where));
+        }
+        
 		/* evaluate function designator */
 		if (!cc_canon_expr_linearize(list, expr->_u._f._lhs, NULL, NULL, &lhs, where)) { return FALSE; }
 
@@ -532,6 +536,15 @@ BOOL cc_canon_codelist_simplify(FCCIRCodeList* list, enum EMMArea where)
     return TRUE;
 }
 
+static void cc_canon_reset_flags(FCCIRBasicBlock* bb)
+{
+    for (; bb; bb = bb->_next)
+    {
+        bb->_visited = 0;
+        bb->_reachable = 0;
+    }
+}
+
 static void cc_canon_checkreachable(FCCIRBasicBlock* bb)
 {
     if (bb->_visited) { return; }
@@ -684,6 +697,64 @@ FCCIRBasicBlock* cc_canon_erease_deadbasicblocks(FCCIRBasicBlock* first, enum EM
     return first;
 }
 
+
+static int retpaths, noretpaths;
+static void cc_canon_check_return_inner(FCCIRBasicBlock* bb)
+{
+    FCCIRCode* code;
+
+	if (bb->_visited) { return; }
+	bb->_visited = 1;
+
+    for (code = bb->_codes._head; code; code = code->_next)
+    {
+		if (code->_op == IR_RET)
+		{
+			retpaths++;
+			return;
+		}
+    }
+
+	if (bb->_tjmp) {
+        cc_canon_check_return_inner(bb->_tjmp);
+	}
+	if (bb->_fjmp) {
+        cc_canon_check_return_inner(bb->_fjmp);
+	}
+	if (!bb->_tjmp && !bb->_fjmp) {
+        if (bb->_next) {
+            cc_canon_check_return_inner(bb->_next);
+        }
+        else {
+            noretpaths++;
+        }
+	}
+}
+
+BOOL cc_canon_check_return(FCCSymbol* func, FCCIRBasicBlock* first)
+{
+    FCCType* rty = cc_type_rettype(func->_type);
+   
+    if (IsVoid(rty)) {
+        return TRUE;
+    }
+
+    retpaths = noretpaths = 0;
+    cc_canon_reset_flags(first);
+    cc_canon_check_return_inner(first);
+
+    if (retpaths > 0 && noretpaths > 0)
+    {
+        logger_output_s("warning: not all control paths return a value in function %s\n", func->_name);
+    }
+    else if (noretpaths > 0) {
+        logger_output_s("error: must return a value in function %s\n", func->_name);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
 FCCIRBasicBlock* cc_canon_uber(FCCIRCodeList* list, enum EMMArea where)
 {
 	FCCIRBasicBlock* first;
@@ -691,19 +762,25 @@ FCCIRBasicBlock* cc_canon_uber(FCCIRCodeList* list, enum EMMArea where)
 	cc_canon_codelist_simplify(list, where);
 
 	/* for debug */
+#if 0
 	logger_output_s("After Simplify:\n");
 	cc_ir_codelist_display(list, 5);
 	logger_output_s("\n");
+#endif
 
 	first = cc_canon_gen_basicblocks(list, where);
-	logger_output_s("Generate Basic Blocks:\n");
+#if 0
+    logger_output_s("Generate Basic Blocks:\n");
 	cc_ir_basicblock_display(first, 5);
 	logger_output_s("\n");
+#endif
 
 	first = cc_canon_erease_deadbasicblocks(first, where);
-	logger_output_s("Erase Dead Blocks:\n");
+#if 0	
+    logger_output_s("Erase Dead Blocks:\n");
 	cc_ir_basicblock_display(first, 5);
 	logger_output_s("\n");
+#endif
 
     list = cc_ir_codeblocks_to_codelist(first, where);
     if (!list) { return NULL; }
@@ -712,9 +789,11 @@ FCCIRBasicBlock* cc_canon_uber(FCCIRCodeList* list, enum EMMArea where)
     cc_canon_codelist_simplify(list, where);
 
 	first = cc_canon_gen_basicblocks(list, where);
-	logger_output_s("Final Canon Result:\n");
+#if 1
+    logger_output_s("Final Canon Result:\n");
 	cc_ir_basicblock_display(first, 5);
 	logger_output_s("\n");
+#endif
 
     return first;
 }

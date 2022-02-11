@@ -22,7 +22,7 @@ struct Struct {
 char str[4] = { 'a', 'b', "ABC" };
 struct Struct s = { 1, 2, 4, 3, 'a', 'b' };
 					
-int test_reachable()
+struct Struct test_reachable(int x, short y, char z)
 {
 	int a, b, c;
 	float f;
@@ -36,10 +36,13 @@ int test_reachable()
 		a = 1000;
 	}
 	
-	if (0) {
+	if (a > 10) {
 		b = 10000;
+	
+		return s;
 	}
 
+	
 }
 
 /*

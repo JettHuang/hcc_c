@@ -2275,11 +2275,11 @@ static BOOL cc_expr_checkarguments(FCCType* functy, FCCIRTree** args, enum EMMAr
 			return FALSE;
 		}
 
-		args[k] = cc_expr_cast(ty, args[k], NULL, where);
-		if (IsInt(args[k]->_ty)
-			&& args[k]->_ty->_size != gbuiltintypes._sinttype->_size)
+		if (IsInt(ty) && ty->_size != gbuiltintypes._sinttype->_size)
 		{
-			args[k] = cc_expr_cast(cc_type_promote(args[k]->_ty), args[k], NULL, where);
+			args[k] = cc_expr_cast(cc_type_promote(ty), args[k], NULL, where);
+		} else {
+			args[k] = cc_expr_cast(ty, args[k], NULL, where);
 		}
 	} /* end for k */
 

@@ -194,6 +194,8 @@ FCCIRCode* cc_ir_codelist_insert_list_after(FCCIRCodeList* l, FCCIRCode* t, FCCI
 
 FCCIRCodeList* cc_ir_codeblocks_to_codelist(FCCIRBasicBlock* first, enum EMMArea where);
 
+int cc_ir_check_undeflabels(FCCIRCodeList* l);
+
 /* for debug */
 void cc_ir_codelist_display(FCCIRCodeList* l, int maxdepth);
 void cc_ir_basicblock_display(FCCIRBasicBlock* bb, int maxdepth);

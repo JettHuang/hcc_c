@@ -1110,22 +1110,78 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 	p->_loc = *loc;
 	p->_type = fty;
 	p->_defined = 1;
-
 	cc_gen_internalname(p);
 
 	/* clear labels table */
 	cc_symbol_reset(gLabels);
 	/* body */
 	{
+		FArray caller, callee;
 		FCCIRCodeList codelist = { NULL, NULL };
 		FCCSymbol* exitlab;
+		FCCIRBasicBlock* basicblocks;
 
 		exitlab = cc_symbol_label(NULL, NULL, CC_MM_TEMPPOOL);
 		ctx->_function = p;
 		ctx->_funcexit = exitlab;
 		ctx->_codes = &codelist;
 
+		/* generate ir-codes */
 		cc_ir_codelist_append(&codelist, cc_ir_newcode(IR_FENTER, CC_MM_TEMPPOOL));
+
+		/* caller & callee parameters converting */
+		{
+			FCCSymbol* retb, *p0, *p1;
+			int n;
+			
+			if (IsStruct(fty->_type)) 
+			{ 
+				if (!(retb = cc_symbol_install("#", &gIdentifiers, gCurrentLevel, CC_MM_TEMPPOOL))) {
+					return FALSE;
+				}
+				retb->_type = cc_type_ptr(fty->_type);
+				retb->_loc = ctx->_currtk._loc;
+				retb->_sclass = SC_Auto;
+				retb->_generated = 1;
+				retb->_temporary = 1;
+				retb->_defined = 1;
+				cc_gen_internalname(retb);
+
+				array_init(&caller, params->_elecount + 1, sizeof(FCCSymbol*), CC_MM_TEMPPOOL);
+				array_init(&callee, params->_elecount + 1, sizeof(FCCSymbol*), CC_MM_TEMPPOOL);
+			} else {
+				retb = NULL;
+				array_init(&caller, params->_elecount, sizeof(FCCSymbol*), CC_MM_TEMPPOOL);
+				array_init(&callee, params->_elecount, sizeof(FCCSymbol*), CC_MM_TEMPPOOL);
+			}
+
+			ctx->_funcretb = retb;
+			if (retb) { array_append(&callee, &retb); }
+			for (n=0; n<params->_elecount; ++n)
+			{
+				array_append(&callee, array_element(params, n));
+			}
+			for (n=0; n<callee._elecount; ++n)
+			{
+				p0 = p1 = *(FCCSymbol**)array_element(&callee, n);
+				if (IsInt(p0->_type) && p0->_type->_size != gbuiltintypes._sinttype->_size)
+				{
+					FCCIRTree* tree, * lhs, * rhs;
+
+					p1 = cc_symbol_dup(p0, CC_MM_TEMPPOOL);
+					p1->_type = cc_type_promote(p0->_type);
+
+					lhs = cc_expr_id(p0, NULL, CC_MM_TEMPPOOL);
+					rhs = cc_expr_cast(p0->_type, cc_expr_id(p1, NULL, CC_MM_TEMPPOOL), NULL, CC_MM_TEMPPOOL);
+					tree = cc_expr_assign(p0->_type, lhs, rhs, NULL, CC_MM_TEMPPOOL);
+					/* p0 = (typecast)p1 */
+					cc_ir_codelist_append(&codelist, cc_ir_newcode_expr(tree, CC_MM_TEMPPOOL));
+				}
+
+				array_append(&caller, &p1);
+			} /* end for n */
+		}
+
 		if (!cc_stmt_compound(ctx, &codelist, NULL, NULL)) 
 		{
 			return FALSE;
@@ -1134,46 +1190,30 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 		exitlab->_loc = ctx->_currtk._loc;
 		cc_ir_codelist_append(&codelist, cc_ir_newcode_label(exitlab, CC_MM_TEMPPOOL));
 		cc_ir_codelist_append(&codelist, cc_ir_newcode(IR_FEXIT, CC_MM_TEMPPOOL));
-
-		/* check undefined label */
-		{
-			FCCIRCode* c;
-			FCCSymbol* label;
-			int cnt = 0;
-
-			for (c= codelist._head; c; c=c->_next)
-			{
-				if (c->_op == IR_JMP)
-				{
-					label = c->_u._jmp._tlabel;
-					if (!label->_defined) {
-						cnt++;
-						logger_output_s("error: undefined label '%s', used at %w\n", label->_name, &label->_loc);
-					}
-				}
-			} /* end for */
-			if (cnt > 0) {
-				return FALSE;
-			}
+		if (cc_ir_check_undeflabels(&codelist) > 0) {
+			return FALSE;
 		}
 
-		{
-			FCCIRBasicBlock* basicblocks;
-
-			logger_output_s("== function: %s ================ \n", p->_name);
-			basicblocks = cc_canon_uber(&codelist, CC_MM_TEMPPOOL);
-			assert(basicblocks);
-
-			if (!cc_dag_translate_basicblocks(basicblocks, CC_MM_TEMPPOOL)) {
-				logger_output_s("translate DAG failed.\n");
-			}
-			else {
-				logger_output_s("After DAG :\n");
-				cc_ir_basicblock_display(basicblocks, 5);
-				logger_output_s("\n");
-			}
-
+		/* basic blocks & generate DAG */
+		if (!(basicblocks = cc_canon_uber(&codelist, CC_MM_TEMPPOOL))) {
+			logger_output_s("canon ir-codes failed.\n");
+			return FALSE;
 		}
+
+		/* check return paths */
+		if (!cc_canon_check_return(p, basicblocks)) {
+			return FALSE;
+		}
+
+		if (!cc_dag_translate_basicblocks(basicblocks, CC_MM_TEMPPOOL)) {
+			logger_output_s("translate DAG failed.\n");
+			return FALSE;
+		}
+#if 1
+		logger_output_s("After DAG :\n");
+		cc_ir_basicblock_display(basicblocks, 5);
+		logger_output_s("\n");
+#endif
 	}
 	
 	/* exit param scope */

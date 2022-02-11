@@ -327,3 +327,15 @@ FCCSymbol* cc_symbol_label(const char* id, const FLocation* loc, enum EMMArea wh
 	return p;
 }
 
+FCCSymbol* cc_symbol_dup(FCCSymbol* p, enum EMMArea where)
+{
+	FCCSymbol* q;
+
+	q = mm_alloc_area(sizeof(struct tagCCSymbol), where);
+	if (!q) { return NULL; }
+
+	*q = *p;
+	q->_up = NULL;
+
+	return q;
+}

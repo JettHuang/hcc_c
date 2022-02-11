@@ -27,6 +27,8 @@ FCCIRBasicBlock* cc_canon_gen_basicblocks(FCCIRCodeList* list, enum EMMArea wher
 /* erase the unreachable basic blocks */
 FCCIRBasicBlock* cc_canon_erease_deadbasicblocks(FCCIRBasicBlock* first, enum EMMArea where);
 
+/* check if return path exist */
+BOOL cc_canon_check_return(FCCSymbol* func, FCCIRBasicBlock* first);
 
 #endif /* __CC_CANON_H__ */
 

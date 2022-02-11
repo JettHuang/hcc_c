@@ -127,4 +127,7 @@ FCCSymbol* cc_symbol_label(const char* id, const FLocation *loc, enum EMMArea wh
 
 void cc_symbol_reset(struct tagCCSymbolTable* tp);
 
+/* duplicate a symbol */
+FCCSymbol* cc_symbol_dup(FCCSymbol* p, enum EMMArea where);
+
 #endif /* __CC_SYMBOLS_H__ */

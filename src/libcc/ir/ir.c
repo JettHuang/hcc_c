@@ -307,6 +307,28 @@ FCCIRCodeList* cc_ir_codeblocks_to_codelist(FCCIRBasicBlock* first, enum EMMArea
 	return list;
 }
 
+/* check undefined label */
+int cc_ir_check_undeflabels(FCCIRCodeList* l)
+{
+	FCCIRCode* c;
+	FCCSymbol* label;
+	int cnt = 0;
+
+	for (c = l->_head; c; c = c->_next)
+	{
+		if (c->_op == IR_JMP)
+		{
+			label = c->_u._jmp._tlabel;
+			if (!label->_defined) {
+				cnt++;
+				logger_output_s("error: undefined label '%s', used at %w\n", label->_name, &label->_loc);
+			}
+		}
+	} /* end for */
+
+	return cnt;
+}
+
 void cc_ir_codelist_display(FCCIRCodeList* l, int maxdepth)
 {
 	FCCIRCode* c = l->_head;

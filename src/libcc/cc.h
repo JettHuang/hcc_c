@@ -38,6 +38,7 @@ typedef struct tagCCContext {
 
 	struct tagCCSymbol* _function;
 	struct tagCCSymbol* _funcexit;
+	struct tagCCSymbol* _funcretb;
 	struct tagCCIRCodeList* _codes;
 	struct tagCCBackend* _backend;
 } FCCContext;

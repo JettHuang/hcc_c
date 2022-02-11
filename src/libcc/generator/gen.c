@@ -21,13 +21,13 @@ static void cc_gen_dumpinitvalues(struct tagCCContext* ctx, struct tagCCSymbol* 
 void cc_gen_internalname(struct tagCCSymbol* sym)
 {
 	if (sym->_generated) {
-		sym->_x._name = hs_hashstr(util_stringf("_%s_", sym->_name));
+		sym->_x._name = hs_hashstr(util_stringf("$%s_", sym->_name));
 	}
 	else if (sym->_scope == SCOPE_GLOBAL || sym->_sclass == SC_External) {
 		sym->_x._name = hs_hashstr(util_stringf("_%s", sym->_name));
 	}
 	else {
-		sym->_x._name = sym->_name;
+		sym->_x._name = hs_hashstr(util_stringf("%s$", sym->_name));
 	}
 }
 
