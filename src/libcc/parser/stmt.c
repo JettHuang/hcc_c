@@ -7,7 +7,7 @@
 #include "lexer/token.h"
 #include "logger.h"
 #include "parser.h"
-#include "generator/gen.h"
+#include "gen/backend.h"
 #include "ir/canon.h"
 #include <string.h>
 #include <assert.h>

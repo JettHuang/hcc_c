@@ -11,7 +11,7 @@
 #include "parser/types.h"
 #include "parser/symbols.h"
 #include "parser/parser.h"
-#include "generator/gen.h"
+#include "gen/backend.h"
 
 #include <string.h>
 

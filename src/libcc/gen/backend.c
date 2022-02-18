@@ -2,9 +2,9 @@
  *		generator
  */
 
-#include "gen.h"
 #include "cc.h"
 #include "logger.h"
+#include "backend.h"
 #include "parser/symbols.h"
 #include "parser/init.h"
 #include "parser/types.h"

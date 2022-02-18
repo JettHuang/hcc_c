@@ -87,8 +87,11 @@ project "libcc"
 		"./src/libcc/parser/*.c",
 		"./src/libcc/ir/*.h",
 		"./src/libcc/ir/*.c",
-		"./src/libcc/generator/*.h",
-		"./src/libcc/generator/*.c"
+		"./src/libcc/gen/*.h",
+		"./src/libcc/gen/*.c",
+		"./src/libcc/gen/x86/*.h",
+		"./src/libcc/gen/x86/*.c",
+		"./src/libcc/gen/x86/*.inl"
     }
 	
 group "tools"

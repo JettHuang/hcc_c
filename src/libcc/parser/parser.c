@@ -12,7 +12,7 @@
 #include "ir/ir.h"
 #include "ir/canon.h"
 #include "ir/dag.h"
-#include "generator/gen.h"
+#include "gen/backend.h"
 
 
 const char* cc_sclass_displayname(int sclass);

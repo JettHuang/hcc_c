@@ -2,10 +2,10 @@
  *		C compiler x86 back-end
  */
 
-#include "gen.h"
 #include "mm.h"
 #include "cc.h"
 #include "hstring.h"
+#include "gen/backend.h"
 #include "parser/symbols.h"
 #include "parser/types.h"
 #include "parser/expr.h"
