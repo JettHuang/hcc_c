@@ -2,7 +2,7 @@
  *		template for x86 assembly instructions.
  *  %0  dst
  *  %1  src
- *  %2  
+ *  %2  tagert or count
  */
 
 #define ASM_INSTRUCT
@@ -97,103 +97,142 @@ ASM_INSTRUCT(X86_NOT_U4M, "not dword ptr [%0] \n")
 ASM_INSTRUCT(X86_JZ_I4R, "cmp %0, 0\n je %2\n")
 ASM_INSTRUCT(X86_JZ_I4M, "cmp dword ptr [%0], 0\n je %2\n")
 ASM_INSTRUCT(X86_JZ_U4R, "cmp %0, 0\n je %2\n")
-ASM_INSTRUCT(X86_JZ_F4M, "fldz\n fcomp dword[%0]\n fnstsw ax\n test ah, 44h\n jnp %2\n")
-ASM_INSTRUCT(X86_JZ_F8M, "fldz\n fcomp qword[%0]\n fnstsw ax\n test ah, 44h\n jnp %2\n")
+ASM_INSTRUCT(X86_JZ_U4M, "cmp dword ptr [%0], 0\n je %2\n")
+ASM_INSTRUCT(X86_JZ_F4M, "fldz\n fcomp dword ptr[%0]\n fnstsw ax\n test ah, 44h\n jnp %2\n")
+ASM_INSTRUCT(X86_JZ_F8M, "fldz\n fcomp qword ptr[%0]\n fnstsw ax\n test ah, 44h\n jnp %2\n")
 
-ASM_INSTRUCT(X86_JNZI4,     "cmp %d1, 0\njne %0\n")
-ASM_INSTRUCT(X86_JNZU4,     "cmp %d1, 0\njne %0\n")
-ASM_INSTRUCT(X86_JNZF4,     "fldz\nfucompp\nfnstsw ax\n test ah, 44h\njp %0\n")
-ASM_INSTRUCT(X86_JNZF8,     "fldz\nfucompp\nfnstsw ax\n test ah, 44h\njp %0\n")
+ASM_INSTRUCT(X86_JNZ_I4R, "cmp %0, 0\n jne %2\n")
+ASM_INSTRUCT(X86_JNZ_I4M, "cmp dword ptr [%0], 0\n jne %2\n")
+ASM_INSTRUCT(X86_JNZ_U4R, "cmp %0, 0\n jne %2\n")
+ASM_INSTRUCT(X86_JNZ_U4M, "cmp dword ptr [%0], 0\n jne %2\n")
+ASM_INSTRUCT(X86_JNZ_F4M, "fldz\n fcomp dword ptr[%0]\n fnstsw ax\n test ah, 44h\n jp %2\n")
+ASM_INSTRUCT(X86_JNZ_F8M, "fldz\n fcomp qword ptr[%0]\n fnstsw ax\n test ah, 44h\n jp %2\n")
 
-ASM_INSTRUCT(X86_JEI4,      "cmp %d1, %d2\nje %0\n")
-ASM_INSTRUCT(X86_JEU4,      "cmp %d1, %d2\nje %0\n")
-ASM_INSTRUCT(X86_JEF4,      "fld dword ptr %2\nfucompp\nfnstsw ax\ntest ah, 44h\njnp %0\n")
-ASM_INSTRUCT(X86_JEF8,      "fld qword ptr %2\nfucompp\nfnstsw ax\ntest ah, 44h\njnp %0\n")
+ASM_INSTRUCT(X86_JE_I4RR, "cmp %0, %1\n je %2\n")
+ASM_INSTRUCT(X86_JE_I4RM, "cmp %0, dword ptr[%1]\n je %2\n")
+ASM_INSTRUCT(X86_JE_I4RI, "cmp %0, %1\n je %2\n")
+ASM_INSTRUCT(X86_JE_U4RR, "cmp %0, %1\n je %2\n")
+ASM_INSTRUCT(X86_JE_U4RM, "cmp %0, dword ptr[%1]\n je %2\n")
+ASM_INSTRUCT(X86_JE_U4RI, "cmp %0, %1\n je %2\n")
+ASM_INSTRUCT(X86_JE_F4MM,  "fld dword ptr [%0]\n fcomp dword ptr[%1]\n fnstsw ax\n test ah, 44h\n jnp %2\n")
+ASM_INSTRUCT(X86_JE_F8MM,  "fld qword ptr [%0]\n fcomp qword ptr[%1]\n fnstsw ax\n test ah, 44h\n jnp %2\n")
 
-ASM_INSTRUCT(X86_JNEI4,     "cmp %d1, %d2\njne %0\n")
-ASM_INSTRUCT(X86_JNEU4,     "cmp %d1, %d2\njne %0\n")
-ASM_INSTRUCT(X86_JNEF4,     "fld dword ptr %2\nfucompp\nfnstsw ax\ntest ah, 44h\njp %0\n")
-ASM_INSTRUCT(X86_JNEF8,     "fld qword ptr %2\nfucompp\nfnstsw ax\ntest ah, 44h\njp %0\n")
+ASM_INSTRUCT(X86_JNE_I4RR, "cmp %0, %1\n jne %2\n")
+ASM_INSTRUCT(X86_JNE_I4RM, "cmp %0, dword ptr[%1]\n jne %2\n")
+ASM_INSTRUCT(X86_JNE_I4RI, "cmp %0, %1\n jne %2\n")
+ASM_INSTRUCT(X86_JNE_U4RR, "cmp %0, %1\n jne %2\n")
+ASM_INSTRUCT(X86_JNE_U4RM, "cmp %0, dword ptr[%1]\n jne %2\n")
+ASM_INSTRUCT(X86_JNE_U4RI, "cmp %0, %1\n jne %2\n")
+ASM_INSTRUCT(X86_JNE_F4MM,  "fld dword ptr [%0]\n fcomp dword ptr[%1]\n fnstsw ax\n test ah, 44h\n jp %2\n")
+ASM_INSTRUCT(X86_JNE_F8MM,  "fld qword ptr [%0]\n fcomp qword ptr[%1]\n fnstsw ax\n test ah, 44h\n jp %2\n")
 
-ASM_INSTRUCT(X86_JGI4,      "cmp %d1, %d2\njg %0\n")
-ASM_INSTRUCT(X86_JGU4,      "cmp %d1, %d2\nja %0\n")
-ASM_INSTRUCT(X86_JGF4,      "fld dword ptr %2\nfucompp\nfnstsw ax\ntest ah, 1\njne %0\n")
-ASM_INSTRUCT(X86_JGF8,      "fld qword ptr %2\nfucompp\nfnstsw ax\ntest ah, 1\njne %0\n")
+ASM_INSTRUCT(X86_JG_I4RR, "cmp %0, %1\n jg %2\n")
+ASM_INSTRUCT(X86_JG_I4RM, "cmp %0, dword ptr[%1]\n jg %2\n")
+ASM_INSTRUCT(X86_JG_I4RI, "cmp %0, %1\n jg %2\n")
+ASM_INSTRUCT(X86_JG_U4RR, "cmp %0, %1\n ja %2\n")
+ASM_INSTRUCT(X86_JG_U4RM, "cmp %0, dword ptr[%1]\n ja %2\n")
+ASM_INSTRUCT(X86_JG_U4RI, "cmp %0, %1\n ja %2\n")
+ASM_INSTRUCT(X86_JG_F4MM,  "fld dword ptr [%0]\n fcomp dword ptr[%1]\n fnstsw ax\n test ah, 1h\n jne %2\n")
+ASM_INSTRUCT(X86_JG_F8MM,  "fld qword ptr [%0]\n fcomp qword ptr[%1]\n fnstsw ax\n test ah, 1h\n jne %2\n")
 
-ASM_INSTRUCT(X86_JLI4,      "cmp %d1, %d2\njl %0\n")
-ASM_INSTRUCT(X86_JLU4,      "cmp %d1, %d2\njb %0\n")
-ASM_INSTRUCT(X86_JLF4,      "fld dword ptr %2\nfucompp\nfnstsw ax\ntest ah, 41h\njp %0\n")
-ASM_INSTRUCT(X86_JLF8,      "fld qword ptr %2\nfucompp\nfnstsw ax\ntest ah, 41h\njp %0\n")
+ASM_INSTRUCT(X86_JL_I4RR, "cmp %0, %1\n jl %2\n")
+ASM_INSTRUCT(X86_JL_I4RM, "cmp %0, dword ptr[%1]\n jl %2\n")
+ASM_INSTRUCT(X86_JL_I4RI, "cmp %0, %1\n jl %2\n")
+ASM_INSTRUCT(X86_JL_U4RR, "cmp %0, %1\n jb %2\n")
+ASM_INSTRUCT(X86_JL_U4RM, "cmp %0, dword ptr[%1]\n jb %2\n")
+ASM_INSTRUCT(X86_JL_U4RI, "cmp %0, %1\n jb %2\n")
+ASM_INSTRUCT(X86_JL_F4MM,  "fld dword ptr [%0]\n fcomp dword ptr[%1]\n fnstsw ax\n test ah, 41h\n jp %2\n")
+ASM_INSTRUCT(X86_JL_F8MM,  "fld qword ptr [%0]\n fcomp qword ptr[%1]\n fnstsw ax\n test ah, 41h\n jp %2\n")
 
-ASM_INSTRUCT(X86_JGEI4,     "cmp %d1, %d2\njge %0\n")
-ASM_INSTRUCT(X86_JGEU4,     "cmp %d1, %d2\njae %0\n")
-ASM_INSTRUCT(X86_JGEF4,     "fld dword ptr %2\nfucompp\nfnstsw ax\ntest ah, 41h\njne %0\n")
-ASM_INSTRUCT(X86_JGEF8,     "fld qword ptr %2\nfucompp\nfnstsw ax\ntest ah, 41h\njne %0\n")
+ASM_INSTRUCT(X86_JGE_I4RR, "cmp %0, %1\n jge %2\n")
+ASM_INSTRUCT(X86_JGE_I4RM, "cmp %0, dword ptr[%1]\n jge %2\n")
+ASM_INSTRUCT(X86_JGE_I4RI, "cmp %0, %1\n jge %2\n")
+ASM_INSTRUCT(X86_JGE_U4RR, "cmp %0, %1\n jae %2\n")
+ASM_INSTRUCT(X86_JGE_U4RM, "cmp %0, dword ptr[%1]\n jae %2\n")
+ASM_INSTRUCT(X86_JGE_U4RI, "cmp %0, %1\n jae %2\n")
+ASM_INSTRUCT(X86_JGE_F4MM,  "fld dword ptr [%0]\n fcomp dword ptr[%1]\n fnstsw ax\n test ah, 41h\n jne %2\n")
+ASM_INSTRUCT(X86_JGE_F8MM,  "fld qword ptr [%0]\n fcomp qword ptr[%1]\n fnstsw ax\n test ah, 41h\n jne %2\n")
 
-ASM_INSTRUCT(X86_JLEI4,     "cmp %d1, %d2\njle %0\n")
-ASM_INSTRUCT(X86_JLEU4,     "cmp %d1, %d2\njbe %0\n")
-ASM_INSTRUCT(X86_JLEF4,     "fld dword ptr %2\nfucompp\nfnstsw ax\ntest ah, 5\njp %0\n")
-ASM_INSTRUCT(X86_JLEF8,     "fld qword ptr %2\nfucompp\nfnstsw ax\ntest ah, 5\njp %0\n")
+ASM_INSTRUCT(X86_JLE_I4RR, "cmp %0, %1\n jle %2\n")
+ASM_INSTRUCT(X86_JLE_I4RM, "cmp %0, dword ptr[%1]\n jle %2\n")
+ASM_INSTRUCT(X86_JLE_I4RI, "cmp %0, %1\n jle %2\n")
+ASM_INSTRUCT(X86_JLE_U4RR, "cmp %0, %1\n jbe %2\n")
+ASM_INSTRUCT(X86_JLE_U4RM, "cmp %0, dword ptr[%1]\n jbe %2\n")
+ASM_INSTRUCT(X86_JLE_U4RI, "cmp %0, %1\n jbe %2\n")
+ASM_INSTRUCT(X86_JLE_F4MM,  "fld dword ptr [%0]\n fcomp dword ptr[%1]\n fnstsw ax\n test ah, 5h\n jp %2\n")
+ASM_INSTRUCT(X86_JLE_F8MM,  "fld qword ptr [%0]\n fcomp qword ptr[%1]\n fnstsw ax\n test ah, 5h\n jp %2\n")
 
-ASM_INSTRUCT(X86_EXT_I1RM,  "movsx %0, byte ptr [%1]")
-ASM_INSTRUCT(X86_EXT_I2RM,  "movsx %0, word ptr [%1]")
-ASM_INSTRUCT(X86_EXT_U1RM,  "movzx %0, byte ptr [%1]")
-ASM_INSTRUCT(X86_EXT_U2RM,  "movzx %0, word ptr [%1]")
+/* load & extension byte & word */
+ASM_INSTRUCT(X86_EXT_RI4MI1,  "movsx %0, byte ptr [%1]")
+ASM_INSTRUCT(X86_EXT_RI4MI2,  "movsx %0, word ptr [%1]")
+ASM_INSTRUCT(X86_EXT_RU4MU1,  "movzx %0, byte ptr [%1]")
+ASM_INSTRUCT(X86_EXT_RU4MU2,  "movzx %0, word ptr [%1]")
 
-ASM_INSTRUCT(X86_CVTI4F4,   "push %d1\nfild DWORD PTR [esp];fstp DWORD PTR %0\nadd esp,4\n")
-ASM_INSTRUCT(X86_CVTI4F8,   "push %d1\nfild DWORD PTR [esp];fstp QWORD PTR %0\nadd esp,4\n")
-ASM_INSTRUCT(X86_CVTU4F4,   "push 0\npush %d1\nfild QWORD PTR [esp];fstp DWORD PTR %0\nadd esp,8\n")
-ASM_INSTRUCT(X86_CVTU4F8,   "push 0\npush %d1\nfild QWORD PTR [esp];fstp QWORD PTR %0\nadd esp,8\n")
-ASM_INSTRUCT(X86_CVTF4,     "fld DWORD PTR %1\nfstp QWORD PTR %0\n")
+/* convert integer to float */
+ASM_INSTRUCT(X86_CVT_MF4RI4,  "push %1\n fild dword ptr [esp]\n fstp dword ptr [%0]\n add esp, 4\n")
+ASM_INSTRUCT(X86_CVT_MF8RI4,  "push %1\n fild dword ptr [esp]\n fstp qword ptr [%0]\n add esp, 4\n")
+ASM_INSTRUCT(X86_CVT_MF4RU4,  "push 0\n push %1\n fild qword ptr [esp]\n fstp dword ptr [%0]\n add esp, 8\n")
+ASM_INSTRUCT(X86_CVT_MF8RU4,  "push 0\n push %1\n fild qword ptr [esp]\n fstp qword ptr [%0]\n add esp, 8\n")
 
+ASM_INSTRUCT(X86_CVT_MF8MF4,  "fld dword ptr [%1]\n fstp qword ptr [%1]\n")
+ASM_INSTRUCT(X86_CVT_MF4MF8,  "fld qword ptr [%1]\n fstp dword ptr [%0]\n")
 
-ASM_INSTRUCT(X86_CVTF4I4,   "fld DWORD PTR %1\nsub esp, 16\nfnstcw [esp];movzx eax, WORD PTR [esp];"
-                            "or eax, 0c00H\nmov 4[esp], eax\nfldcw 4[esp];fistp DWORD PTR 8[esp];"
-                            "fldcw [esp];mov eax, 8[esp];add esp, 16\n")
-ASM_INSTRUCT(X86_CVTF4U4,   "fld DWORD PTR %1\nsub esp, 16\nfnstcw [esp];movzx eax, WORD PTR [esp];"
-                            "or eax, 0c00H\nmov 4[esp], eax\nfldcw 4[esp];fistp QWORD PTR 8[esp];"
-                            "fldcw [esp];mov eax, 8[esp];add esp, 16\n")
-ASM_INSTRUCT(X86_CVTF8,     "fld QWORD PTR %1\nfstp DWORD PTR %0\n")
-ASM_INSTRUCT(X86_CVTF8I4,   "fld QWORD PTR %1\nsub esp, 16\nfnstcw [esp];movzx eax, WORD PTR [esp];"
-                            "or eax, 0c00H\nmov 4[esp], eax\nfldcw 4[esp];fistp DWORD PTR 8[esp];"
-                            "fldcw [esp];mov eax, 8[esp];add esp, 16\n")
-ASM_INSTRUCT(X86_CVTF8U4,   "fld QWORD PTR %1\nsub esp, 16\nfnstcw [esp];movzx eax, WORD PTR [esp];"
-                            "or eax, 0c00H\nmov 4[esp], eax\nfldcw 4[esp];fistp QWORD PTR 8[esp];"
-                            "fldcw [esp];mov eax, 8[esp];add esp, 16\n")
+/* convert float to integer (in eax) */
+ASM_INSTRUCT(X86_CVT_RI4MF4,   "fld dword ptr [%1]\n sub esp, 16\n fnstcw [esp]\n movzx eax, word ptr [esp]\n"
+                               "or eax, 0c00H\n mov 4[esp], eax\n fldcw 4[esp]\n fistp dword ptr 8[esp]\n"
+                               "fldcw [esp]\n mov eax, 8[esp]\n  add esp, 16\n")
+ASM_INSTRUCT(X86_CVT_RU4MF4,   "fld dword ptr [%1]\n sub esp, 16\n fnstcw [esp]\n movzx eax, word ptr [esp]\n"
+                               "or eax, 0c00H\n mov 4[esp], eax\n fldcw 4[esp]\n  fistp qword ptr 8[esp]\n"
+                               "fldcw [esp]\n mov eax, 8[esp]\n  add esp, 16\n")
+
+ASM_INSTRUCT(X86_CVT_RI4MF8,   "fld qword ptr [%1]\n sub esp, 16\n fnstcw [esp]\n movzx eax, word ptr [esp]\n"
+                               "or eax, 0c00H\n mov 4[esp], eax\n fldcw 4[esp]\n fistp dword ptr 8[esp]\n"
+                               "fldcw [esp]\n mov eax, 8[esp]\n  add esp, 16\n")
+ASM_INSTRUCT(X86_CVT_RU4MF8,   "fld qword ptr [%1]\n sub esp, 16\n fnstcw [esp]\n movzx eax, word ptr [esp]\n"
+                               "or eax, 0c00H\n mov 4[esp], eax\n fldcw 4[esp]\n  fistp qword ptr 8[esp]\n"
+                               "fldcw [esp]\n mov eax, 8[esp]\n  add esp, 16\n")
 						
+ASM_INSTRUCT(X86_ADDR,      "lea %0, [%1]\n")
+ASM_INSTRUCT(X86_MOV_I1MR,  "mov byte ptr [%0], %1\n")
+ASM_INSTRUCT(X86_MOV_I2MR,  "mov word ptr [%0], %1\n")
+ASM_INSTRUCT(X86_MOV_I4MR,  "mov dword ptr [%0], %1\n")
+ASM_INSTRUCT(X86_MOV_U1MR,  "mov byte ptr [%0], %1\n")
+ASM_INSTRUCT(X86_MOV_U2MR,  "mov word ptr [%0], %1\n")
+ASM_INSTRUCT(X86_MOV_U4MR,  "mov dword ptr [%0], %1\n")
+ASM_INSTRUCT(X86_MOV_P4MR,  "mov dword ptr [%0], %1\n")
 
-ASM_INSTRUCT(X86_ADDR,      "lea %0, [%1]")
-ASM_INSTRUCT(X86_MOVI1,     "mov %b0, %b1\n")
-ASM_INSTRUCT(X86_MOVI2,     "mov %w0, %w1\n")
-ASM_INSTRUCT(X86_MOVI4,     "mov %d0, %d1\n")
-ASM_INSTRUCT(X86_MOVBLK,    "lea edi, %0\nlea esi, %1\nmov ecx, %2\nrep movsb\n")
+ASM_INSTRUCT(X86_MOV_BMM,   "lea edi, %0\n lea esi, %1\n mov ecx, %2\n rep movsb\n")
 
-ASM_INSTRUCT(X86_JMP,       "jmp %0\n")
-ASM_INSTRUCT(X86_IJMP,      "jmp DWORD PTR %0[%1*4]")
+ASM_INSTRUCT(X86_JMP,       "jmp %2\n")
+ASM_INSTRUCT(X86_IJMP,      "jmp dword ptr [%0]\n")
 
-ASM_INSTRUCT(X86_PROLOGUE,  "push ebp\npush ebx\npush esi\npush edi\nmov ebp, esp\n")
-ASM_INSTRUCT(X86_PUSH,      "push %d0\n")
-ASM_INSTRUCT(X86_PUSHF4,    "push ecx\nfld DWORD PTR %0\nfstp DWORD PTR [esp]")
-ASM_INSTRUCT(X86_PUSHF8,    "sub esp, 8\nfld QWORD PTR %0\nfstp QWORD PTR [esp]")
-ASM_INSTRUCT(X86_PUSHB,     "lea esi, %0\nsub esp, %2\nmov edi, esp\nmov ecx, %1\nrep movsb\n")
+ASM_INSTRUCT(X86_PROLOGUE,  "push ebp\n push ebx\n push esi\n push edi\n mov ebp, esp\n")
+ASM_INSTRUCT(X86_PUSH_I4R,  "push %0\n")
+ASM_INSTRUCT(X86_PUSH_I4M,  "push dword ptr[%0]\n")
+ASM_INSTRUCT(X86_PUSH_I4I,  "push %0\n")
+ASM_INSTRUCT(X86_PUSH_U4R,  "push %0\n")
+ASM_INSTRUCT(X86_PUSH_U4M,  "push dword ptr[%0]\n")
+ASM_INSTRUCT(X86_PUSH_U4I,  "push %0\n")
+ASM_INSTRUCT(X86_PUSH_P4M,  "push dword ptr[%0]\n")
+ASM_INSTRUCT(X86_PUSH_P4R,  "push %0\n")
+
+ASM_INSTRUCT(X86_PUSH_F4M,  "push ecx\n fld dword ptr [%0]\n fstp dword ptr [esp]\n")
+ASM_INSTRUCT(X86_PUSH_F8M,  "sub esp, 8\n fld qword ptr [%0]\n fstp qword ptr [esp]\n")
+ASM_INSTRUCT(X86_PUSH_BM,   "lea esi, [%1]\n sub esp, %2\n mov edi, esp\n mov ecx, %2\n rep movsb\n")
 ASM_INSTRUCT(X86_EXPANDF,   "sub esp, %0\n")
-ASM_INSTRUCT(X86_CALL,      "call %1\n")
-ASM_INSTRUCT(X86_ICALL,     "call DWORD PTR %1\n")
+ASM_INSTRUCT(X86_CALL,      "call %2\n")
+ASM_INSTRUCT(X86_ICALL,     "call dword ptr [%0]\n")
 ASM_INSTRUCT(X86_REDUCEF,   "add esp, %0\n")
-ASM_INSTRUCT(X86_EPILOGUE,  "mov esp, ebp\npop edi\npop esi\npop ebx\npop ebp\nret\n")
+ASM_INSTRUCT(X86_EPILOGUE,  "mov esp, ebp\n pop edi\n pop esi\n pop ebx\n pop ebp\n ret\n")
 
+/* set zero */
+ASM_INSTRUCT(X86_ZERO_M,    "lea edi, [%0]\n  mov al, 0\n mov ecx, %2\n rep stosb\n")
 
-ASM_INSTRUCT(X86_CLEAR,     "push %1\npush 0\nlea eax, %0\npush eax\ncall _memset\nadd esp, 12\n")
-
-ASM_INSTRUCT(X86_LDF4,      "fld DWORD PTR %0\n")
-ASM_INSTRUCT(X86_LDF8,      "fld QWORD PTR %0\n")
-ASM_INSTRUCT(X86_STF4,      "fstp DWORD PTR %0\n")
-ASM_INSTRUCT(X86_STF8,      "fstp QWORD PTR %0\n")
-
-
-ASM_INSTRUCT(X86_STF4_NO_POP,     "fst DWORD PTR %0\n")
-ASM_INSTRUCT(X86_STF8_NO_POP,     "fst QWORD PTR %0\n")
-
-ASM_INSTRUCT(X86_X87_POP,     "fstp st(0)")
-
+ASM_INSTRUCT(X86_LD_F4M,    "fld dword ptr [%0]\n")
+ASM_INSTRUCT(X86_LD_F8M,    "fld qword ptr [%0]\n")
+ASM_INSTRUCT(X86_ST_F4M,    "fst dword ptr [%0]\n")
+ASM_INSTRUCT(X86_ST_F8M,    "fst qword ptr [%0]\n")
+ASM_INSTRUCT(X86_STP_F4M,   "fstp dword ptr [%0]\n")
+ASM_INSTRUCT(X86_STP_F8M,   "fstp qword ptr [%0]\n")
+ASM_INSTRUCT(X86_STP_NIL,   "fstp st(0)")
 
