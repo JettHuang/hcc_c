@@ -56,6 +56,9 @@ BOOL cc_parser_initializer(struct tagCCContext* ctx, FVarInitializer** outinit, 
 				break;
 			}
 			cc_read_token(ctx, &ctx->_currtk);
+			if (ctx->_currtk._type == TK_RBRACE) {
+				break;
+			}
 		} /* end for ;; */
 
 		initializer->_u._kids._kids = kids._data;
