@@ -5,11 +5,12 @@
  *  %2  tagert or count
  */
 
-#define ASM_INSTRUCT
-
 #ifndef ASM_INSTRUCT
 #error "You must define ASM_INSTRUCT before including this file."
 #endif
+
+ASM_INSTRUCT(X86_INS_INVALID, "--N/A--")
+ASM_INSTRUCT(X86_LABEL, "%2: \n")
 
 ASM_INSTRUCT(X86_OR_I4RR, "or %0, %1 \n")
 ASM_INSTRUCT(X86_OR_I4RI, "or %0, %1 \n")
@@ -192,16 +193,24 @@ ASM_INSTRUCT(X86_CVT_RU4MF8,   "fld qword ptr [%1]\n sub esp, 16\n fnstcw [esp]\
                                "or eax, 0c00H\n mov 4[esp], eax\n fldcw 4[esp]\n  fistp qword ptr 8[esp]\n"
                                "fldcw [esp]\n mov eax, 8[esp]\n  add esp, 16\n")
 						
-ASM_INSTRUCT(X86_ADDR,      "lea %0, [%1]\n")
-ASM_INSTRUCT(X86_MOV_I1MR,  "mov byte ptr [%0], %1\n")
-ASM_INSTRUCT(X86_MOV_I2MR,  "mov word ptr [%0], %1\n")
-ASM_INSTRUCT(X86_MOV_I4MR,  "mov dword ptr [%0], %1\n")
-ASM_INSTRUCT(X86_MOV_U1MR,  "mov byte ptr [%0], %1\n")
-ASM_INSTRUCT(X86_MOV_U2MR,  "mov word ptr [%0], %1\n")
-ASM_INSTRUCT(X86_MOV_U4MR,  "mov dword ptr [%0], %1\n")
-ASM_INSTRUCT(X86_MOV_P4MR,  "mov dword ptr [%0], %1\n")
+ASM_INSTRUCT(X86_ADDR,       "lea %0, [%1]\n")
+ASM_INSTRUCT(X86_MOV_I1MRI,  "mov byte ptr [%0], %1\n")
+ASM_INSTRUCT(X86_MOV_I2MRI,  "mov word ptr [%0], %1\n")
+ASM_INSTRUCT(X86_MOV_I4MRI,  "mov dword ptr [%0], %1\n")
+ASM_INSTRUCT(X86_MOV_U1MRI,  "mov byte ptr [%0], %1\n")
+ASM_INSTRUCT(X86_MOV_U2MRI,  "mov word ptr [%0], %1\n")
+ASM_INSTRUCT(X86_MOV_U4MRI,  "mov dword ptr [%0], %1\n")
+ASM_INSTRUCT(X86_MOV_P4MRI,  "mov dword ptr [%0], %1\n")
+ASM_INSTRUCT(X86_MOV_I1RM,   "mov %0, byte ptr [%1]\n")
+ASM_INSTRUCT(X86_MOV_I2RM,   "mov %0, word ptr [%1]\n")
+ASM_INSTRUCT(X86_MOV_I4RM,   "mov %0, dword ptr [%1]\n")
+ASM_INSTRUCT(X86_MOV_U1RM,   "mov %0, byte ptr [%1]\n")
+ASM_INSTRUCT(X86_MOV_U2RM,   "mov %0, word ptr [%1]\n")
+ASM_INSTRUCT(X86_MOV_U4RM,   "mov %0, dword ptr [%1]\n")
+ASM_INSTRUCT(X86_MOV_P4RM,   "mov %0, dword ptr [%1]\n")
+ASM_INSTRUCT(X86_MOV_RRI,    "mov %0, %1\n")
 
-ASM_INSTRUCT(X86_MOV_BMM,   "lea edi, %0\n lea esi, %1\n mov ecx, %2\n rep movsb\n")
+ASM_INSTRUCT(X86_MOV_BMM,   "lea edi, [%0]\n lea esi, [%1]\n mov ecx, %2\n rep movsb\n")
 
 ASM_INSTRUCT(X86_JMP,       "jmp %2\n")
 ASM_INSTRUCT(X86_IJMP,      "jmp dword ptr [%0]\n")
@@ -215,8 +224,18 @@ ASM_INSTRUCT(X86_PUSH_U4M,  "push dword ptr[%0]\n")
 ASM_INSTRUCT(X86_PUSH_U4I,  "push %0\n")
 ASM_INSTRUCT(X86_PUSH_P4M,  "push dword ptr[%0]\n")
 ASM_INSTRUCT(X86_PUSH_P4R,  "push %0\n")
+ASM_INSTRUCT(X86_PUSH_P4I,  "push %0\n")
 
+ASM_INSTRUCT(X86_PUSH_I8I,  "-----")
+ASM_INSTRUCT(X86_PUSH_I8M,  "-----")
+ASM_INSTRUCT(X86_PUSH_I8R,  "-----")
+ASM_INSTRUCT(X86_PUSH_U8I,  "-----")
+ASM_INSTRUCT(X86_PUSH_U8M,  "-----")
+ASM_INSTRUCT(X86_PUSH_U8R,  "-----")
+
+ASM_INSTRUCT(X86_PUSH_F4R,  "push ecx\n fstp dword ptr [esp]\n")
 ASM_INSTRUCT(X86_PUSH_F4M,  "push ecx\n fld dword ptr [%0]\n fstp dword ptr [esp]\n")
+ASM_INSTRUCT(X86_PUSH_F8R,  "sub esp, 8\n fstp qword ptr [esp]\n")
 ASM_INSTRUCT(X86_PUSH_F8M,  "sub esp, 8\n fld qword ptr [%0]\n fstp qword ptr [esp]\n")
 ASM_INSTRUCT(X86_PUSH_BM,   "lea esi, [%1]\n sub esp, %2\n mov edi, esp\n mov ecx, %2\n rep movsb\n")
 ASM_INSTRUCT(X86_EXPANDF,   "sub esp, %0\n")

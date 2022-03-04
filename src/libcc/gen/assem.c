@@ -5,9 +5,10 @@
 
 #include "assem.h"
 #include "mm.h"
+#include "logger.h"
 
 
-FCCASCode* cc_as_newcode(unsigned int op, enum EMMArea where)
+FCCASCode* cc_as_newcode(enum EMMArea where)
 {
 	FCCASCode* code = mm_alloc_area(sizeof(FCCASCode), where);
 	if (!code) {
@@ -15,8 +16,7 @@ FCCASCode* cc_as_newcode(unsigned int op, enum EMMArea where)
 		return NULL;
 	}
 
-	memset(code, 0, sizeof(FCCASCode));
-	code->_opcode = op;
+	util_memset(code, 0, sizeof(FCCASCode));
 	return code;
 }
 

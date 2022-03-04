@@ -64,6 +64,11 @@ const char* util_itoa(int i)
 	return itoa(i, str, 10);
 }
 
+void* util_memset(void* s, int ch, unsigned int n)
+{
+	return memset(s, ch, n);
+}
+
 int util_roundup(int val, int align)
 {
 	return (val + align - 1) & (~(align - 1));
@@ -246,7 +251,7 @@ void array_append_zeroed(FArray* array)
 
 	array_make_cap_enough(array, array->_elecount + 1);
 	data = (char*)(array->_data) + array->_elesize * array->_elecount;
-	memset(data, 0, array->_elesize);
+	util_memset(data, 0, array->_elesize);
 	array->_elecount++;
 }
 

@@ -60,7 +60,7 @@ void cc_type_init(const FCCTypeMetrics* m)
 	FCCSymbol* p;
 
 	sMaxlevel = 0;
-	memset(stypetable, 0, sizeof(stypetable));
+	util_memset(stypetable, 0, sizeof(stypetable));
 	sTypeMetric = *m;
 
 	{

@@ -48,5 +48,6 @@ struct tagCCBackend* cc_new_backend();
 
 void cc_gen_internalname(struct tagCCSymbol* sym);
 void cc_gen_dumpsymbols(struct tagCCContext* ctx);
+BOOL cc_gen_asmcodes(struct tagCCSymbol* func, struct tagCCIRBasicBlock* bb, struct tagCCASCodeList* asmlist, enum EMMArea where);
 
 #endif /* __CC_GEN_H__ */

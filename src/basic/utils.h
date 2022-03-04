@@ -70,6 +70,8 @@ const char* util_itoa(int i);
 /* round up (align = 2^n) */
 int util_roundup(int val, int align);
 
+void* util_memset(void *s, int ch, unsigned int n);
+
 typedef struct tagArray
 {
 	void* _data;

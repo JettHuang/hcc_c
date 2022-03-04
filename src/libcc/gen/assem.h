@@ -9,38 +9,28 @@
 #include "ir/dag.h"
 
 
-enum ASOperandType /* bytes */
+enum ASOperandFormat 
 {
-	S1,
-	U1,
-	S2,
-	U2,
-	S4,
-	U4,
-	S8,
-	U8,
-	F4,
-	F8
-};
-
-enum ASAddressingMode 
-{
-	Reg,
-	Mem,
-	Imm
+	FormatReg,
+	FormatImm,
+	FormatSIB,
+	FormatInSIB
 };
 
 typedef struct tagCCASOperand {
-	unsigned int _addrmode;
+	int _format;
+	int _tycode; /* operand type code */
 	union {
-		struct tagCCDagNode* _reg;
-		struct tagCCDagNode* _imm;
+		short _regs[2]; /* NOTE: for 64bits regs[1]:regs[0] */
+		struct tagCCSymbol* _imm; /* immediate constant */
 		struct {
-			struct tagCCDagNode* _base;
-			struct tagCCDagNode* _index;
-			unsigned int _scale; /* 1, 2, 4, 8 */
-			struct tagCCDagNode* _displacement;
-		} _mem;
+			struct tagCCSymbol* _displacement;
+			unsigned int _displacement2;
+
+			short _basereg;
+			short _indexreg;
+			short _scale; /* 1, 2, 4, 8 */
+		} _sib;
 	} _u;
 } FCCASOperand;
 
@@ -49,6 +39,7 @@ typedef struct tagCCASCode {
 	struct tagCCASOperand _dst;
 	struct tagCCASOperand _src;
 	struct tagCCSymbol*	  _target;
+	int _count;
 
 	struct tagCCASCode* _prev, * _next;
 } FCCASCode;
@@ -59,7 +50,7 @@ typedef struct tagCCASCodeList {
 } FCCASCodeList;
 
 
-FCCASCode* cc_as_newcode(unsigned int op, enum EMMArea where);
+FCCASCode* cc_as_newcode(enum EMMArea where);
 void cc_as_codelist_append(FCCASCodeList* l, FCCASCode* c);
 /* remove & return next item */
 FCCASCode* cc_as_codelist_remove(FCCASCodeList* l, FCCASCode* c);

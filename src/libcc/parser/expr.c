@@ -2,7 +2,6 @@
  *		expression parsing.
  */
 
-#include <string.h>
 #include <stdarg.h>
 
 #include "expr.h"
@@ -34,7 +33,7 @@ static FCCIRTree* cc_expr_new(enum EMMArea where)
 {
 	FCCIRTree* tree = mm_alloc_area(sizeof(FCCIRTree), where);
 	if (tree) {
-		memset(tree, 0, sizeof(FCCIRTree));
+		util_memset(tree, 0, sizeof(FCCIRTree));
 	}
 	else {
 		logger_output_s("error: out of memory at %s:%d\n", __FILE__, __LINE__);
@@ -1766,7 +1765,7 @@ FCCIRTree* cc_expr_id(FCCSymbol* p, FLocation* loc, enum EMMArea where)
 		return NULL;
 	}
 
-	tree->_op = IR_MKOP(op);
+	tree->_op = IR_MKOP1(op, IR_PTR);
 	if (loc) { tree->_loc = *loc; }
 	tree->_symbol = p;
 

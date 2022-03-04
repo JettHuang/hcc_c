@@ -7,8 +7,6 @@
 #include "types.h"
 #include "logger.h"
 
-#include <string.h>
-
 extern void cc_gen_internalname(struct tagCCSymbol* sym);
 
 #define SYM_HASHSIZE 256
@@ -47,7 +45,7 @@ static void cc_init_table(FCCSymbolTable* tp, int level)
 	tp->_level = level;
 	tp->_previous = NULL;
 	tp->_all = NULL;
-	memset(tp->_buckets, 0, sizeof(tp->_buckets));
+	util_memset(tp->_buckets, 0, sizeof(tp->_buckets));
 }
 
 /* create a symbol table */
@@ -73,7 +71,7 @@ void cc_symbol_reset(struct tagCCSymbolTable* tp)
 {
 	tp->_previous = NULL;
 	tp->_all = NULL;
-	memset(tp->_buckets, 0, sizeof(tp->_buckets));
+	util_memset(tp->_buckets, 0, sizeof(tp->_buckets));
 }
 
 void cc_symbol_init()
@@ -145,7 +143,7 @@ FCCSymbol* cc_symbol_install(const char* name, struct tagCCSymbolTable** tpp, in
 		return NULL;
 	}
 
-	memset(&p->_sym, 0, sizeof(p->_sym));
+	util_memset(&p->_sym, 0, sizeof(p->_sym));
 	p->_sym._type = NULL;
 	p->_sym._name = name;
 	p->_sym._scope = level;
@@ -273,7 +271,7 @@ FCCSymbol* cc_symbol_constant(struct tagCCType* ty, FCCConstVal val)
 		return NULL;
 	}
 
-	memset(&p->_sym, 0, sizeof(p->_sym));
+	util_memset(&p->_sym, 0, sizeof(p->_sym));
 	p->_sym._name = hs_hashstr(util_itoa(cc_symbol_genlabel(1)));
 	p->_sym._type = ty;
 	p->_sym._scope = SCOPE_CONST;
@@ -297,7 +295,7 @@ FCCSymbol* cc_symbol_temporary(struct tagCCType* ty, int sclass)
 	p = mm_alloc_area(sizeof(struct tagCCSymbol), CC_MM_TEMPPOOL);
 	if (!p) { return NULL; }
 
-	memset(p, 0, sizeof(*p));
+	util_memset(p, 0, sizeof(*p));
 	p->_name = hs_hashstr(util_itoa(cc_symbol_gentemp(1)));
 	p->_type = ty;
 	p->_sclass = sclass;

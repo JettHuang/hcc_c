@@ -2,9 +2,8 @@
  *		dag pool.
  */
 
-#include <string.h>
-
 #include "dag.h"
+#include "parser/types.h"
 #include "logger.h"
 
 
@@ -18,7 +17,7 @@ static struct tagDagPoolEntry {
 static int gpooleddagscnt = 0;
 
 
-static struct tagDagPoolEntry* cc_dag_entry(unsigned int op, FCCIRDagNode* lhs, FCCIRDagNode* rhs, FCCSymbol* sym, enum EMMArea where)
+static struct tagDagPoolEntry* cc_dag_entry(unsigned int op, int valsize, FCCIRDagNode* lhs, FCCIRDagNode* rhs, FCCSymbol* sym, enum EMMArea where)
 {
 	struct tagDagPoolEntry* dag = mm_alloc_area(sizeof(struct tagDagPoolEntry), where);
 	if (!dag) {
@@ -26,8 +25,9 @@ static struct tagDagPoolEntry* cc_dag_entry(unsigned int op, FCCIRDagNode* lhs, 
 		return NULL;
 	}
 
-	memset(dag, 0, sizeof(*dag));
+	util_memset(dag, 0, sizeof(*dag));
 	dag->_node._op = op;
+	dag->_node._typesize = valsize;
 	if ((dag->_node._kids[0] = lhs) != NULL) {
 		lhs->_refcnt++;
 	}
@@ -39,13 +39,13 @@ static struct tagDagPoolEntry* cc_dag_entry(unsigned int op, FCCIRDagNode* lhs, 
 	return dag;
 }
 
-FCCIRDagNode* cc_dag_newnode(unsigned int op, FCCIRDagNode* lhs, FCCIRDagNode* rhs, FCCSymbol* sym, enum EMMArea where)
+FCCIRDagNode* cc_dag_newnode(unsigned int op, int valsize, FCCIRDagNode* lhs, FCCIRDagNode* rhs, FCCSymbol* sym, enum EMMArea where)
 {
-	struct tagDagPoolEntry* dag = cc_dag_entry(op, lhs, rhs, sym, where);
+	struct tagDagPoolEntry* dag = cc_dag_entry(op, valsize, lhs, rhs, sym, where);
 	return dag ? &dag->_node : NULL;
 }
 
-FCCIRDagNode* cc_dag_newnode_inpool(unsigned int op, FCCIRDagNode* lhs, FCCIRDagNode* rhs, FCCSymbol* sym, enum EMMArea where)
+FCCIRDagNode* cc_dag_newnode_inpool(unsigned int op, int valsize, FCCIRDagNode* lhs, FCCIRDagNode* rhs, FCCSymbol* sym, enum EMMArea where)
 {
 	struct tagDagPoolEntry* p;
 	int h;
@@ -60,7 +60,7 @@ FCCIRDagNode* cc_dag_newnode_inpool(unsigned int op, FCCIRDagNode* lhs, FCCIRDag
 		}
 	} /* end for p */
 
-	p = cc_dag_entry(op, lhs, rhs, sym, where);
+	p = cc_dag_entry(op, valsize, lhs, rhs, sym, where);
 	p->_link = buckets[h];
 	buckets[h] = p;
 	gpooleddagscnt++;
@@ -97,7 +97,7 @@ void cc_dag_rmnodes_inpool(FCCSymbol* p)
 void cc_dag_reset_pool()
 {
 	if (gpooleddagscnt > 0) {
-		memset(&buckets, 0, sizeof(buckets));
+		util_memset(&buckets, 0, sizeof(buckets));
 	}
 	gpooleddagscnt = 0;
 }
@@ -127,7 +127,7 @@ static BOOL cc_dag_translate_expr(FCCIRTree* expr, enum EMMArea where)
 			return FALSE;
 		}
 
-		if (!(expr->_dagnode = cc_dag_newnode_inpool(expr->_op, NULL, NULL, p, where)))
+		if (!(expr->_dagnode = cc_dag_newnode_inpool(expr->_op, expr->_ty->_size, NULL, NULL, p, where)))
 		{
 			return FALSE;
 		}
@@ -140,7 +140,7 @@ static BOOL cc_dag_translate_expr(FCCIRTree* expr, enum EMMArea where)
 		if (cc_dag_translate_expr(lhs, where) &&
 			cc_dag_translate_expr(rhs, where))
 		{
-			if (!(expr->_dagnode = cc_dag_newnode_inpool(expr->_op, lhs->_dagnode, rhs->_dagnode, NULL, where)))
+			if (!(expr->_dagnode = cc_dag_newnode_inpool(expr->_op, expr->_ty->_size, lhs->_dagnode, rhs->_dagnode, NULL, where)))
 			{
 				return FALSE;
 			}
@@ -170,7 +170,7 @@ static BOOL cc_dag_translate_expr(FCCIRTree* expr, enum EMMArea where)
 		if (cc_dag_translate_expr(lhs, where) &&
 			cc_dag_translate_expr(rhs, where))
 		{
-			if (!(expr->_dagnode = cc_dag_newnode_inpool(expr->_op, lhs->_dagnode, rhs->_dagnode, NULL, where)))
+			if (!(expr->_dagnode = cc_dag_newnode_inpool(expr->_op, expr->_ty->_size, lhs->_dagnode, rhs->_dagnode, NULL, where)))
 			{
 				return FALSE;
 			}
@@ -192,7 +192,7 @@ static BOOL cc_dag_translate_expr(FCCIRTree* expr, enum EMMArea where)
 		if (cc_dag_translate_expr(lhs, where) &&
 			cc_dag_translate_expr(rhs, where))
 		{
-			if (!(expr->_dagnode = cc_dag_newnode_inpool(expr->_op, lhs->_dagnode, rhs->_dagnode, NULL, where)))
+			if (!(expr->_dagnode = cc_dag_newnode_inpool(expr->_op, expr->_ty->_size, lhs->_dagnode, rhs->_dagnode, NULL, where)))
 			{
 				return FALSE;
 			}
@@ -208,7 +208,7 @@ static BOOL cc_dag_translate_expr(FCCIRTree* expr, enum EMMArea where)
 	{
 		if (cc_dag_translate_expr(expr->_u._kids[0], where))
 		{
-			if (!(expr->_dagnode = cc_dag_newnode_inpool(expr->_op, expr->_u._kids[0]->_dagnode, NULL, NULL, where)))
+			if (!(expr->_dagnode = cc_dag_newnode_inpool(expr->_op, expr->_ty->_size, expr->_u._kids[0]->_dagnode, NULL, NULL, where)))
 			{
 				return FALSE;
 			}
@@ -219,7 +219,7 @@ static BOOL cc_dag_translate_expr(FCCIRTree* expr, enum EMMArea where)
 	case IR_ADDRF:
 	case IR_ADDRL:
 	{
-		if (!(expr->_dagnode = cc_dag_newnode_inpool(expr->_op, NULL, NULL, expr->_symbol, where)))
+		if (!(expr->_dagnode = cc_dag_newnode_inpool(expr->_op, expr->_ty->_size, NULL, NULL, expr->_symbol, where)))
 		{
 			return FALSE;
 		}
@@ -237,7 +237,7 @@ static BOOL cc_dag_translate_expr(FCCIRTree* expr, enum EMMArea where)
 			return FALSE;
 		}
 		
-		if (!(expr->_dagnode = cc_dag_newnode_inpool(expr->_op, expr->_u._f._lhs->_dagnode, ret ? ret->_dagnode : NULL, NULL, where)))
+		if (!(expr->_dagnode = cc_dag_newnode_inpool(expr->_op, expr->_ty->_size, expr->_u._f._lhs->_dagnode, ret ? ret->_dagnode : NULL, NULL, where)))
 		{
 			return FALSE;
 		}

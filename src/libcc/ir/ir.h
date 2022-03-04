@@ -117,9 +117,16 @@ typedef struct tagCCExprTree {
 /* IR DAG node */
 typedef struct tagCCDagNode {
 	unsigned int _op;
+	int _typesize;
 	struct tagCCSymbol* _symbol; /* for constant */
 	struct tagCCDagNode* _kids[2];
 	int _refcnt;
+
+	/* for code gen */
+	struct {
+		int _registered : 1;
+		short _regs[2];
+	} _x;
 } FCCIRDagNode;
 
 /* IR code */

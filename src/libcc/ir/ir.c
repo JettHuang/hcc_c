@@ -2,8 +2,6 @@
  *		intermediate representation.
  */
 
-#include <string.h>
-
 #include "ir.h"
 #include "logger.h"
 #include "parser/types.h"
@@ -67,7 +65,7 @@ FCCIRBasicBlock* cc_ir_newbasicblock(enum EMMArea where)
 		return NULL;
 	}
 
-	memset(bb, 0, sizeof(FCCIRBasicBlock));
+	util_memset(bb, 0, sizeof(FCCIRBasicBlock));
 	return bb;
 }
 
@@ -79,7 +77,7 @@ FCCIRCode* cc_ir_newcode(unsigned int op, enum EMMArea where)
 		return NULL;
 	}
 	
-	memset(code, 0, sizeof(FCCIRCode));
+	util_memset(code, 0, sizeof(FCCIRCode));
 	code->_op = op;
 	return code;
 }
