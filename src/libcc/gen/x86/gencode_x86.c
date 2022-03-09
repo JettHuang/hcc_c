@@ -48,9 +48,10 @@ typedef struct tagCCGenCodeContext {
 	unsigned int _localspace; /* bytes */
 } FCCGenCodeContext;
 
-#define MAKE_LOOKTAG2(addr1, ty)	(((ty) << 16) | (addr1))
-#define MAKE_LOOKTAG3(addr0, addr1, ty)	(((ty) << 16) | ((addr0) << 8) | (addr1))
-#define MAKE_LOOKTAG4(cmp, addr0, addr1, ty)	( ((cmp) << 24) | ((ty) << 16) | ((addr0) << 8) | (addr1))
+#define MAKE_LOOKTAG1(p0)	(p0)
+#define MAKE_LOOKTAG2(p0, p1)	(((p0) << 16) | (p1))
+#define MAKE_LOOKTAG3(p0, p1, p2)	(((p0) << 16) | ((p1) << 8) | (p0))
+#define MAKE_LOOKTAG4(p0, p1, p2, p3)	( ((p0) << 24) | ((p1) << 16) | ((p2) << 8) | (p3))
 
 typedef struct tagCCASLookupEntry {
 	int _tag;
@@ -301,72 +302,418 @@ static BOOL emit_move(FCCASCodeList* asmlist, FCCASOperand* dst, FCCASOperand* s
 
 static BOOL emit_add(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
 {
-	return FALSE;
+	static const FCCASLookupEntry lookup[] =
+	{
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_S32), X86_ADD_I4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatImm, IR_S32), X86_ADD_I4RI },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_S32),  X86_ADD_I4RM },
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_U32), X86_ADD_U4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatImm, IR_U32), X86_ADD_U4RI },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_U32),  X86_ADD_U4RM },
+
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_F32),  X86_ADD_F4RM },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_F64),  X86_ADD_F8RM }
+	};
+
+	FCCASCode* asm;
+
+	if (!(asm = cc_as_newcode(where))) {
+		return FALSE;
+	}
+
+	asm->_opcode = lookup_asmcode(MAKE_LOOKTAG3(dst->_format, src->_format, dst->_tycode), lookup, ELEMENTSCNT(lookup));
+	if (asm->_opcode == X86_INS_INVALID) {
+		return FALSE;
+	}
+	asm->_dst = *dst;
+	asm->_src = *src;
+	emit(asmlist, asm);
+
+	return TRUE;
 }
 
 static BOOL emit_sub(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
 {
-	return FALSE;
+	static const FCCASLookupEntry lookup[] =
+	{
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_S32), X86_SUB_I4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatImm, IR_S32), X86_SUB_I4RI },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_S32),  X86_SUB_I4RM },
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_U32), X86_SUB_U4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatImm, IR_U32), X86_SUB_U4RI },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_U32),  X86_SUB_U4RM },
+
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_F32),  X86_SUB_F4RM },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_F64),  X86_SUB_F8RM }
+	};
+
+	FCCASCode* asm;
+
+	if (!(asm = cc_as_newcode(where))) {
+		return FALSE;
+	}
+
+	asm->_opcode = lookup_asmcode(MAKE_LOOKTAG3(dst->_format, src->_format, dst->_tycode), lookup, ELEMENTSCNT(lookup));
+	if (asm->_opcode == X86_INS_INVALID) {
+		return FALSE;
+	}
+	asm->_dst = *dst;
+	asm->_src = *src;
+	emit(asmlist, asm);
+
+	return TRUE;
 }
 
 static BOOL emit_mul(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
 {
-	return FALSE;
+	static const FCCASLookupEntry lookup[] =
+	{
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_S32), X86_MUL_I4RM },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_S32),  X86_MUL_I4RM },
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_U32), X86_MUL_U4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_U32),  X86_MUL_U4RM },
+
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_F32),  X86_MUL_F4RM },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_F64),  X86_MUL_F8RM }
+	};
+
+	FCCASCode* asm;
+
+	if (!(asm = cc_as_newcode(where))) {
+		return FALSE;
+	}
+
+	asm->_opcode = lookup_asmcode(MAKE_LOOKTAG3(dst->_format, src->_format, dst->_tycode), lookup, ELEMENTSCNT(lookup));
+	if (asm->_opcode == X86_INS_INVALID) {
+		return FALSE;
+	}
+	asm->_dst = *dst;
+	asm->_src = *src;
+	emit(asmlist, asm);
+
+	return TRUE;
 }
 
 static BOOL emit_div(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
 {
-	return FALSE;
+	static const FCCASLookupEntry lookup[] =
+	{
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_S32), X86_DIV_I4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_S32),  X86_DIV_I4RM },
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_U32), X86_DIV_U4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_U32),  X86_DIV_U4RM },
+
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_F32),  X86_DIV_F4RM },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_F64),  X86_DIV_F8RM }
+	};
+
+	FCCASCode* asm;
+
+	if (!(asm = cc_as_newcode(where))) {
+		return FALSE;
+	}
+
+	asm->_opcode = lookup_asmcode(MAKE_LOOKTAG3(dst->_format, src->_format, dst->_tycode), lookup, ELEMENTSCNT(lookup));
+	if (asm->_opcode == X86_INS_INVALID) {
+		return FALSE;
+	}
+	asm->_dst = *dst;
+	asm->_src = *src;
+	emit(asmlist, asm);
+
+	return TRUE;
 }
 
 static BOOL emit_mod(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
 {
-	return FALSE;
+	static const FCCASLookupEntry lookup[] =
+	{
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_S32), X86_MOD_I4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_S32),  X86_MOD_I4RM },
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_U32), X86_MOD_U4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_U32),  X86_MOD_U4RM }
+	};
+
+	FCCASCode* asm;
+
+	if (!(asm = cc_as_newcode(where))) {
+		return FALSE;
+	}
+
+	asm->_opcode = lookup_asmcode(MAKE_LOOKTAG3(dst->_format, src->_format, dst->_tycode), lookup, ELEMENTSCNT(lookup));
+	if (asm->_opcode == X86_INS_INVALID) {
+		return FALSE;
+	}
+	asm->_dst = *dst;
+	asm->_src = *src;
+	emit(asmlist, asm);
+
+	return TRUE;
 }
 
 static BOOL emit_lshift(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
 {
-	return FALSE;
+	static const FCCASLookupEntry lookup[] =
+	{
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_S32), X86_LSH_I4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatImm, IR_S32),  X86_LSH_I4RI },
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_U32), X86_LSH_U4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatImm, IR_U32),  X86_LSH_U4RI }
+	};
+
+	FCCASCode* asm;
+
+	if (!(asm = cc_as_newcode(where))) {
+		return FALSE;
+	}
+
+	asm->_opcode = lookup_asmcode(MAKE_LOOKTAG3(dst->_format, src->_format, dst->_tycode), lookup, ELEMENTSCNT(lookup));
+	if (asm->_opcode == X86_INS_INVALID) {
+		return FALSE;
+	}
+	asm->_dst = *dst;
+	asm->_src = *src;
+	emit(asmlist, asm);
+
+	return TRUE;
 }
 
 static BOOL emit_rshift(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
 {
-	return FALSE;
+	static const FCCASLookupEntry lookup[] =
+	{
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_S32), X86_RSH_I4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatImm, IR_S32),  X86_RSH_I4RI },
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_U32), X86_RSH_U4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatImm, IR_U32),  X86_RSH_U4RI }
+	};
+
+	FCCASCode* asm;
+
+	if (!(asm = cc_as_newcode(where))) {
+		return FALSE;
+	}
+
+	asm->_opcode = lookup_asmcode(MAKE_LOOKTAG3(dst->_format, src->_format, dst->_tycode), lookup, ELEMENTSCNT(lookup));
+	if (asm->_opcode == X86_INS_INVALID) {
+		return FALSE;
+	}
+	asm->_dst = *dst;
+	asm->_src = *src;
+	emit(asmlist, asm);
+
+	return TRUE;
 }
 
 static BOOL emit_bitand(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
 {
-	return FALSE;
+	static const FCCASLookupEntry lookup[] =
+	{
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_S32), X86_AND_I4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatImm, IR_S32),  X86_AND_I4RI },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_S32),  X86_AND_I4RM },
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_U32), X86_AND_U4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatImm, IR_U32),  X86_AND_U4RI },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_U32),  X86_AND_U4RM }
+	};
+
+	FCCASCode* asm;
+
+	if (!(asm = cc_as_newcode(where))) {
+		return FALSE;
+	}
+
+	asm->_opcode = lookup_asmcode(MAKE_LOOKTAG3(dst->_format, src->_format, dst->_tycode), lookup, ELEMENTSCNT(lookup));
+	if (asm->_opcode == X86_INS_INVALID) {
+		return FALSE;
+	}
+	asm->_dst = *dst;
+	asm->_src = *src;
+	emit(asmlist, asm);
+
+	return TRUE;
 }
 
 static BOOL emit_bitor(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
 {
-	return FALSE;
+	static const FCCASLookupEntry lookup[] =
+	{
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_S32), X86_OR_I4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatImm, IR_S32),  X86_OR_I4RI },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_S32),  X86_OR_I4RM },
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_U32), X86_OR_U4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatImm, IR_U32),  X86_OR_U4RI },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_U32),  X86_OR_U4RM }
+	};
+
+	FCCASCode* asm;
+
+	if (!(asm = cc_as_newcode(where))) {
+		return FALSE;
+	}
+
+	asm->_opcode = lookup_asmcode(MAKE_LOOKTAG3(dst->_format, src->_format, dst->_tycode), lookup, ELEMENTSCNT(lookup));
+	if (asm->_opcode == X86_INS_INVALID) {
+		return FALSE;
+	}
+	asm->_dst = *dst;
+	asm->_src = *src;
+	emit(asmlist, asm);
+
+	return TRUE;
 }
 
 static BOOL emit_bitxor(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
 {
-	return FALSE;
+	static const FCCASLookupEntry lookup[] =
+	{
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_S32), X86_XOR_I4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatImm, IR_S32),  X86_XOR_I4RI },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_S32),  X86_XOR_I4RM },
+		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_U32), X86_XOR_U4RR },
+		{ MAKE_LOOKTAG3(FormatReg, FormatImm, IR_U32),  X86_XOR_U4RI },
+		{ MAKE_LOOKTAG3(FormatReg, FormatInSIB, IR_U32),  X86_XOR_U4RM }
+	};
+
+	FCCASCode* asm;
+
+	if (!(asm = cc_as_newcode(where))) {
+		return FALSE;
+	}
+
+	asm->_opcode = lookup_asmcode(MAKE_LOOKTAG3(dst->_format, src->_format, dst->_tycode), lookup, ELEMENTSCNT(lookup));
+	if (asm->_opcode == X86_INS_INVALID) {
+		return FALSE;
+	}
+	asm->_dst = *dst;
+	asm->_src = *src;
+	emit(asmlist, asm);
+
+	return TRUE;
 }
 
 static BOOL emit_neg(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, enum EMMArea where)
 {
-	return FALSE;
+	static const FCCASLookupEntry lookup[] =
+	{
+		{ MAKE_LOOKTAG2(FormatReg, IR_S32), X86_NEG_I4R },
+		{ MAKE_LOOKTAG2(FormatInSIB, IR_S32),  X86_NEG_I4M },
+		{ MAKE_LOOKTAG2(FormatReg, IR_U32), X86_NEG_U4R },
+		{ MAKE_LOOKTAG2(FormatInSIB, IR_U32),  X86_NEG_U4M },
+		{ MAKE_LOOKTAG2(FormatReg, IR_F32),  X86_NEG_F4R },
+		{ MAKE_LOOKTAG2(FormatReg, IR_F64),  X86_NEG_F8R }
+	};
+
+	FCCASCode* asm;
+
+	if (!(asm = cc_as_newcode(where))) {
+		return FALSE;
+	}
+
+	asm->_opcode = lookup_asmcode(MAKE_LOOKTAG2(dst->_format, dst->_tycode), lookup, ELEMENTSCNT(lookup));
+	if (asm->_opcode == X86_INS_INVALID) {
+		return FALSE;
+	}
+	asm->_dst = *dst;
+	emit(asmlist, asm);
+
+	return TRUE;
 }
 
 static BOOL emit_bcom(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, enum EMMArea where)
 {
-	return FALSE;
+	static const FCCASLookupEntry lookup[] =
+	{
+		{ MAKE_LOOKTAG2(FormatReg, IR_S32), X86_NOT_I4R },
+		{ MAKE_LOOKTAG2(FormatInSIB, IR_S32),  X86_NOT_I4M },
+		{ MAKE_LOOKTAG2(FormatReg, IR_U32), X86_NOT_U4R },
+		{ MAKE_LOOKTAG2(FormatInSIB, IR_U32),  X86_NOT_U4M }
+	};
+
+	FCCASCode* asm;
+
+	if (!(asm = cc_as_newcode(where))) {
+		return FALSE;
+	}
+
+	asm->_opcode = lookup_asmcode(MAKE_LOOKTAG2(dst->_format, dst->_tycode), lookup, ELEMENTSCNT(lookup));
+	if (asm->_opcode == X86_INS_INVALID) {
+		return FALSE;
+	}
+	asm->_dst = *dst;
+	emit(asmlist, asm);
+
+	return TRUE;
 }
 
 static BOOL emit_cvt(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
 {
-	return FALSE;
+	static const FCCASLookupEntry lookup[] =
+	{
+		/* load & extension byte & word */
+		{ MAKE_LOOKTAG4(FormatReg, IR_S32, FormatInSIB, IR_S8),  X86_EXT_RI4MI1 },
+		{ MAKE_LOOKTAG4(FormatReg, IR_S32, FormatInSIB, IR_S16), X86_EXT_RI4MI2 },
+		{ MAKE_LOOKTAG4(FormatReg, IR_U32, FormatInSIB, IR_U8),  X86_EXT_RU4MU1 },
+		{ MAKE_LOOKTAG4(FormatReg, IR_U32, FormatInSIB, IR_U16), X86_EXT_RU4MU2 },
+
+		/* convert integer to float */
+		{ MAKE_LOOKTAG4(FormatInSIB, IR_F32, FormatReg, IR_S32),  X86_CVT_MF4RI4 },
+		{ MAKE_LOOKTAG4(FormatInSIB, IR_F64, FormatReg, IR_S32),  X86_CVT_MF8RI4 },
+		{ MAKE_LOOKTAG4(FormatInSIB, IR_F32, FormatReg, IR_U32),  X86_CVT_MF4RU4 },
+		{ MAKE_LOOKTAG4(FormatInSIB, IR_F64, FormatReg, IR_U32),  X86_CVT_MF8RU4 },
+
+		/* convert double -- float */
+		{ MAKE_LOOKTAG4(FormatInSIB, IR_F64, FormatInSIB, IR_F32),  X86_CVT_MF8MF4 },
+		{ MAKE_LOOKTAG4(FormatInSIB, IR_F32, FormatInSIB, IR_F64),  X86_CVT_MF4MF8 },
+
+		/* convert float to integer (in eax) */
+		{ MAKE_LOOKTAG4(FormatReg, IR_S32, FormatInSIB, IR_F32),  X86_CVT_RI4MF4 },
+		{ MAKE_LOOKTAG4(FormatReg, IR_U32, FormatInSIB, IR_F32),  X86_CVT_RU4MF4 },
+		{ MAKE_LOOKTAG4(FormatReg, IR_S32, FormatInSIB, IR_F64),  X86_CVT_RI4MF8 },
+		{ MAKE_LOOKTAG4(FormatReg, IR_U32, FormatInSIB, IR_F64),  X86_CVT_RU4MF8 }
+	};
+
+	FCCASCode* asm;
+
+	if (!(asm = cc_as_newcode(where))) {
+		return FALSE;
+	}
+
+	asm->_opcode = lookup_asmcode(MAKE_LOOKTAG3(dst->_format, src->_format, dst->_tycode), lookup, ELEMENTSCNT(lookup));
+	if (asm->_opcode == X86_INS_INVALID) {
+		return FALSE;
+	}
+	asm->_dst = *dst;
+	asm->_src = *src;
+	emit(asmlist, asm);
+
+	return TRUE;
 }
 
 static BOOL emit_call(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, enum EMMArea where)
 {
-	return FALSE;
+	static const FCCASLookupEntry lookup[] =
+	{
+		{ MAKE_LOOKTAG1(FormatReg),  X86_CALL },
+		{ MAKE_LOOKTAG1(FormatImm),  X86_CALL },
+		{ MAKE_LOOKTAG1(FormatSIB),  X86_CALL }, 
+		{ MAKE_LOOKTAG1(FormatInSIB),  X86_ICALL }
+	};
+
+	FCCASCode* asm;
+
+	if (!(asm = cc_as_newcode(where))) {
+		return FALSE;
+	}
+
+	asm->_opcode = lookup_asmcode(MAKE_LOOKTAG1(dst->_format), lookup, ELEMENTSCNT(lookup));
+	if (asm->_opcode == X86_INS_INVALID) {
+		return FALSE;
+	}
+	asm->_dst = *dst;
+	emit(asmlist, asm);
+
+	return TRUE;
 }
 
 /* generate code for expression */
