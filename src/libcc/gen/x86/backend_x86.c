@@ -29,6 +29,8 @@ static void defconst_string(struct tagCCContext* ctx, const void* str, int count
 static void defconst_address(struct tagCCContext* ctx, struct tagCCExprTree* expr);
 static void defglobal_end(struct tagCCContext* ctx, struct tagCCSymbol* sym);
 
+static void deffunction_begin(struct tagCCContext* ctx, struct tagCCSymbol* func);
+static void deffunction_end(struct tagCCContext* ctx, struct tagCCSymbol* func);
 
 struct tagCCBackend* cc_new_backend()
 {
@@ -55,6 +57,8 @@ struct tagCCBackend* cc_new_backend()
 	backend->_defconst_string = &defconst_string;
 	backend->_defconst_address = &defconst_address;
 	backend->_defglobal_end = &defglobal_end;
+	backend->_deffunction_begin = &deffunction_begin;
+	backend->_deffunction_end = &deffunction_end;
 
 	return backend;
 }
@@ -372,4 +376,16 @@ static void defconst_address(struct tagCCContext* ctx, struct tagCCExprTree* exp
 static void defglobal_end(struct tagCCContext* ctx, struct tagCCSymbol* sym)
 {
 	/* do nothing */
+}
+
+static void deffunction_begin(struct tagCCContext* ctx, struct tagCCSymbol* func)
+{
+	switchsegment(ctx, SEG_CODE);
+
+	fprintf(ctx->_outfp, "%s: \n", func->_x._name);
+}
+
+static void deffunction_end(struct tagCCContext* ctx, struct tagCCSymbol* func)
+{
+	fprintf(ctx->_outfp, "\n; end for function '%s'\n", func->_name);
 }

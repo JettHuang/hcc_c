@@ -5,11 +5,13 @@
 #include "utils.h"
 #include "mm.h"
 #include "cc.h"
+#include "logger.h"
 #include "parser/symbols.h"
 #include "parser/types.h"
 #include "ir/ir.h"
 #include "gen/assem.h"
 #include "opcodes_x86.h"
+#include "reg_x86.h"
 
 
 #define ASM_INSTRUCT(op, str)	{ op,  str},
@@ -24,19 +26,6 @@ struct FX86AsmCode {
 };
 
 
-/* x86 generic registers */
-#define X86_NIL		0x00
-#define X86_EAX		0x01
-#define X86_EBX		0x02
-#define X86_ECX		0x03
-#define X86_EDX		0x04
-#define X86_ESI		0x05
-#define X86_EDI		0x06
-#define X86_EBP		0x07
-#define X86_ESP		0x08
-#define X86_ST0		0x10
-#define X86_ST1		0x11
-
 #define REQUIRES_BIT0()		(0)
 #define REQUIRES_BIT1(b0)	(REQUIRES_BIT0() | (1 << b0))
 #define REQUIRES_BIT2(b0, b1)	(REQUIRES_BIT1(b0) | (1 << b1))
@@ -44,8 +33,29 @@ struct FX86AsmCode {
 #define REQUIRES_BIT4(b0, b1, b2, b3)	(REQUIRES_BIT3(b0, b1, b2) | (1 << b3))
 
 
+enum ELocalUseEntryKind { LOCAL_BLOCK, LOCAL_VAR, LOCAL_TMP};
+typedef struct tagCCLocalUseEntry {
+	int _kind;
+	union {
+		struct {
+			int _level; /* block level */
+			int _offset;
+		} _blk;
+		struct {
+			struct tagCCDagNode* _dag;
+			int _offset;
+			int _size;
+		} _tmp;
+	} _x;
+} FCCLocalUseEntry;
+
 typedef struct tagCCGenCodeContext {
-	unsigned int _localspace; /* bytes */
+	struct tagCCASCodeList* _asmlist;
+	enum EMMArea _where;
+
+	FArray _localuses;
+	int _curlocalbytes; /* current local space bytes used */
+	int _maxlocalbytes; /* max local space bytes used */
 } FCCGenCodeContext;
 
 #define MAKE_LOOKTAG1(p0)	(p0)
@@ -59,12 +69,12 @@ typedef struct tagCCASLookupEntry {
 } FCCASLookupEntry;
 
 static void emit(FCCASCodeList* asmlist, FCCASCode* asm);
-static BOOL munch_expr(FCCGenCodeContext* ctx, FCCIRDagNode* dag,  FCCASCodeList* asmlist, int requires, struct tagCCASOperand* operand, enum EMMArea where);
-static BOOL munch_stmt(FCCGenCodeContext* ctx, FCCIRCode* stmt, FCCASCodeList* asmlist, enum EMMArea where);
+static BOOL munch_expr(struct tagCCGenCodeContext* ctx, FCCIRDagNode* dag, int requires, struct tagCCASOperand* operand);
+static BOOL munch_stmt(struct tagCCGenCodeContext* ctx, FCCIRCode* stmt);
 
-static void block_enter(FCCGenCodeContext* ctx, int level);
-static void block_leave(FCCGenCodeContext* ctx, int level);
-static void local_variable(FCCGenCodeContext* ctx, struct tagCCSymbol* id);
+static void block_enter(struct tagCCGenCodeContext* ctx, int level);
+static void block_leave(struct tagCCGenCodeContext* ctx, int level);
+static void local_variable(struct tagCCGenCodeContext* ctx, struct tagCCSymbol* id);
 
 static enum X86ASMCode lookup_asmcode(const int tag, const FCCASLookupEntry* v, int count)
 {
@@ -80,18 +90,109 @@ static enum X86ASMCode lookup_asmcode(const int tag, const FCCASLookupEntry* v, 
 	return X86_INS_INVALID;
 }
 
-static void block_enter(FCCGenCodeContext* ctx, int level)
+static void gen_context_init(struct tagCCGenCodeContext* ctx, struct tagCCASCodeList* asmlist, enum EMMArea where)
 {
-	// TODO:
-}
-static void block_leave(FCCGenCodeContext* ctx, int level)
-{
-	// TODO:
+	ctx->_asmlist = asmlist;
+	ctx->_where = where;
+	ctx->_curlocalbytes = 0;
+	ctx->_maxlocalbytes = 0;
+
+	array_init(&ctx->_localuses, 128, sizeof(struct tagCCLocalUseEntry), where);
 }
 
-static void local_variable(FCCGenCodeContext* ctx, struct tagCCSymbol* id)
+static void block_enter(struct tagCCGenCodeContext* ctx, int level)
 {
-	// TODO:
+	struct tagCCLocalUseEntry e;
+
+	e._kind = LOCAL_BLOCK;
+	e._x._blk._level = level;
+	e._x._blk._offset = ctx->_curlocalbytes;
+
+	array_append(&ctx->_localuses, &e);
+}
+
+static void block_leave(struct tagCCGenCodeContext* ctx, int level)
+{
+	int i;
+
+	for (i=ctx->_localuses._elecount-1; i>=0; --i)
+	{
+		struct tagCCLocalUseEntry* p;
+		
+		p = array_element(&ctx->_localuses, i);
+		if (p->_kind == LOCAL_TMP)
+		{
+			if (p->_x._tmp._dag && p->_x._tmp._dag->_refcnt > 0)
+			{
+				break; /* keep it living */
+			}
+
+			array_popback(&ctx->_localuses);
+		}
+		else if (p->_kind == LOCAL_BLOCK)
+		{
+			if (p->_x._blk._level >= level)
+			{
+				ctx->_curlocalbytes = p->_x._blk._offset;
+				array_popback(&ctx->_localuses);
+			}
+			if (p->_x._blk._level == level)
+			{
+				break;
+			}
+		}
+	} /* end for */
+}
+
+static void local_variable(struct tagCCGenCodeContext* ctx, struct tagCCSymbol* id)
+{
+	int spacebytes = util_roundup(id->_type->_size, 4);
+	
+	ctx->_curlocalbytes += spacebytes;
+	id->_x._frame_offset = -ctx->_curlocalbytes;
+
+	if (ctx->_curlocalbytes > ctx->_maxlocalbytes)
+	{
+		ctx->_maxlocalbytes = ctx->_curlocalbytes;
+	}
+}
+
+int gen_get_tempspace(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag)
+{
+	struct tagCCLocalUseEntry e;
+	int i, spacebytes;
+
+	for (i=0; i < ctx->_localuses._elecount; ++i)
+	{
+		struct tagCCLocalUseEntry* p;
+
+		p = array_element(&ctx->_localuses, i);
+		if (p->_kind == LOCAL_TMP)
+		{
+			if (p->_x._tmp._size >= dag->_typesize &&
+				(!p->_x._tmp._dag || p->_x._tmp._dag->_refcnt <= 0))
+			{
+				p->_x._tmp._dag = dag;
+				return p->_x._tmp._offset;
+			}
+		}
+	} /* end for */
+
+	/* create new temp */
+	spacebytes = util_roundup(dag->_typesize, 4);
+	ctx->_curlocalbytes += spacebytes;
+	if (ctx->_curlocalbytes > ctx->_maxlocalbytes)
+	{
+		ctx->_maxlocalbytes = ctx->_curlocalbytes;
+	}
+
+	e._kind = LOCAL_TMP;
+	e._x._tmp._offset = -ctx->_curlocalbytes;
+	e._x._tmp._size = spacebytes;
+	e._x._tmp._dag = dag;
+	array_append(&ctx->_localuses, &e);
+	
+	return e._x._tmp._offset;
 }
 
 static void emit(FCCASCodeList* asmlist, FCCASCode* asm)
@@ -99,7 +200,7 @@ static void emit(FCCASCodeList* asmlist, FCCASCode* asm)
 	cc_as_codelist_append(asmlist, asm);
 }
 
-static BOOL emit_argv(FCCASCodeList* asmlist, FCCASOperand* src, int bytescnt, enum EMMArea where)
+static BOOL emit_argv(FCCASCodeList* asmlist, const FCCASOperand* src, int bytescnt, enum EMMArea where)
 {
 	static const FCCASLookupEntry lookup[] =
 	{
@@ -160,7 +261,7 @@ static BOOL emit_jmp(FCCASCodeList* asmlist, FCCSymbol* target, enum EMMArea whe
 	return TRUE;
 }
 
-static BOOL emit_cjmp(FCCASCodeList* asmlist, int ircmp, FCCASOperand* dst, FCCASOperand* src, FCCSymbol* tlabel, FCCSymbol* flabel, enum EMMArea where)
+static BOOL emit_cjmp(FCCASCodeList* asmlist, int ircmp, const FCCASOperand* dst, const FCCASOperand* src, FCCSymbol* tlabel, FCCSymbol* flabel, enum EMMArea where)
 {
 	static const FCCASLookupEntry lookup[] =
 	{
@@ -242,24 +343,28 @@ static BOOL emit_cjmp(FCCASCodeList* asmlist, int ircmp, FCCASOperand* dst, FCCA
 	return TRUE;
 }
 
-static BOOL emit_move(FCCASCodeList* asmlist, FCCASOperand* dst, FCCASOperand* src, int bytescnt, enum EMMArea where)
+static BOOL emit_move(FCCASCodeList* asmlist, const FCCASOperand* dst, const FCCASOperand* src, int bytescnt, enum EMMArea where)
 {
 	static const FCCASLookupEntry lookup[] =
 	{
 		{ MAKE_LOOKTAG3(FormatSIB, FormatReg, IR_S8),  X86_MOV_I1MRI },
 		{ MAKE_LOOKTAG3(FormatSIB, FormatReg, IR_S16), X86_MOV_I2MRI },
 		{ MAKE_LOOKTAG3(FormatSIB, FormatReg, IR_S32), X86_MOV_I4MRI },
+		{ MAKE_LOOKTAG3(FormatSIB, FormatReg, IR_S64), X86_MOV_I8MR  },
 		{ MAKE_LOOKTAG3(FormatSIB, FormatReg, IR_U8),  X86_MOV_U1MRI },
 		{ MAKE_LOOKTAG3(FormatSIB, FormatReg, IR_U16), X86_MOV_U2MRI },
 		{ MAKE_LOOKTAG3(FormatSIB, FormatReg, IR_U32), X86_MOV_U4MRI },
+		{ MAKE_LOOKTAG3(FormatSIB, FormatReg, IR_U64), X86_MOV_U8MR  },
 		{ MAKE_LOOKTAG3(FormatSIB, FormatReg, IR_PTR), X86_MOV_P4MRI },
 
 		{ MAKE_LOOKTAG3(FormatSIB, FormatImm, IR_S8),  X86_MOV_I1MRI },
 		{ MAKE_LOOKTAG3(FormatSIB, FormatImm, IR_S16), X86_MOV_I2MRI },
 		{ MAKE_LOOKTAG3(FormatSIB, FormatImm, IR_S32), X86_MOV_I4MRI },
+		{ MAKE_LOOKTAG3(FormatSIB, FormatImm, IR_S64), X86_MOV_I8MI  },
 		{ MAKE_LOOKTAG3(FormatSIB, FormatImm, IR_U8),  X86_MOV_U1MRI },
 		{ MAKE_LOOKTAG3(FormatSIB, FormatImm, IR_U16), X86_MOV_U2MRI },
 		{ MAKE_LOOKTAG3(FormatSIB, FormatImm, IR_U32), X86_MOV_U4MRI },
+		{ MAKE_LOOKTAG3(FormatSIB, FormatImm, IR_U64), X86_MOV_U8MI  },
 		{ MAKE_LOOKTAG3(FormatSIB, FormatImm, IR_PTR), X86_MOV_P4MRI },
 
 		{ MAKE_LOOKTAG3(FormatReg, FormatReg, IR_S8),  X86_MOV_RRI },
@@ -300,7 +405,23 @@ static BOOL emit_move(FCCASCodeList* asmlist, FCCASOperand* dst, FCCASOperand* s
 	return TRUE;
 }
 
-static BOOL emit_add(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
+BOOL emit_store_regvalue(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag, int tmpoffset)
+{
+	struct tagCCASOperand dst = { 0 }, src = { 0 };
+
+	dst._format = FormatSIB;
+	dst._tycode = IR_OPTY0(dag->_op);
+	dst._u._sib._basereg = X86_EBP;
+	dst._u._sib._displacement2 = tmpoffset;
+	src._format = FormatReg;
+	src._tycode = IR_OPTY0(dag->_op);
+	src._u._regs[0] = dag->_x._loc._registers[0];
+	src._u._regs[1] = dag->_x._loc._registers[1];
+
+	return emit_move(ctx->_asmlist, &dst, &src, dag->_typesize, ctx->_where);
+}
+
+static BOOL emit_add(FCCASCodeList* asmlist, FCCIRDagNode* dag, const FCCASOperand* dst, const FCCASOperand* src, enum EMMArea where)
 {
 	static const FCCASLookupEntry lookup[] =
 	{
@@ -332,7 +453,7 @@ static BOOL emit_add(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* ds
 	return TRUE;
 }
 
-static BOOL emit_sub(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
+static BOOL emit_sub(FCCASCodeList* asmlist, FCCIRDagNode* dag, const FCCASOperand* dst, const FCCASOperand* src, enum EMMArea where)
 {
 	static const FCCASLookupEntry lookup[] =
 	{
@@ -364,7 +485,7 @@ static BOOL emit_sub(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* ds
 	return TRUE;
 }
 
-static BOOL emit_mul(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
+static BOOL emit_mul(FCCASCodeList* asmlist, FCCIRDagNode* dag, const FCCASOperand* dst, const FCCASOperand* src, enum EMMArea where)
 {
 	static const FCCASLookupEntry lookup[] =
 	{
@@ -394,7 +515,7 @@ static BOOL emit_mul(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* ds
 	return TRUE;
 }
 
-static BOOL emit_div(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
+static BOOL emit_div(FCCASCodeList* asmlist, FCCIRDagNode* dag, const FCCASOperand* dst, const FCCASOperand* src, enum EMMArea where)
 {
 	static const FCCASLookupEntry lookup[] =
 	{
@@ -424,7 +545,7 @@ static BOOL emit_div(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* ds
 	return TRUE;
 }
 
-static BOOL emit_mod(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
+static BOOL emit_mod(FCCASCodeList* asmlist, FCCIRDagNode* dag, const FCCASOperand* dst, const FCCASOperand* src, enum EMMArea where)
 {
 	static const FCCASLookupEntry lookup[] =
 	{
@@ -451,7 +572,7 @@ static BOOL emit_mod(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* ds
 	return TRUE;
 }
 
-static BOOL emit_lshift(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
+static BOOL emit_lshift(FCCASCodeList* asmlist, FCCIRDagNode* dag, const FCCASOperand* dst, const FCCASOperand* src, enum EMMArea where)
 {
 	static const FCCASLookupEntry lookup[] =
 	{
@@ -478,7 +599,7 @@ static BOOL emit_lshift(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand*
 	return TRUE;
 }
 
-static BOOL emit_rshift(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
+static BOOL emit_rshift(FCCASCodeList* asmlist, FCCIRDagNode* dag, const FCCASOperand* dst, const FCCASOperand* src, enum EMMArea where)
 {
 	static const FCCASLookupEntry lookup[] =
 	{
@@ -505,7 +626,7 @@ static BOOL emit_rshift(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand*
 	return TRUE;
 }
 
-static BOOL emit_bitand(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
+static BOOL emit_bitand(FCCASCodeList* asmlist, FCCIRDagNode* dag, const FCCASOperand* dst, const FCCASOperand* src, enum EMMArea where)
 {
 	static const FCCASLookupEntry lookup[] =
 	{
@@ -534,7 +655,7 @@ static BOOL emit_bitand(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand*
 	return TRUE;
 }
 
-static BOOL emit_bitor(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
+static BOOL emit_bitor(FCCASCodeList* asmlist, FCCIRDagNode* dag, const FCCASOperand* dst, const FCCASOperand* src, enum EMMArea where)
 {
 	static const FCCASLookupEntry lookup[] =
 	{
@@ -563,7 +684,7 @@ static BOOL emit_bitor(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* 
 	return TRUE;
 }
 
-static BOOL emit_bitxor(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
+static BOOL emit_bitxor(FCCASCodeList* asmlist, FCCIRDagNode* dag, const FCCASOperand* dst, const FCCASOperand* src, enum EMMArea where)
 {
 	static const FCCASLookupEntry lookup[] =
 	{
@@ -592,7 +713,7 @@ static BOOL emit_bitxor(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand*
 	return TRUE;
 }
 
-static BOOL emit_neg(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, enum EMMArea where)
+static BOOL emit_neg(FCCASCodeList* asmlist, FCCIRDagNode* dag, const FCCASOperand* dst, enum EMMArea where)
 {
 	static const FCCASLookupEntry lookup[] =
 	{
@@ -620,7 +741,7 @@ static BOOL emit_neg(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* ds
 	return TRUE;
 }
 
-static BOOL emit_bcom(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, enum EMMArea where)
+static BOOL emit_bcom(FCCASCodeList* asmlist, FCCIRDagNode* dag, const FCCASOperand* dst, enum EMMArea where)
 {
 	static const FCCASLookupEntry lookup[] =
 	{
@@ -646,7 +767,7 @@ static BOOL emit_bcom(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* d
 	return TRUE;
 }
 
-static BOOL emit_cvt(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, FCCASOperand* src, enum EMMArea where)
+static BOOL emit_cvt(FCCASCodeList* asmlist, FCCIRDagNode* dag, const FCCASOperand* dst, const FCCASOperand* src, enum EMMArea where)
 {
 	static const FCCASLookupEntry lookup[] =
 	{
@@ -690,7 +811,7 @@ static BOOL emit_cvt(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* ds
 	return TRUE;
 }
 
-static BOOL emit_call(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* dst, enum EMMArea where)
+static BOOL emit_call(FCCASCodeList* asmlist, FCCIRDagNode* dag, const FCCASOperand* dst, enum EMMArea where)
 {
 	static const FCCASLookupEntry lookup[] =
 	{
@@ -717,7 +838,7 @@ static BOOL emit_call(FCCASCodeList* asmlist, FCCIRDagNode* dag, FCCASOperand* d
 }
 
 /* generate code for expression */
-static BOOL munch_expr(FCCGenCodeContext* ctx, FCCIRDagNode* dag, FCCASCodeList* asmlist, int requires, struct tagCCASOperand* operand, enum EMMArea where)
+static BOOL munch_expr(struct tagCCGenCodeContext* ctx, FCCIRDagNode* dag, int requires, struct tagCCASOperand* operand)
 {
 	struct tagCCASOperand dst = { 0 }, src = { 0 };
 
@@ -732,204 +853,204 @@ static BOOL munch_expr(FCCGenCodeContext* ctx, FCCIRDagNode* dag, FCCASCodeList*
 		break;
 	case IR_ASSIGN:
 	{
-		if (!munch_expr(ctx, dag->_kids[1], asmlist, REQUIRES_BIT4(FormatReg, FormatImm, FormatInSIB, FormatSIB), &src, where)) {
+		if (!munch_expr(ctx, dag->_kids[1], REQUIRES_BIT4(FormatReg, FormatImm, FormatInSIB, FormatSIB), &src)) {
 			return FALSE;
 		}
 
-		if (!munch_expr(ctx, dag->_kids[0], asmlist, REQUIRES_BIT1(FormatInSIB), &dst, where)) {
+		if (!munch_expr(ctx, dag->_kids[0], REQUIRES_BIT1(FormatInSIB), &dst)) {
 			return FALSE;
 		}
 
-		if (!emit_move(asmlist, &dst, &src, dag->_kids[1]->_typesize, where)) {
+		if (!emit_move(ctx->_asmlist, &dst, &src, dag->_kids[1]->_typesize, ctx->_where)) {
 			return FALSE;
 		}
 	}
 		break;
 	case IR_ADD:
 	{
-		if (!munch_expr(ctx, dag->_kids[0], asmlist, REQUIRES_BIT1(FormatReg), &dst, where)) {
+		if (!munch_expr(ctx, dag->_kids[0], REQUIRES_BIT1(FormatReg), &dst)) {
 			return FALSE;
 		}
-		if (!munch_expr(ctx, dag->_kids[1], asmlist, REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src, where)) {
+		if (!munch_expr(ctx, dag->_kids[1], REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src)) {
 			return FALSE;
 		}
 
-		if (!emit_add(asmlist, dag, &dst, &src, where)) {
+		if (!emit_add(ctx->_asmlist, dag, &dst, &src, ctx->_where)) {
 			return FALSE;
 		}
 	}
 		break;
 	case IR_SUB:
 	{
-		if (!munch_expr(ctx, dag->_kids[1], asmlist, REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src, where)) {
+		if (!munch_expr(ctx, dag->_kids[1], REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src)) {
 			return FALSE;
 		}
 
-		if (!munch_expr(ctx, dag->_kids[0], asmlist, REQUIRES_BIT1(FormatReg), &dst, where)) {
+		if (!munch_expr(ctx, dag->_kids[0], REQUIRES_BIT1(FormatReg), &dst)) {
 			return FALSE;
 		}
 
-		if (!emit_sub(asmlist, dag, &dst, &src, where)) {
+		if (!emit_sub(ctx->_asmlist, dag, &dst, &src, ctx->_where)) {
 			return FALSE;
 		}
 	}
 		break;
 	case IR_MUL:
 	{
-		if (!munch_expr(ctx, dag->_kids[1], asmlist, REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src, where)) {
+		if (!munch_expr(ctx, dag->_kids[1], REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src)) {
 			return FALSE;
 		}
 
-		if (!munch_expr(ctx, dag->_kids[0], asmlist, REQUIRES_BIT1(FormatReg), &dst, where)) {
+		if (!munch_expr(ctx, dag->_kids[0], REQUIRES_BIT1(FormatReg), &dst)) {
 			return FALSE;
 		}
 
-		if (!emit_mul(asmlist, dag, &dst, &src, where)) {
+		if (!emit_mul(ctx->_asmlist, dag, &dst, &src, ctx->_where)) {
 			return FALSE;
 		}
 	}
 		break;
 	case IR_DIV:
 	{
-		if (!munch_expr(ctx, dag->_kids[1], asmlist, REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src, where)) {
+		if (!munch_expr(ctx, dag->_kids[1], REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src)) {
 			return FALSE;
 		}
 
-		if (!munch_expr(ctx, dag->_kids[0], asmlist, REQUIRES_BIT1(FormatReg), &dst, where)) {
+		if (!munch_expr(ctx, dag->_kids[0], REQUIRES_BIT1(FormatReg), &dst)) {
 			return FALSE;
 		}
 
-		if (!emit_div(asmlist, dag, &dst, &src, where)) {
+		if (!emit_div(ctx->_asmlist, dag, &dst, &src, ctx->_where)) {
 			return FALSE;
 		}
 	}
 		break;
 	case IR_MOD:
 	{
-		if (!munch_expr(ctx, dag->_kids[1], asmlist, REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src, where)) {
+		if (!munch_expr(ctx, dag->_kids[1], REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src)) {
 			return FALSE;
 		}
 
-		if (!munch_expr(ctx, dag->_kids[0], asmlist, REQUIRES_BIT1(FormatReg), &dst, where)) {
+		if (!munch_expr(ctx, dag->_kids[0], REQUIRES_BIT1(FormatReg), &dst)) {
 			return FALSE;
 		}
 
-		if (!emit_mod(asmlist, dag, &dst, &src, where)) {
+		if (!emit_mod(ctx->_asmlist, dag, &dst, &src, ctx->_where)) {
 			return FALSE;
 		}
 	}
 		break;
 	case IR_LSHIFT:
 	{
-		if (!munch_expr(ctx, dag->_kids[1], asmlist, REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src, where)) {
+		if (!munch_expr(ctx, dag->_kids[1], REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src)) {
 			return FALSE;
 		}
 
-		if (!munch_expr(ctx, dag->_kids[0], asmlist, REQUIRES_BIT1(FormatReg), &dst, where)) {
+		if (!munch_expr(ctx, dag->_kids[0], REQUIRES_BIT1(FormatReg), &dst)) {
 			return FALSE;
 		}
 
-		if (!emit_lshift(asmlist, dag, &dst, &src, where)) {
+		if (!emit_lshift(ctx->_asmlist, dag, &dst, &src, ctx->_where)) {
 			return FALSE;
 		}
 	}
 		break;
 	case IR_RSHIFT:
 	{
-		if (!munch_expr(ctx, dag->_kids[1], asmlist, REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src, where)) {
+		if (!munch_expr(ctx, dag->_kids[1], REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src)) {
 			return FALSE;
 		}
 
-		if (!munch_expr(ctx, dag->_kids[0], asmlist, REQUIRES_BIT1(FormatReg), &dst, where)) {
+		if (!munch_expr(ctx, dag->_kids[0], REQUIRES_BIT1(FormatReg), &dst)) {
 			return FALSE;
 		}
 
-		if (!emit_rshift(asmlist, dag, &dst, &src, where)) {
+		if (!emit_rshift(ctx->_asmlist, dag, &dst, &src, ctx->_where)) {
 			return FALSE;
 		}
 	}
 		break;
 	case IR_BITAND:
 	{
-		if (!munch_expr(ctx, dag->_kids[1], asmlist, REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src, where)) {
+		if (!munch_expr(ctx, dag->_kids[1], REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src)) {
 			return FALSE;
 		}
 
-		if (!munch_expr(ctx, dag->_kids[0], asmlist, REQUIRES_BIT1(FormatReg), &dst, where)) {
+		if (!munch_expr(ctx, dag->_kids[0], REQUIRES_BIT1(FormatReg), &dst)) {
 			return FALSE;
 		}
 
-		if (!emit_bitand(asmlist, dag, &dst, &src, where)) {
+		if (!emit_bitand(ctx->_asmlist, dag, &dst, &src, ctx->_where)) {
 			return FALSE;
 		}
 	}
 		break;
 	case IR_BITOR:
 	{
-		if (!munch_expr(ctx, dag->_kids[1], asmlist, REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src, where)) {
+		if (!munch_expr(ctx, dag->_kids[1], REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src)) {
 			return FALSE;
 		}
 
-		if (!munch_expr(ctx, dag->_kids[0], asmlist, REQUIRES_BIT1(FormatReg), &dst, where)) {
+		if (!munch_expr(ctx, dag->_kids[0], REQUIRES_BIT1(FormatReg), &dst)) {
 			return FALSE;
 		}
 
-		if (!emit_bitor(asmlist, dag, &dst, &src, where)) {
+		if (!emit_bitor(ctx->_asmlist, dag, &dst, &src, ctx->_where)) {
 			return FALSE;
 		}
 	}
 		break;
 	case IR_BITXOR:
 	{
-		if (!munch_expr(ctx, dag->_kids[1], asmlist, REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src, where)) {
+		if (!munch_expr(ctx, dag->_kids[1], REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src)) {
 			return FALSE;
 		}
 
-		if (!munch_expr(ctx, dag->_kids[0], asmlist, REQUIRES_BIT1(FormatReg), &dst, where)) {
+		if (!munch_expr(ctx, dag->_kids[0], REQUIRES_BIT1(FormatReg), &dst)) {
 			return FALSE;
 		}
 
-		if (!emit_bitxor(asmlist, dag, &dst, &src, where)) {
+		if (!emit_bitxor(ctx->_asmlist, dag, &dst, &src, ctx->_where)) {
 			return FALSE;
 		}
 	}
 		break;
 	case IR_NEG:
 	{
-		if (!munch_expr(ctx, dag->_kids[0], asmlist, REQUIRES_BIT1(FormatReg), &dst, where)) {
+		if (!munch_expr(ctx, dag->_kids[0], REQUIRES_BIT1(FormatReg), &dst)) {
 			return FALSE;
 		}
 
-		if (!emit_neg(asmlist, dag, &dst, where)) {
+		if (!emit_neg(ctx->_asmlist, dag, &dst, ctx->_where)) {
 			return FALSE;
 		}
 	}
 		break;
 	case IR_BCOM:
 	{
-		if (!munch_expr(ctx, dag->_kids[0], asmlist, REQUIRES_BIT1(FormatReg), &dst, where)) {
+		if (!munch_expr(ctx, dag->_kids[0], REQUIRES_BIT1(FormatReg), &dst)) {
 			return FALSE;
 		}
 
-		if (!emit_bcom(asmlist, dag, &dst, where)) {
+		if (!emit_bcom(ctx->_asmlist, dag, &dst, ctx->_where)) {
 			return FALSE;
 		}
 	}
 		break;
 	case IR_CVT:
 	{
-		if (!munch_expr(ctx, dag->_kids[0], asmlist, REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src, where)) {
+		if (!munch_expr(ctx, dag->_kids[0], REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src)) {
 			return FALSE;
 		}
 
-		if (!emit_cvt(asmlist, dag, &dst, &src, where)) {
+		if (!emit_cvt(ctx->_asmlist, dag, &dst, &src, ctx->_where)) {
 			return FALSE;
 		}
 	}
 		break;
 	case IR_INDIR:
 	{
-		if (!munch_expr(ctx, dag->_kids[0], asmlist, REQUIRES_BIT3(FormatReg, FormatImm, FormatSIB), &src, where)) {
+		if (!munch_expr(ctx, dag->_kids[0], REQUIRES_BIT3(FormatReg, FormatImm, FormatSIB), &src)) {
 			return FALSE;
 		}
 
@@ -961,16 +1082,16 @@ static BOOL munch_expr(FCCGenCodeContext* ctx, FCCIRDagNode* dag, FCCASCodeList*
 		operand->_format = FormatSIB;
 		operand->_tycode = IR_OPTY0(dag->_op);
 		operand->_u._sib._basereg = X86_EBP;
-		operand->_u._sib._displacement2 = dag->_symbol->_x._where._frame_offset;
+		operand->_u._sib._displacement2 = dag->_symbol->_x._frame_offset;
 	}
 		break;
 	case IR_CALL:
 	{
-		if (!munch_expr(ctx, dag->_kids[0], asmlist, REQUIRES_BIT3(FormatReg, FormatImm, FormatSIB), &dst, where)) {
+		if (!munch_expr(ctx, dag->_kids[0], REQUIRES_BIT3(FormatReg, FormatImm, FormatSIB), &dst)) {
 			return FALSE;
 		}
 
-		if (!emit_call(asmlist, dag, &dst, where)) {
+		if (!emit_call(ctx->_asmlist, dag, &dst, ctx->_where)) {
 			return FALSE;
 		}
 	}
@@ -983,7 +1104,7 @@ static BOOL munch_expr(FCCGenCodeContext* ctx, FCCIRDagNode* dag, FCCASCodeList*
 }
 
 /* generate code for ir-code */
-static BOOL munch_stmt(FCCGenCodeContext* ctx, FCCIRCode* ircode, FCCASCodeList* asmlist, enum EMMArea where)
+static BOOL munch_stmt(struct tagCCGenCodeContext* ctx, FCCIRCode* ircode)
 {
 	FCCASOperand dst = { 0 }, src = { 0 };
 	FCCIRDagNode* dag;
@@ -996,12 +1117,12 @@ static BOOL munch_stmt(FCCGenCodeContext* ctx, FCCIRCode* ircode, FCCASCodeList*
 	case IR_ARG:
 	{
 		dag = ircode->_u._expr->_dagnode;
-		if (!munch_expr(ctx, dag, asmlist, REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src, where))
+		if (!munch_expr(ctx, dag, REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src))
 		{
 			return FALSE;
 		}
 
-		if (!emit_argv(asmlist, &src, dag->_typesize, where))
+		if (!emit_argv(ctx->_asmlist, &src, dag->_typesize, ctx->_where))
 		{
 			return FALSE;
 		}
@@ -1010,7 +1131,7 @@ static BOOL munch_stmt(FCCGenCodeContext* ctx, FCCIRCode* ircode, FCCASCodeList*
 	case IR_EXP:
 	{
 		dag = ircode->_u._expr->_dagnode;
-		if (!munch_expr(ctx, dag, asmlist, REQUIRES_BIT0(), NULL, where))
+		if (!munch_expr(ctx, dag, REQUIRES_BIT0(), NULL))
 		{
 			return FALSE;
 		}
@@ -1018,7 +1139,7 @@ static BOOL munch_stmt(FCCGenCodeContext* ctx, FCCIRCode* ircode, FCCASCodeList*
 		break;
 	case IR_JMP:
 	{
-		if (!emit_jmp(asmlist, ircode->_u._jmp._tlabel, where)) {
+		if (!emit_jmp(ctx->_asmlist, ircode->_u._jmp._tlabel, ctx->_where)) {
 			return FALSE;
 		}
 	}
@@ -1034,29 +1155,29 @@ static BOOL munch_stmt(FCCGenCodeContext* ctx, FCCIRCode* ircode, FCCASCodeList*
 
 		if (tycode == IR_F32 || tycode == IR_F64)
 		{
-			if (!munch_expr(ctx, lhs, asmlist, REQUIRES_BIT1(FormatInSIB), &dst, where))
+			if (!munch_expr(ctx, lhs, REQUIRES_BIT1(FormatInSIB), &dst))
 			{
 				return FALSE;
 			}
-			if (!munch_expr(ctx, rhs, asmlist, REQUIRES_BIT1(FormatInSIB), &src, where))
+			if (!munch_expr(ctx, rhs, REQUIRES_BIT1(FormatInSIB), &src))
 			{
 				return FALSE;
 			}
 		}
 		else
 		{
-			if (!munch_expr(ctx, lhs, asmlist, REQUIRES_BIT1(FormatReg), &dst, where))
+			if (!munch_expr(ctx, lhs, REQUIRES_BIT1(FormatReg), &dst))
 			{
 				return FALSE;
 			}
 
-			if (!munch_expr(ctx, rhs, asmlist, REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src, where))
+			if (!munch_expr(ctx, rhs, REQUIRES_BIT3(FormatReg, FormatImm, FormatInSIB), &src))
 			{
 				return FALSE;
 			}
 		}
 
-		if (!emit_cjmp(asmlist, IR_OP(dag->_op), &dst, &src, ircode->_u._jmp._tlabel, ircode->_u._jmp._flabel, where))
+		if (!emit_cjmp(ctx->_asmlist, IR_OP(dag->_op), &dst, &src, ircode->_u._jmp._tlabel, ircode->_u._jmp._flabel, ctx->_where))
 		{
 			return FALSE;
 		}
@@ -1064,14 +1185,14 @@ static BOOL munch_stmt(FCCGenCodeContext* ctx, FCCIRCode* ircode, FCCASCodeList*
 		break;
 	case IR_LABEL:
 	{
-		if (!(asm = cc_as_newcode(where))) {
+		if (!(asm = cc_as_newcode(ctx->_where))) {
 			return FALSE;
 		}
 
 		asm->_opcode = X86_LABEL;
 		asm->_target = ircode->_u._label;
 
-		emit(asmlist, asm);
+		emit(ctx->_asmlist, asm);
 	}
 		break;
 	case IR_BLKBEG:
@@ -1085,7 +1206,7 @@ static BOOL munch_stmt(FCCGenCodeContext* ctx, FCCIRCode* ircode, FCCASCodeList*
 		if (ircode->_u._ret._expr) 
 		{
 			dag = ircode->_u._ret._expr->_dagnode;
-			if (!munch_expr(ctx, dag, asmlist, REQUIRES_BIT4(FormatReg, FormatImm, FormatInSIB, FormatSIB), &src, where))
+			if (!munch_expr(ctx, dag, REQUIRES_BIT4(FormatReg, FormatImm, FormatInSIB, FormatSIB), &src))
 			{
 				return FALSE;
 			}
@@ -1113,12 +1234,12 @@ static BOOL munch_stmt(FCCGenCodeContext* ctx, FCCIRCode* ircode, FCCASCodeList*
 				assert(0);
 			}
 
-			if (!emit_move(asmlist, &dst, &src, dag->_typesize, where)) {
+			if (!emit_move(ctx->_asmlist, &dst, &src, dag->_typesize, ctx->_where)) {
 				return FALSE;
 			}
 		}
 
-		if (ircode->_u._ret._exitlab && !emit_jmp(asmlist, ircode->_u._ret._exitlab, where))
+		if (ircode->_u._ret._exitlab && !emit_jmp(ctx->_asmlist, ircode->_u._ret._exitlab, ctx->_where))
 		{
 			return FALSE;
 		}
@@ -1126,38 +1247,38 @@ static BOOL munch_stmt(FCCGenCodeContext* ctx, FCCIRCode* ircode, FCCASCodeList*
 		break;
 	case IR_ZERO:
 	{
-		if (!(asm = cc_as_newcode(where))) {
+		if (!(asm = cc_as_newcode(ctx->_where))) {
 			return FALSE;
 		}
 
-		if (!munch_expr(ctx, ircode->_u._zero._addr->_dagnode, asmlist, REQUIRES_BIT1(FormatSIB), &asm->_dst, where))
+		if (!munch_expr(ctx, ircode->_u._zero._addr->_dagnode, REQUIRES_BIT1(FormatSIB), &asm->_dst))
 		{
 			return FALSE;
 		}
 		asm->_opcode = X86_ZERO_M;
 		asm->_count = ircode->_u._zero._bytes;
 
-		emit(asmlist, asm);
+		emit(ctx->_asmlist, asm);
 	}
 		break;
 	case IR_FENTER:
 	{
-		if (!(asm = cc_as_newcode(where))) {
+		if (!(asm = cc_as_newcode(ctx->_where))) {
 			return FALSE;
 		}
 
 		asm->_opcode = X86_PROLOGUE;
-		emit(asmlist, asm);
+		emit(ctx->_asmlist, asm);
 	}
 		break;
 	case IR_FEXIT:
 	{
-		if (!(asm = cc_as_newcode(where))) {
+		if (!(asm = cc_as_newcode(ctx->_where))) {
 			return FALSE;
 		}
 
 		asm->_opcode = X86_EPILOGUE;
-		emit(asmlist, asm);
+		emit(ctx->_asmlist, asm);
 	}
 		break;
 	default:
@@ -1167,26 +1288,84 @@ static BOOL munch_stmt(FCCGenCodeContext* ctx, FCCIRCode* ircode, FCCASCodeList*
 	return TRUE;
 }
 
-static BOOL cc_gen_asmcodes_irlist(struct tagCCSymbol* func, FCCIRCodeList* irlist, struct tagCCASCodeList* asmlist, enum EMMArea where)
+static BOOL cc_gen_asmcodes_irlist(struct tagCCGenCodeContext *ctx, FCCIRCodeList* irlist)
 {
 	FCCIRCode* c = irlist->_head;
 
 	for (; c; c = c->_next)
 	{
-		
+		if (!munch_stmt(ctx, c)) {
+			return FALSE;
+		}
 	} /* end for */
 
 	return TRUE;
 }
 
-BOOL cc_gen_asmcodes(struct tagCCSymbol* func, struct tagCCIRBasicBlock* bb, struct tagCCASCodeList* asmlist, enum EMMArea where)
+/*
+       Frame Layout
+	      ...
+     |             |
+	 +-------------+
+	 |   param2    |
+	 +-------------+
+	 |   param1    |
+	 +-------------+
+	 |   param0    |
+	 +-------------+ +8
+	 |   ret-addr  |
+	 +-------------+ +4
+	 |   ebp       |
+	 +-------------+ +0 <--- ebp
+	 |   local     |
+	 |   temps     |
+	 +-------------+
+	 |callee-saved |
+	 +-------------+
+     |             |
+ */
+BOOL cc_gen_asmcodes(FArray* caller, FArray* callee, struct tagCCIRBasicBlock* bb, struct tagCCASCodeList* asmlist, enum EMMArea where)
 {
+	struct tagCCGenCodeContext genctx;
+	int offset, i;
+
+	gen_context_init(&genctx, asmlist, where);
+	cc_reg_reset();
+
+	/* calculate parameters stack offset */
+	offset = 8;
+	for (i = 0; i < caller->_elecount; i++)
+	{
+		FCCSymbol* p0, * p1;
+
+		p0 = *(FCCSymbol**)array_element(caller, i);
+		p1 = *(FCCSymbol**)array_element(callee, i);
+
+		p0->_x._frame_offset = offset;
+		p1->_x._frame_offset = offset;
+
+		assert((p0->_type->_size & 0x03) == 0);
+		offset += p0->_type->_size;
+	} /* end for i */
+
 	for (; bb; bb = bb->_next)
 	{
-		if (!cc_gen_asmcodes_irlist(func, &bb->_codes, asmlist, where)) {
+		if (!cc_gen_asmcodes_irlist(&genctx, &bb->_codes)) {
 			return FALSE;
 		}
 	} /* end for bb */
 
 	return TRUE;
+}
+
+BOOL cc_gen_dumpfunction(struct tagCCContext* ctx, struct tagCCSymbol* func, FArray* caller, FArray* callee, struct tagCCIRBasicBlock* body)
+{
+	struct tagCCASCodeList asmlist = { NULL, NULL };
+
+	if (!cc_gen_asmcodes(caller, callee, body, &asmlist, CC_MM_TEMPPOOL)) {
+		cc_logger_outs("failed to generate assemble codes for function '%s'\n", func->_name);
+		return FALSE;
+	}
+
+	return FALSE;
 }

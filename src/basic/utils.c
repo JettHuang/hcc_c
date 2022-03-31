@@ -255,6 +255,12 @@ void array_append_zeroed(FArray* array)
 	array->_elecount++;
 }
 
+void array_popback(FArray* array)
+{
+	assert(array->_elecount > 0);
+	array->_elecount--;
+}
+
 void array_clear(FArray* array)
 {
 	array->_elecount = 0;

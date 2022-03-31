@@ -25,7 +25,7 @@ typedef struct tagCCASOperand {
 		struct tagCCSymbol* _imm; /* immediate constant */
 		struct {
 			struct tagCCSymbol* _displacement;
-			unsigned int _displacement2;
+			int _displacement2;
 
 			short _basereg;
 			short _indexreg;

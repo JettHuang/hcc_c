@@ -41,6 +41,8 @@ typedef struct tagCCBackend {
 
 	void (*_defglobal_end)(struct tagCCContext* ctx, struct tagCCSymbol* sym);
 
+	void (*_deffunction_begin)(struct tagCCContext* ctx, struct tagCCSymbol* func);
+	void (*_deffunction_end)(struct tagCCContext* ctx, struct tagCCSymbol* func);
 } FCCBackend;
 
 
@@ -48,6 +50,6 @@ struct tagCCBackend* cc_new_backend();
 
 void cc_gen_internalname(struct tagCCSymbol* sym);
 void cc_gen_dumpsymbols(struct tagCCContext* ctx);
-BOOL cc_gen_asmcodes(struct tagCCSymbol* func, struct tagCCIRBasicBlock* bb, struct tagCCASCodeList* asmlist, enum EMMArea where);
+BOOL cc_gen_dumpfunction(struct tagCCContext* ctx, struct tagCCSymbol* func, FArray* caller, FArray* callee, struct tagCCIRBasicBlock* body);
 
 #endif /* __CC_GEN_H__ */

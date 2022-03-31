@@ -89,12 +89,7 @@ typedef struct tagCCSymbol
 			struct tagCCIRBasicBlock* _basicblock;
 		} _u;
 		int _refcnt;
-
-		int _registered : 1;
-		union {
-			short _regs[2];
-			int _frame_offset; /* for argument or local variable's frame offset*/
-		} _where;
+		int _frame_offset; /* for argument or local variable's frame offset*/
 	} _x;
 } FCCSymbol;
 

@@ -789,7 +789,7 @@ FCCIRBasicBlock* cc_canon_uber(FCCIRCodeList* list, enum EMMArea where)
     cc_canon_codelist_simplify(list, where);
 
 	first = cc_canon_gen_basicblocks(list, where);
-#if 1
+#if 0
     logger_output_s("Final Canon Result:\n");
 	cc_ir_basicblock_display(first, 5);
 	logger_output_s("\n");

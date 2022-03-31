@@ -1214,6 +1214,12 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 		cc_ir_basicblock_display(basicblocks, 5);
 		logger_output_s("\n");
 #endif
+		/* generate & dump back-end codes */
+		ctx->_backend->_deffunction_begin(ctx, p);
+		if (!cc_gen_dumpfunction(ctx, p, &caller, &callee, basicblocks)) {
+			return FALSE;
+		}
+		ctx->_backend->_deffunction_end(ctx, p);
 	}
 	
 	/* exit param scope */

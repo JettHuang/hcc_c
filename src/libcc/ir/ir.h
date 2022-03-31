@@ -124,8 +124,12 @@ typedef struct tagCCDagNode {
 
 	/* for code gen */
 	struct {
-		int _registered : 1;
-		short _regs[2];
+		int _inregister : 1;
+		int _intemporary : 1;
+		union {
+			short _registers[2]; /* registers ids*/
+			int _temp_offset;
+		} _loc;
 	} _x;
 } FCCIRDagNode;
 
