@@ -120,11 +120,13 @@ typedef struct tagCCDagNode {
 	int _typesize;
 	struct tagCCSymbol* _symbol; /* for constant */
 	struct tagCCDagNode* _kids[2];
-	int _refcnt;
+	int _lastref;
 
 	/* for code gen */
 	struct {
-		int _inregister : 1;
+		int _isemitted : 1;
+		int _recalable : 1;  /* can be recalculated */
+ 		int _inregister : 1;
 		int _intemporary : 1;
 		union {
 			short _registers[2]; /* registers ids*/

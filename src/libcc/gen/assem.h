@@ -6,8 +6,6 @@
 #ifndef __CC_ASSEM_H__
 #define __CC_ASSEM_H__
 
-#include "ir/dag.h"
-
 
 enum ASOperandFormat 
 {
@@ -35,7 +33,7 @@ typedef struct tagCCASOperand {
 } FCCASOperand;
 
 typedef struct tagCCASCode {
-	unsigned int _opcode;
+	int _opcode;
 	struct tagCCASOperand _dst;
 	struct tagCCASOperand _src;
 	struct tagCCSymbol*	  _target;

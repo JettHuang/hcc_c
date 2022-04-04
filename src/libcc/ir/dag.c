@@ -28,12 +28,8 @@ static struct tagDagPoolEntry* cc_dag_entry(unsigned int op, int valsize, FCCIRD
 	util_memset(dag, 0, sizeof(*dag));
 	dag->_node._op = op;
 	dag->_node._typesize = valsize;
-	if ((dag->_node._kids[0] = lhs) != NULL) {
-		lhs->_refcnt++;
-	}
-	if ((dag->_node._kids[1] = rhs) != NULL) {
-		rhs->_refcnt++;
-	}
+	dag->_node._kids[0] = lhs;
+	dag->_node._kids[1] = rhs;
 
 	dag->_node._symbol = sym;
 	return dag;

@@ -302,7 +302,7 @@ FCCSymbol* cc_symbol_temporary(struct tagCCType* ty, int sclass)
 	p->_scope = gCurrentLevel;
 	p->_generated = 1;
 	p->_temporary = 1;
-	p->_defined = 1;
+	p->_defined = 0;
 
 	return p;
 }

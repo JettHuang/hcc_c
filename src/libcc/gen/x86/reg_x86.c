@@ -5,8 +5,7 @@
 #include "reg_x86.h"
 #include "ir/ir.h"
 
-
-extern int gen_get_tempspace(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag);
+extern int gen_get_tempspace(struct tagCCGenCodeContext* ctx, int seqid, struct tagCCDagNode* dag);
 extern BOOL emit_store_regvalue(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag, int tmpoffset);
 
 typedef struct tagRegisterEntry
@@ -33,7 +32,7 @@ static struct tagRegisterEntry gRegisters[] =
 	{ X86_ST1, 1, NULL, 0 }
 };
 
-static BOOL cc_reg_spill(struct tagCCGenCodeContext* ctx, int regid)
+static BOOL cc_reg_spill(struct tagCCGenCodeContext* ctx, int seqid, int regid)
 {
 	struct tagCCDagNode* dag;
 	int tmpoffset;
@@ -42,7 +41,7 @@ static BOOL cc_reg_spill(struct tagCCGenCodeContext* ctx, int regid)
 	assert(dag);
 	assert(dag->_x._inregister);
 
-	tmpoffset = gen_get_tempspace(ctx, dag);
+	tmpoffset = gen_get_tempspace(ctx, seqid, dag);
 	if (!emit_store_regvalue(ctx, dag, tmpoffset))
 	{
 		return FALSE;
@@ -68,7 +67,7 @@ void cc_reg_reset()
 	}
 }
 
-BOOL cc_reg_get(struct tagCCGenCodeContext* ctx, int requires, struct tagCCDagNode* dag, int part)
+BOOL cc_reg_get(struct tagCCGenCodeContext* ctx, int seqid, int requires, struct tagCCDagNode* dag, int part)
 {
 	int candidates[X86_MAX];
 	int i, cnt;
@@ -80,7 +79,7 @@ BOOL cc_reg_get(struct tagCCGenCodeContext* ctx, int requires, struct tagCCDagNo
 		if (requires & REG_BIT(i))
 		{
 			p = &gRegisters[i];
-			if (!p->_dag || p->_dag->_refcnt <= 0) {
+			if (!p->_dag || p->_dag->_lastref < seqid) {
 				result = p;
 				break;
 			}
@@ -92,23 +91,23 @@ BOOL cc_reg_get(struct tagCCGenCodeContext* ctx, int requires, struct tagCCDagNo
 
 	if (!result)
 	{
-		int maxref = 0;
+		int lastref = 0;
 		for (i = 0; i < cnt; ++i)
 		{
 			p = &gRegisters[candidates[i]];
 			assert(p->_dag);
-			if (p->_dag->_refcnt > maxref)
+			if (p->_dag->_lastref > lastref)
 			{
-				maxref = p->_dag->_refcnt;
+				lastref = p->_dag->_lastref;
 				result = p;
 			}
 		}
 	}
 
 	if (!result) { return FALSE; }
-	if (result->_dag && result->_dag->_refcnt > 0)
+	if (result->_dag && result->_dag->_lastref > seqid)
 	{
-		if (!cc_reg_spill(ctx, result->_id)) {
+		if (!cc_reg_spill(ctx, seqid, result->_id)) {
 			return FALSE;
 		}
 	}

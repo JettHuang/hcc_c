@@ -32,7 +32,7 @@
 void cc_reg_reset();
 
 /* get register for dag */
-BOOL cc_reg_get(struct tagCCGenCodeContext* ctx, int requires, struct tagCCDagNode* dag, int part);
+BOOL cc_reg_get(struct tagCCGenCodeContext* ctx, int seqid, int requires, struct tagCCDagNode* dag, int part);
 
 /* put register allocated for dag */
 BOOL cc_reg_put(int regid);

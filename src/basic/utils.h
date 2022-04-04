@@ -6,6 +6,7 @@
 #define __UTILS_H__
 
 #include <stdint.h>
+#include <assert.h>
 #include "mm.h"
 
 

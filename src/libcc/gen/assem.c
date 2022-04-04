@@ -3,9 +3,10 @@
  *
  */
 
-#include "assem.h"
 #include "mm.h"
 #include "logger.h"
+#include "utils.h"
+#include "assem.h"
 
 
 FCCASCode* cc_as_newcode(enum EMMArea where)
