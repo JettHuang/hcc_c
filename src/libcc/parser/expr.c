@@ -3157,8 +3157,13 @@ FCCIRTree* cc_expr_assign(FCCType* ty, FCCIRTree* lhs, FCCIRTree* rhs, FLocation
 	right = cc_expr_right(rhs);
 	if (IR_OP(right->_op) == IR_CALL && IR_OPTY0(right->_op) == IR_BLK)
 	{
-		right->_u._f._ret = addr;
-		return rhs;
+		FCCIRTree* retaddr = right->_u._f._ret;
+		
+		if (!retaddr || (IsAddrOp(retaddr->_op) && retaddr->_symbol->_temporary))
+		{
+			right->_u._f._ret = addr;
+			return rhs;
+		}
 	}
 
 	field = lhs->_field;

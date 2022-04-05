@@ -194,7 +194,7 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
 
         result = expr;
         if (ret && outexpr) {
-            result = cc_expr_indir(ret, &expr->_loc, where);
+            ret = cc_expr_indir(ret, &expr->_loc, where);
             if (!cc_canon_expr_linearize(list, ret, NULL, NULL, &result, where)) { return FALSE; }
         }
     }
