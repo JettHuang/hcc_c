@@ -12,7 +12,8 @@ enum ASOperandFormat
 	FormatReg,
 	FormatImm,
 	FormatSIB,
-	FormatInSIB
+	FormatInSIB,
+	FormatInSIB2 /* this one is Indir(Indir(SIB)) */
 };
 
 typedef struct tagCCASOperand {

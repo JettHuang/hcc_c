@@ -26,7 +26,7 @@
 #define X86_MAX		0x12
 
 #define NORMAL_X86REGS	(REG_BIT(X86_EAX) | REG_BIT(X86_EBX) | REG_BIT(X86_ECX) | REG_BIT(X86_EDX))
-
+#define NORMAL_ADDR_X86REGS	(NORMAL_X86REGS | REG_BIT(X86_ESI) | REG_BIT(X86_EDI))
 
 /* reset registers */
 void cc_reg_reset();

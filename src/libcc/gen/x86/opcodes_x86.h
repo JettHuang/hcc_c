@@ -16,6 +16,7 @@ enum X86ASMCode
     X86_BLKLEAVE,
     X86_LOCALVAR,
     X86_MOVERET,
+    X86_LOAD, /* load memory to register */
 
     X86_LABEL,
 
