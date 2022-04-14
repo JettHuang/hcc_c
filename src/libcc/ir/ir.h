@@ -101,6 +101,7 @@ typedef struct tagCCExprTree {
 			struct tagCCExprTree* _lhs;
 			struct tagCCExprTree** _args; /* end with null */
 			struct tagCCExprTree* _ret;   /* for receive returned block data */
+			int _argsbytes;
 		} _f;
 		FCCConstVal _val;
 	} _u;
@@ -118,6 +119,7 @@ typedef struct tagCCExprTree {
 typedef struct tagCCDagNode {
 	unsigned int _op;
 	int _typesize;
+	int _argsbytes;  /* for ir-call */
 	struct tagCCSymbol* _symbol; /* for constant */
 	struct tagCCDagNode* _kids[2];
 	int _lastref;
@@ -125,12 +127,15 @@ typedef struct tagCCDagNode {
 	/* for code gen */
 	struct {
 		int _isemitted : 1;
-		int _recalable : 1;  /* can be recalculated */
+		int _recalable : 1;
  		int _inregister : 1;
-		int _intemporary : 1;
-		union {
-			short _registers[2]; /* registers ids*/
-			int _temp_offset;
+		int _inmemory : 1;
+		struct {
+			short _regs[2]; /* registers ids*/
+			struct {
+				struct tagCCSymbol* _var;
+				int _offset;
+			} _mm;
 		} _loc;
 	} _x;
 } FCCIRDagNode;

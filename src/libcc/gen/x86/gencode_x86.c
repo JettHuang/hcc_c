@@ -39,6 +39,7 @@ typedef struct tagCCLocalUseEntry {
 typedef struct tagCCGenCodeContext {
 	struct tagCCASCodeList _asmlist;
 	enum EMMArea _where;
+	struct tagCCSymbol* _frame_base;
 
 	FArray _localuses;
 	int _curlocalbytes; /* current local space bytes used */
@@ -64,7 +65,7 @@ typedef struct tagCCTripleCodeContext {
 } FCCTripleCodeContext;
 
 static struct tagCCTripleCode* emit_triple(struct tagCCTripleCodeContext *ctx, int opcode);
-static BOOL munch_expr(struct tagCCTripleCodeContext* ctx, FCCIRDagNode* dag);
+static BOOL munch_expr(struct tagCCTripleCodeContext* ctx, struct tagCCDagNode* dag);
 static BOOL munch_stmt(struct tagCCTripleCodeContext* ctx, FCCIRCode* stmt);
 
 static void block_enter(struct tagCCGenCodeContext* ctx, int seqid, int level);
@@ -99,8 +100,10 @@ static struct tagCCTripleCode* emit_triple(struct tagCCTripleCodeContext* ctx, i
 	return c;
 }
 
-static void gen_context_init(struct tagCCGenCodeContext* ctx, enum EMMArea where)
+static BOOL gen_context_init(struct tagCCGenCodeContext* ctx, enum EMMArea where)
 {
+	struct tagCCSymbol* p;
+
 	ctx->_asmlist._head = NULL;
 	ctx->_asmlist._tail = NULL;
 	ctx->_where = where;
@@ -108,6 +111,18 @@ static void gen_context_init(struct tagCCGenCodeContext* ctx, enum EMMArea where
 	ctx->_maxlocalbytes = 0;
 	
 	array_init(&ctx->_localuses, 128, sizeof(struct tagCCLocalUseEntry), where);
+
+	p = mm_alloc_area(sizeof(struct tagCCSymbol), CC_MM_TEMPPOOL);
+	if (!p) { return FALSE; }
+
+	util_memset(p, 0, sizeof(*p));
+	p->_name = "framebase";
+	p->_sclass = SC_Auto;
+	p->_scope = SCOPE_LOCAL;
+	p->_generated = 1;
+
+	ctx->_frame_base = p;
+	return TRUE;
 }
 
 static void block_enter(struct tagCCGenCodeContext* ctx, int seqid, int level)
@@ -167,7 +182,7 @@ static void local_variable(struct tagCCGenCodeContext* ctx, struct tagCCSymbol* 
 	}
 }
 
-int gen_get_tempspace(struct tagCCGenCodeContext* ctx, int seqid, struct tagCCDagNode* dag)
+void alloc_temporary_space(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag, int curseqid)
 {
 	struct tagCCLocalUseEntry e;
 	int i, spacebytes;
@@ -180,10 +195,20 @@ int gen_get_tempspace(struct tagCCGenCodeContext* ctx, int seqid, struct tagCCDa
 		if (p->_kind == LOCAL_TMP)
 		{
 			if (p->_x._tmp._size >= dag->_typesize &&
-				(!p->_x._tmp._dag || p->_x._tmp._dag->_lastref < seqid))
+				(!p->_x._tmp._dag || p->_x._tmp._dag->_lastref < curseqid))
 			{
+				if (p->_x._tmp._dag)
+				{
+					p->_x._tmp._dag->_x._inmemory = 0;
+					p->_x._tmp._dag->_x._loc._mm._var = NULL;
+					p->_x._tmp._dag->_x._loc._mm._offset = 0;
+				}
+
 				p->_x._tmp._dag = dag;
-				return p->_x._tmp._offset;
+				dag->_x._inmemory = 1;
+				dag->_x._loc._mm._var = ctx->_frame_base;
+				dag->_x._loc._mm._offset = p->_x._tmp._offset;
+				return;
 			}
 		}
 	} /* end for */
@@ -202,7 +227,9 @@ int gen_get_tempspace(struct tagCCGenCodeContext* ctx, int seqid, struct tagCCDa
 	e._x._tmp._dag = dag;
 	array_append(&ctx->_localuses, &e);
 	
-	return e._x._tmp._offset;
+	dag->_x._inmemory = 1;
+	dag->_x._loc._mm._var = ctx->_frame_base;
+	dag->_x._loc._mm._offset = e._x._tmp._offset;
 }
 
 static struct tagCCASCode* emit_as(struct tagCCGenCodeContext* ctx, int opcode)
@@ -219,54 +246,62 @@ static struct tagCCASCode* emit_as(struct tagCCGenCodeContext* ctx, int opcode)
 	return asm;
 }
 
-BOOL emit_store_regvalue(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag, int tmpoffset)
+BOOL emit_store_r2staticmem(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag)
 {
 	struct tagCCASCode* asm;
+	struct tagCCSymbol* var;
 
 	if (!(asm = emit_as(ctx, X86_MOV))) { return FALSE; }
 
+	assert(dag->_x._inmemory);
+	assert(dag->_x._inregister);
+
+	var = dag->_x._loc._mm._var;
 	asm->_dst._format = FormatSIB;
 	asm->_dst._tycode = IR_OPTY0(dag->_op);
-	asm->_dst._u._sib._basereg = X86_EBP;
-	asm->_dst._u._sib._displacement2 = tmpoffset;
+	if (var->_scope == SCOPE_PARAM || var->_scope == SCOPE_LOCAL) {
+		asm->_dst._u._sib._basereg = X86_EBP;
+		asm->_dst._u._sib._displacement2 = var->_x._frame_offset + dag->_x._loc._mm._offset;
+	}
+	else {
+		asm->_dst._u._sib._displacement = var;
+		asm->_dst._u._sib._displacement2 = dag->_x._loc._mm._offset;
+	}
 	asm->_src._format = FormatReg;
 	asm->_src._tycode = IR_OPTY0(dag->_op);
-	asm->_src._u._regs[0] = dag->_x._loc._registers[0];
-	asm->_src._u._regs[1] = dag->_x._loc._registers[1];
+	asm->_src._u._regs[0] = dag->_x._loc._regs[0];
+	asm->_src._u._regs[1] = dag->_x._loc._regs[1];
+	asm->_count = dag->_typesize;
 
 	return TRUE;
 }
 
-BOOL emit_restore_tmpvalue(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag, int regs[2])
+BOOL emit_load_staticmem2r(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag)
 {
 	struct tagCCASCode* asm;
-	int i, tmpoffset = -1;
-
-	for (i = 0; i < ctx->_localuses._elecount; ++i)
-	{
-		struct tagCCLocalUseEntry* p;
-
-		p = array_element(&ctx->_localuses, i);
-		if (p->_kind == LOCAL_TMP)
-		{
-			if (p->_x._tmp._dag == dag)
-			{
-				tmpoffset = p->_x._tmp._offset;
-				p->_x._tmp._dag = NULL;
-				break;
-			}
-		}
-	} /* end for */
+	struct tagCCSymbol* var;
 
 	if (!(asm = emit_as(ctx, X86_MOV))) { return FALSE; }
+
+	assert(dag->_x._inmemory);
+	assert(dag->_x._inregister);
+
+	var = dag->_x._loc._mm._var;
 	asm->_src._format = FormatInSIB;
 	asm->_src._tycode = IR_OPTY0(dag->_op);
-	asm->_src._u._sib._basereg = X86_EBP;
-	asm->_src._u._sib._displacement2 = tmpoffset;
+	if (var->_scope == SCOPE_PARAM || var->_scope == SCOPE_LOCAL) {
+		asm->_src._u._sib._basereg = X86_EBP;
+		asm->_src._u._sib._displacement2 = var->_x._frame_offset + dag->_x._loc._mm._offset;
+	}
+	else {
+		asm->_src._u._sib._displacement = var;
+		asm->_src._u._sib._displacement2 = dag->_x._loc._mm._offset;
+	}
 	asm->_dst._format = FormatReg;
 	asm->_dst._tycode = IR_OPTY0(dag->_op);
-	asm->_dst._u._regs[0] = dag->_x._loc._registers[0];
-	asm->_dst._u._regs[1] = dag->_x._loc._registers[1];
+	asm->_dst._u._regs[0] = dag->_x._loc._regs[0];
+	asm->_dst._u._regs[1] = dag->_x._loc._regs[1];
+	asm->_count = dag->_typesize;
 
 	return TRUE;
 }
@@ -281,8 +316,50 @@ static void mark_lastref(FCCIRDagNode* dag, int seqid)
 	}
 }
 
+static void check_static_indir(struct tagCCDagNode* dag)
+{
+	if (IR_OP(dag->_op) == IR_INDIR && dag->_x._recalable)
+	{
+		struct tagCCDagNode* kid = dag->_kids[0];
+
+		switch (IR_OP(kid->_op))
+		{
+		case IR_ADD:
+		case IR_SUB:
+		{
+			struct tagCCDagNode* lhs, * rhs;
+
+			lhs = kid->_kids[0];
+			rhs = kid->_kids[1];
+			if (IsAddrOp(lhs->_op) && IR_OP(rhs->_op) == IR_CONST)
+			{
+				struct tagCCSymbol* var = lhs->_symbol;
+				struct tagCCSymbol* cnst = rhs->_symbol;
+				int k = cnst->_u._cnstval._pointer;
+
+				if (IR_OP(kid->_op) == IR_SUB) { k = -k; }
+
+				dag->_x._inmemory = 1;
+				dag->_x._loc._mm._var = var;
+				dag->_x._loc._mm._offset = k;
+			}
+		}
+		break;
+		case IR_CONST:
+		{
+			dag->_x._inmemory = 1;
+			dag->_x._loc._mm._var = NULL;
+			dag->_x._loc._mm._offset = kid->_symbol->_u._cnstval._pointer;
+		}
+		break;
+		default:
+			break;
+		}
+	} /* end if */
+}
+
 /* generate code for expression */
-static BOOL munch_expr(struct tagCCTripleCodeContext* ctx, FCCIRDagNode* dag)
+static BOOL munch_expr(struct tagCCTripleCodeContext* ctx, struct tagCCDagNode* dag)
 {
 	struct tagCCTripleCode* triple;
 
@@ -319,7 +396,8 @@ static BOOL munch_expr(struct tagCCTripleCodeContext* ctx, FCCIRDagNode* dag)
 	case IR_BITOR:
 	case IR_BITXOR:
 	{
-		int opcode, irop0, irop1;
+		struct tagCCDagNode* lhs, * rhs;
+		int opcode;
 
 		switch (IR_OP(dag->_op))
 		{
@@ -335,13 +413,13 @@ static BOOL munch_expr(struct tagCCTripleCodeContext* ctx, FCCIRDagNode* dag)
 		case IR_BITXOR: opcode = X86_XOR; break;
 		}
 
-		if (!munch_expr(ctx, dag->_kids[0])) { return FALSE; }
-		if (!munch_expr(ctx, dag->_kids[1])) { return FALSE; }
+		lhs = dag->_kids[0];
+		rhs = dag->_kids[1];
+		if (!munch_expr(ctx, lhs)) { return FALSE; }
+		if (!munch_expr(ctx, rhs)) { return FALSE; }
 
-		irop0 = dag->_kids[0]->_op;
-		irop1 = dag->_kids[1]->_op;
 		if ((opcode == X86_ADD || opcode == X86_SUB)
-			&& (IsAddrOp(irop0) && IR_OP(irop1) == IR_CONST))
+			&& (IsAddrOp(lhs->_op) && IR_OP(rhs->_op) == IR_CONST))
 		{
 			dag->_x._recalable = 1;
 		}
@@ -351,12 +429,12 @@ static BOOL munch_expr(struct tagCCTripleCodeContext* ctx, FCCIRDagNode* dag)
 
 			dag->_x._isemitted = 1;
 			mark_lastref(dag, triple->_seqid);
-			mark_lastref(dag->_kids[0], triple->_seqid);
-			mark_lastref(dag->_kids[1], triple->_seqid);
+			mark_lastref(lhs, triple->_seqid);
+			mark_lastref(rhs, triple->_seqid);
 
 			triple->_result = dag;
-			triple->_kids[0] = dag->_kids[0];
-			triple->_kids[1] = dag->_kids[1];
+			triple->_kids[0] = lhs;
+			triple->_kids[1] = rhs;
 		}
 	}
 		break;
@@ -389,19 +467,19 @@ static BOOL munch_expr(struct tagCCTripleCodeContext* ctx, FCCIRDagNode* dag)
 		{
 			if (!kid->_x._isemitted)
 			{
-				if (!munch_expr(ctx, kid->_kids[0])) { return FALSE; }
+				if (!munch_expr(ctx, kid)) { return FALSE; }
 				if (!(triple = emit_triple(ctx, X86_LOAD))) { return FALSE; }
 				kid->_x._isemitted = 1;
 				mark_lastref(kid, triple->_seqid);
-				mark_lastref(kid->_kids[0], triple->_seqid);
 				triple->_result = kid;
-				triple->_kids[0] = kid->_kids[0];
+				triple->_kids[0] = kid;
 			}
 		}
 		else
 		{
 			if (!munch_expr(ctx, kid)) { return FALSE; }
 			dag->_x._recalable = kid->_x._recalable;
+			check_static_indir(dag);
 		}
 	}
 		break;
@@ -595,27 +673,32 @@ static BOOL cc_gen_triplecodes(struct tagCCTripleCodeContext* ctx, struct tagCCI
 }
 
 /* translate dag to asm-operand */
-static BOOL cc_gen_dag2operand(struct tagCCDagNode *dag, struct tagCCASOperand *operand)
+static BOOL cc_get_operand(struct tagCCDagNode *dag, struct tagCCASOperand *operand)
 {
-	int irop0, irop1;
-
 	util_memset(operand, 0, sizeof(*operand));
 	if (dag->_x._inregister)
 	{
 		operand->_format = FormatReg;
 		operand->_tycode = IR_OPTY0(dag->_op);
-		operand->_u._regs[0] = dag->_x._loc._registers[0];
-		operand->_u._regs[1] = dag->_x._loc._registers[1];
-
+		operand->_u._regs[0] = dag->_x._loc._regs[0];
+		operand->_u._regs[1] = dag->_x._loc._regs[1];
 		return TRUE;
 	}
-	else if (dag->_x._intemporary)
+	else if (dag->_x._inmemory)
 	{
+		struct tagCCSymbol* var = dag->_x._loc._mm._var;
+
 		operand->_format = FormatInSIB;
 		operand->_tycode = IR_OPTY0(dag->_op);
-		operand->_u._sib._basereg = X86_EBP;
-		operand->_u._sib._displacement2 = dag->_x._loc._temp_offset;
-		
+		if (var->_scope == SCOPE_PARAM || var->_scope == SCOPE_LOCAL) {
+			operand->_u._sib._basereg = X86_EBP;
+			operand->_u._sib._displacement2 = var->_x._frame_offset + dag->_x._loc._mm._offset;
+		}
+		else {
+			operand->_u._sib._displacement = var;
+			operand->_u._sib._displacement2 = dag->_x._loc._mm._offset;
+		}
+
 		return TRUE;
 	}
 	else
@@ -625,16 +708,18 @@ static BOOL cc_gen_dag2operand(struct tagCCDagNode *dag, struct tagCCASOperand *
 		case IR_ADD:
 		case IR_SUB:
 		{
-			irop0 = dag->_kids[0]->_op;
-			irop1 = dag->_kids[1]->_op;
-			if (IsAddrOp(irop0) && IR_OP(irop1) == IR_CONST)
+			struct tagCCDagNode* lhs, * rhs;
+
+			lhs = dag->_kids[0];
+			rhs = dag->_kids[1];
+			if (IsAddrOp(lhs->_op) && IR_OP(rhs->_op) == IR_CONST)
 			{
-				struct tagCCSymbol* id = dag->_kids[0]->_symbol;
-				struct tagCCSymbol* cnst = dag->_kids[1]->_symbol;
+				struct tagCCSymbol* id = lhs->_symbol;
+				struct tagCCSymbol* cnst = rhs->_symbol;
 				int k = cnst->_u._cnstval._pointer;
 
 				if (IR_OP(dag->_op) == IR_SUB) { k = -k; }
-				if (IR_OP(irop0) == IR_ADDRG)
+				if (IR_OP(lhs->_op) == IR_ADDRG)
 				{
 					operand->_format = FormatSIB;
 					operand->_tycode = IR_OPTY0(dag->_op);
@@ -653,6 +738,22 @@ static BOOL cc_gen_dag2operand(struct tagCCDagNode *dag, struct tagCCASOperand *
 			}
 		}
 			break;
+		case IR_ADDRG:
+		{
+			operand->_format = FormatSIB;
+			operand->_tycode = IR_OPTY0(dag->_op);
+			operand->_u._sib._displacement = dag->_symbol;
+		}
+			break;
+		case IR_ADDRF:
+		case IR_ADDRL:
+		{
+			operand->_format = FormatSIB;
+			operand->_tycode = IR_OPTY0(dag->_op);
+			operand->_u._sib._basereg = X86_EBP;
+			operand->_u._sib._displacement2 = dag->_symbol->_x._frame_offset;
+		}
+			break;
 		case IR_CONST:
 		{
 			operand->_format = FormatImm;
@@ -664,7 +765,7 @@ static BOOL cc_gen_dag2operand(struct tagCCDagNode *dag, struct tagCCASOperand *
 		case IR_INDIR:
 		{
 			struct tagCCASOperand addr = { 0 };
-			if (!cc_gen_dag2operand(dag->_kids[0], &addr)) { return FALSE; }
+			if (!cc_get_operand(dag->_kids[0], &addr)) { return FALSE; }
 			if (addr._format == FormatReg)
 			{
 				operand->_format = FormatInSIB;
@@ -707,18 +808,39 @@ static BOOL cc_gen_dag2operand(struct tagCCDagNode *dag, struct tagCCASOperand *
 	return FALSE;
 }
 
-static BOOL cc_gen_InInSIB2InSIB(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag, struct tagCCASOperand* operand, int seqid)
+static int cc_get_regflags_bytype(int tycode)
+{
+	switch (tycode)
+	{
+	case IR_S8:
+	case IR_U8:
+	case IR_S16:
+	case IR_U16:
+		return NORMAL_X86REGS;
+	case IR_S32:
+	case IR_U32:
+	case IR_PTR:
+		return NORMAL_ADDR_X86REGS;
+	default:
+		break;
+	}
+
+	return NORMAL_ADDR_X86REGS;
+}
+
+static BOOL cc_convert_insib2_to_insib(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag, struct tagCCASOperand* operand, int seqid)
 {
 	if (operand->_format == FormatInSIB2)
 	{
 		struct tagCCDagNode* kid = dag->_kids[0];
 		int regs[2] = { X86_NIL, X86_NIL};
 		
-		assert(IR_OP(kid->_op) == IR_INDIR && kid->_x._intemporary);
-		regs[0] = cc_reg_get(ctx, seqid, NORMAL_ADDR_X86REGS, kid, 0);
+		assert(IR_OP(kid->_op) == IR_INDIR && kid->_x._inmemory);
+		regs[0] = cc_reg_alloc(ctx, seqid, NORMAL_ADDR_X86REGS);
 		if (regs[0] == X86_NIL) { return FALSE; }
-		if (!emit_restore_tmpvalue(ctx, kid, regs)) { return FALSE; }
-		dag->_x._inregister = 1;
+
+		cc_reg_make_associated(regs[0], kid, 0);
+		if (!emit_load_staticmem2r(ctx, kid)) { return FALSE; }
 	
 		operand->_format = FormatInSIB;
 		operand->_tycode = IR_OPTY0(dag->_op);
@@ -732,26 +854,26 @@ static BOOL cc_gen_InInSIB2InSIB(struct tagCCGenCodeContext* ctx, struct tagCCDa
 	return TRUE;
 }
 
-static BOOL cc_gen_InSIB2SIB(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag, struct tagCCASOperand* operand, int seqid)
+static BOOL cc_convert_insib_reg_imm_to_sib(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag, struct tagCCASOperand* operand, int seqid)
 {
 	struct tagCCASCode* as;
 
 	if (operand->_format == FormatInSIB)
 	{
-		struct tagCCDagNode* kid = dag->_kids[0];
 		int regs[2] = { X86_NIL, X86_NIL };
 
-		regs[0] = cc_reg_get(ctx, seqid, NORMAL_ADDR_X86REGS, kid, 0);
+		regs[0] = cc_reg_alloc(ctx, seqid, NORMAL_ADDR_X86REGS);
 		if (regs[0] == X86_NIL) { return FALSE; }
+
+		cc_reg_make_associated(regs[0], dag, 0);
 		if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+
 		as->_src = *operand;
 		as->_dst._format = FormatReg;
 		as->_dst._tycode = IR_OPTY0(dag->_op);
 		as->_dst._u._regs[0] = regs[0];
-		as->_dst._u._regs[1] = regs[1];
-		as->_count = kid->_typesize;
+		as->_count = dag->_typesize;
 
-		dag->_x._inregister = 1;
 		operand->_format = FormatSIB;
 		operand->_tycode = IR_OPTY0(dag->_op);
 		operand->_u._sib._basereg = regs[0];
@@ -760,8 +882,91 @@ static BOOL cc_gen_InSIB2SIB(struct tagCCGenCodeContext* ctx, struct tagCCDagNod
 		operand->_u._sib._displacement2 = 0;
 		operand->_u._sib._displacement = NULL;
 	}
+	else if (operand->_format == FormatReg)
+	{
+		int regid = operand->_u._regs[0];
+
+		operand->_format = FormatSIB;
+		operand->_tycode = IR_OPTY0(dag->_op);
+		operand->_u._sib._basereg = regid;
+		operand->_u._sib._indexreg = X86_NIL;
+		operand->_u._sib._scale = 0;
+		operand->_u._sib._displacement2 = 0;
+		operand->_u._sib._displacement = NULL;
+	}
+	else if (operand->_format == FormatImm)
+	{
+		int ptr = operand->_u._imm->_u._cnstval._pointer;
+
+		operand->_format = FormatSIB;
+		operand->_tycode = IR_OPTY0(dag->_op);
+		operand->_u._sib._basereg = X86_NIL;
+		operand->_u._sib._indexreg = X86_NIL;
+		operand->_u._sib._scale = 0;
+		operand->_u._sib._displacement2 = ptr;
+		operand->_u._sib._displacement = NULL;
+	}
 
 	return TRUE;
+}
+
+static BOOL cc_convert_insib_sib_imm_to_reg(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag, struct tagCCASOperand* operand, int seqid)
+{
+	struct tagCCASCode* as;
+	int tycode;
+
+	tycode = IR_OPTY0(dag->_op);
+	if (operand->_format == FormatInSIB || operand->_format == FormatImm || operand->_format == FormatSIB)
+	{
+		int regs[2] = { X86_NIL, X86_NIL };
+
+		regs[0] = cc_reg_alloc(ctx, seqid, NORMAL_ADDR_X86REGS);
+		if (regs[0] == X86_NIL) { return FALSE; }
+		cc_reg_make_associated(regs[0], dag, 0);
+		if (tycode == IR_S64 || tycode == IR_U64)
+		{
+			regs[1] = cc_reg_alloc(ctx, seqid, NORMAL_ADDR_X86REGS);
+			if (regs[1] == X86_NIL) { return FALSE; }
+			cc_reg_make_associated(regs[1], dag, 1);
+		}
+
+		if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+
+		as->_src = *operand;
+		as->_dst._format = FormatReg;
+		as->_dst._tycode = IR_OPTY0(dag->_op);
+		as->_dst._u._regs[0] = regs[0];
+		as->_dst._u._regs[1] = regs[1];
+		as->_count = dag->_typesize;
+
+		*operand = as->_dst;
+	}
+
+	return TRUE;
+}
+
+static BOOL cc_is_integer(int tycode)
+{
+	switch (tycode)
+	{
+	case IR_S8:
+	case IR_U8:
+	case IR_S16:
+	case IR_U16:
+	case IR_S32:
+	case IR_U32:
+	case IR_S64:
+	case IR_U64:
+	case IR_PTR:
+		return TRUE;
+	case IR_F32:
+	case IR_F64:
+		return FALSE;
+	default:
+		assert(0); break;
+	}
+
+	return FALSE;
 }
 
 /*
@@ -788,7 +993,7 @@ static BOOL cc_gen_InSIB2SIB(struct tagCCGenCodeContext* ctx, struct tagCCDagNod
  */
 static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTripleCode* triple)
 {
-	const int seqid = triple->_seqid;
+	const int curseqid = triple->_seqid;
 	struct tagCCASCode* as;
 	struct tagCCDagNode* result, *lhs, *rhs;
 	int tycode;
@@ -796,9 +1001,9 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 	switch (triple->_opcode)
 	{
 	case X86_BLKENTER:
-		block_enter(ctx, seqid, triple->_count); break;
+		block_enter(ctx, curseqid, triple->_count); break;
 	case X86_BLKLEAVE:
-		block_leave(ctx, seqid, triple->_count); break;
+		block_leave(ctx, curseqid, triple->_count); break;
 	case X86_LOCALVAR:
 		local_variable(ctx, triple->_target); break;
 	case X86_MOVERET:
@@ -816,11 +1021,12 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 		case IR_PTR:
 		{
 			struct tagCCASOperand src = { 0 };
-			if (!cc_gen_dag2operand(lhs, &src)) { return FALSE; }
-			if (!cc_gen_InInSIB2InSIB(ctx, lhs, &src, seqid)) { return FALSE; }
+
+			if (!cc_get_operand(lhs, &src)) { return FALSE; }
+			if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &src, curseqid)) { return FALSE; }
 			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
 			as->_dst._format = FormatReg;
-			as->_dst._tycode = src._tycode;
+			as->_dst._tycode = tycode;
 			as->_dst._u._regs[0] = X86_EAX;
 			as->_dst._u._regs[1] = X86_NIL;
 			as->_src = src;
@@ -831,11 +1037,12 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 		case IR_U64:
 		{
 			struct tagCCASOperand src = { 0 };
-			if (!cc_gen_dag2operand(lhs, &src)) { return FALSE; }
-			if (!cc_gen_InInSIB2InSIB(ctx, lhs, &src, seqid)) { return FALSE; }
+
+			if (!cc_get_operand(lhs, &src)) { return FALSE; }
+			if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &src, curseqid)) { return FALSE; }
 			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
 			as->_dst._format = FormatReg;
-			as->_dst._tycode = src._tycode;
+			as->_dst._tycode = tycode;
 			as->_dst._u._regs[0] = X86_EAX;
 			as->_dst._u._regs[1] = X86_EDX;
 			as->_src = src;
@@ -846,11 +1053,12 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 		case IR_F64:
 		{
 			struct tagCCASOperand src = { 0 };
-			if (!cc_gen_dag2operand(lhs, &src)) { return FALSE; }
-			if (!cc_gen_InInSIB2InSIB(ctx, lhs, &src, seqid)) { return FALSE; }
+
+			if (!cc_get_operand(lhs, &src)) { return FALSE; }
+			if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &src, curseqid)) { return FALSE; }
 			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
 			as->_dst._format = FormatReg;
-			as->_dst._tycode = src._tycode;
+			as->_dst._tycode = tycode;
 			as->_dst._u._regs[0] = X86_ST0;
 			as->_dst._u._regs[1] = X86_NIL;
 			as->_src = src;
@@ -880,17 +1088,18 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 			int regs[2] = { X86_NIL, X86_NIL };
 
 			if (lhs->_x._inregister) { return TRUE; }
-			if (!cc_gen_dag2operand(lhs, &src)) { return FALSE; }
-			if (!cc_gen_InInSIB2InSIB(ctx, lhs, &src, seqid)) { return FALSE; }
+			if (!cc_get_operand(lhs, &src)) { return FALSE; }
+			if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &src, curseqid)) { return FALSE; }
 
-			regs[0] = cc_reg_get(ctx, seqid, NORMAL_ADDR_X86REGS, lhs, 0);
+			regs[0] = cc_reg_alloc(ctx, curseqid, NORMAL_ADDR_X86REGS);
 			if (regs[0] == X86_NIL) { return FALSE; }
+			cc_reg_make_associated(regs[0], lhs, 0);
 			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+
 			as->_src = src;
 			as->_dst._format = FormatReg;
-			as->_dst._tycode = tycode;
+			as->_dst._tycode = IR_OPTY0(lhs->_op);
 			as->_dst._u._regs[0] = regs[0];
-			as->_dst._u._regs[1] = regs[1];
 			as->_count = lhs->_typesize;
 		}
 			break;
@@ -908,16 +1117,215 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 	case X86_OR:
 	case X86_XOR:
 	case X86_AND:
-	case X86_LSH:
-	case X86_RSH:
 	case X86_ADD:
 	case X86_SUB:
 	case X86_MUL:
+	{
+		struct tagCCASOperand dst = {0}, src = { 0 };
+		int regs[2] = { X86_NIL, X86_NIL };
+
+		result = triple->_result;
+		lhs = triple->_kids[0];
+		rhs = triple->_kids[1];
+
+		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
+		if (dst._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &dst, curseqid)) { return FALSE; }
+		if (lhs->_x._inregister && lhs->_lastref <= curseqid)
+		{
+			cc_reg_free(ctx, lhs->_x._loc._regs[0], curseqid);
+			cc_reg_make_associated(lhs->_x._loc._regs[0], result, 0);
+		}
+		else
+		{
+			/* load to register */
+			regs[0] = cc_reg_alloc(ctx, curseqid,  NORMAL_X86REGS);
+			if (regs[0] == X86_NIL) { return FALSE; }
+			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+
+			as->_src = dst;
+			as->_dst._format = FormatReg;
+			as->_dst._tycode = IR_OPTY0(lhs->_op);
+			as->_dst._u._regs[0] = regs[0];
+			as->_count = lhs->_typesize;
+
+			cc_reg_make_associated(regs[0], result, 0);
+		}
+		
+		assert(result->_x._inregister);
+		
+		if (!cc_get_operand(result, &dst)) { return FALSE; }
+		if (!cc_get_operand(rhs, &src)) { return FALSE; }
+		if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, rhs, &src, curseqid)) { return FALSE; }
+		if (!(as = emit_as(ctx, triple->_opcode))) { return FALSE; }
+		as->_dst = dst;
+		as->_src = src;
+	}
+		break;
+	case X86_LSH:
+	case X86_RSH:
+	{
+		struct tagCCASOperand dst = { 0 }, src = { 0 };
+		int regs[2] = { X86_NIL, X86_NIL };
+
+		result = triple->_result;
+		lhs = triple->_kids[0];
+		rhs = triple->_kids[1];
+
+		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
+		if (dst._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &dst, curseqid)) { return FALSE; }
+		if (!cc_get_operand(rhs, &src)) { return FALSE; }
+		if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, rhs, &src, curseqid)) { return FALSE; }
+
+		if (lhs->_x._inregister && lhs->_lastref <= curseqid && (lhs->_x._loc._regs[0] != X86_ECX || src._format == FormatImm))
+		{
+			cc_reg_free(ctx, lhs->_x._loc._regs[0], curseqid);
+			cc_reg_make_associated(lhs->_x._loc._regs[0], result, 0);
+		}
+		else
+		{
+			/* load to register */
+			regs[0] = cc_reg_alloc(ctx, curseqid, (REG_BIT(X86_EAX) | REG_BIT(X86_EBX) | REG_BIT(X86_EDX)));
+			if (regs[0] == X86_NIL) { return FALSE; }
+			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+
+			as->_src = dst;
+			as->_dst._format = FormatReg;
+			as->_dst._tycode = IR_OPTY0(lhs->_op);
+			as->_dst._u._regs[0] = regs[0];
+			as->_count = lhs->_typesize;
+
+			cc_reg_make_associated(regs[0], result, 0);
+		}
+		assert(result->_x._inregister);
+
+		if (src._format != FormatImm && (src._format != FormatReg || src._u._regs[0] != X86_ECX))
+		{
+			cc_reg_free(ctx, X86_ECX, curseqid);
+			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+			as->_dst = src;
+			as->_src._format = FormatReg;
+			as->_src._tycode = src._tycode;
+			as->_src._u._regs[0] = X86_ECX;
+
+			cc_reg_make_associated(X86_ECX, rhs, 0);
+		}
+
+		if (!cc_get_operand(result, &dst)) { return FALSE; }
+		if (!cc_get_operand(rhs, &src)) { return FALSE; }
+		if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+		as->_dst = dst;
+		as->_src = src;
+	}
+		break;
 	case X86_DIV:
 	case X86_MOD:
+	{
+		struct tagCCASOperand dst = { 0 }, src = { 0 };
+		int regs[2] = { X86_NIL, X86_NIL };
+
+		result = triple->_result;
+		lhs = triple->_kids[0];
+		rhs = triple->_kids[1];
+
+		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
+		if (dst._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &dst, curseqid)) { return FALSE; }
+		if (lhs->_x._inregister && (lhs->_x._loc._regs[0] == X86_EAX))
+		{
+			cc_reg_free(ctx, lhs->_x._loc._regs[0], curseqid);
+			cc_reg_make_associated(lhs->_x._loc._regs[0], result, 0);
+		}
+		else
+		{
+			/* load to register */
+			regs[0] = cc_reg_alloc(ctx, curseqid, REG_BIT(X86_EAX));
+			if (regs[0] == X86_NIL) { return FALSE; }
+			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+
+			as->_src = dst;
+			as->_dst._format = FormatReg;
+			as->_dst._tycode = IR_OPTY0(lhs->_op);
+			as->_dst._u._regs[0] = regs[0];
+			as->_count = lhs->_typesize;
+
+			cc_reg_make_associated(regs[0], result, 0);
+		}
+
+		assert(result->_x._inregister);
+		/* mark edx is using */
+		cc_reg_free(ctx, X86_EDX, curseqid);
+		cc_reg_markused(X86_EDX);
+
+		if (!cc_get_operand(rhs, &src)) { return FALSE; }
+		if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, rhs, &src, curseqid)) { return FALSE; }
+		if ((src._format != FormatReg) && (src._format != FormatInSIB))
+		{
+			/* load to register */
+			regs[0] = cc_reg_alloc(ctx, curseqid, NORMAL_X86REGS);
+			if (regs[0] == X86_NIL) { return FALSE; }
+			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+
+			as->_src = src;
+			as->_dst._format = FormatReg;
+			as->_dst._tycode = IR_OPTY0(rhs->_op);
+			as->_dst._u._regs[0] = regs[0];
+			as->_count = rhs->_typesize;
+
+			cc_reg_make_associated(regs[0], rhs, 0);
+		}
+
+		if (!cc_get_operand(result, &dst)) { return FALSE; }
+		if (!cc_get_operand(rhs, &src)) { return FALSE; }
+		if (!(as = emit_as(ctx, X86_DIV))) { return FALSE; }
+		as->_dst = dst;
+		as->_src = src;
+
+		cc_reg_unmarkused(X86_EDX);
+		if (triple->_opcode == X86_MOD)
+		{
+			cc_reg_make_unassociated(result->_x._loc._regs[0], result, 0);
+			cc_reg_make_associated(X86_EDX, result, 0);
+		}
+	}	
+		break;
+	
 	case X86_NEG:
 	case X86_NOT:
+	{
+		struct tagCCASOperand dst = { 0 }, src = { 0 };
+		int regs[2] = { X86_NIL, X86_NIL };
 
+		result = triple->_result;
+		lhs = triple->_kids[0];
+
+		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
+		if (dst._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &dst, curseqid)) { return FALSE; }
+		if (lhs->_x._inregister && lhs->_lastref <= curseqid)
+		{
+			cc_reg_free(ctx, lhs->_x._loc._regs[0], curseqid);
+			cc_reg_make_associated(lhs->_x._loc._regs[0], result, 0);
+		}
+		else
+		{
+			/* load to register */
+			regs[0] = cc_reg_alloc(ctx, curseqid, NORMAL_ADDR_X86REGS);
+			if (regs[0] == X86_NIL) { return FALSE; }
+			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+
+			as->_src = dst;
+			as->_dst._format = FormatReg;
+			as->_dst._tycode = IR_OPTY0(lhs->_op);
+			as->_dst._u._regs[0] = regs[0];
+			as->_count = lhs->_typesize;
+
+			cc_reg_make_associated(regs[0], result, 0);
+		}
+
+		assert(result->_x._inregister);
+		if (!cc_get_operand(result, &dst)) { return FALSE; }
+		if (!(as = emit_as(ctx, triple->_opcode))) { return FALSE; }
+		as->_dst = dst;
+	}
+		break;
 	case X86_JZ:
 	case X86_JNZ:
 	case X86_JE:
@@ -926,21 +1334,292 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 	case X86_JL:
 	case X86_JGE:
 	case X86_JLE:
-	case X86_JMP:
+	{
+		struct tagCCASOperand dst = { 0 }, src = { 0 };
+		int regs[2] = { X86_NIL, X86_NIL };
 
+		lhs = triple->_kids[0];
+		rhs = triple->_kids[1];
+
+		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
+		if (dst._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &dst, curseqid)) { return FALSE; }
+		if (!lhs->_x._inregister)
+		{
+			/* load to register */
+			regs[0] = cc_reg_alloc(ctx, curseqid, NORMAL_ADDR_X86REGS);
+			if (regs[0] == X86_NIL) { return FALSE; }
+			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+
+			as->_src = dst;
+			as->_dst._format = FormatReg;
+			as->_dst._tycode = IR_OPTY0(lhs->_op);
+			as->_dst._u._regs[0] = regs[0];
+			as->_count = lhs->_typesize;
+
+			cc_reg_make_associated(regs[0], lhs, 0);
+		}
+
+		assert(lhs->_x._inregister);
+
+		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
+		if (!cc_get_operand(rhs, &src)) { return FALSE; }
+		if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, rhs, &src, curseqid)) { return FALSE; }
+		if (!(as = emit_as(ctx, triple->_opcode))) { return FALSE; }
+		as->_dst = dst;
+		as->_src = src;
+		as->_target = triple->_target;
+	}
+		break;
+	case X86_JMP:
+	{
+		if (!(as = emit_as(ctx, X86_JMP))) { return FALSE; }
+		as->_target = triple->_target;
+	}
+		break;
 	/* convert */
 	case X86_CVT:
+	{
+		struct tagCCASOperand dst = { 0 }, src = { 0 };
+		int regs[2] = { X86_NIL, X86_NIL };
+		int dstty, srcty;
+		BOOL isdstfilled = FALSE;
+
+		lhs = triple->_result;
+		rhs = triple->_kids[0];
+		dstty = IR_OPTY0(lhs->_op);
+		srcty = IR_OPTY0(rhs->_op);
+
+		if (!cc_get_operand(rhs, &src)) { return FALSE; }
+		if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, rhs, &src, curseqid)) { return FALSE; }
+		if (src._format == FormatSIB && !cc_convert_insib_sib_imm_to_reg(ctx, rhs, &src, curseqid)) { return FALSE; }
+		if (cc_is_integer(dstty) && cc_is_integer(srcty))
+		{
+			if (dstty != IR_U64 && dstty != IR_S64)
+			{
+				/* alloc register */
+				regs[0] = cc_reg_alloc(ctx, curseqid, (REG_BIT(X86_EAX) | REG_BIT(X86_EBX) | REG_BIT(X86_ECX) | REG_BIT(X86_EDX)));
+				if (regs[0] == X86_NIL) { return FALSE; }
+				
+				cc_reg_make_associated(regs[0], lhs, 0);
+			}
+			else
+			{
+				/* alloc temp */
+				alloc_temporary_space(ctx, lhs, curseqid);
+				if (src._format != FormatReg && !cc_convert_insib_sib_imm_to_reg(ctx, rhs, &src, curseqid)) { return FALSE; }
+			}
+		}
+		else if (cc_is_integer(dstty) && !cc_is_integer(srcty))
+		{
+			if (dstty != IR_U64 && dstty != IR_S64)
+			{
+				cc_reg_free(ctx, X86_EAX, curseqid);
+				cc_reg_make_associated(X86_EAX, lhs, 0);
+			}
+			else
+			{
+				/* alloc temp */
+				alloc_temporary_space(ctx, lhs, curseqid);
+				assert(src._format == FormatReg || src._format == FormatInSIB);
+			}
+		}
+		else if (!cc_is_integer(dstty) && cc_is_integer(srcty))
+		{
+			/* alloc temp */
+			alloc_temporary_space(ctx, lhs, curseqid);
+
+			if (srcty != IR_U64 && srcty != IR_S64)
+			{
+				if (srcty == IR_S8 || srcty == IR_U8 || srcty == IR_S16 || srcty == IR_U16)
+				{
+					/* alloc intermediate register */
+					regs[0] = cc_reg_alloc(ctx, curseqid, (REG_BIT(X86_EAX) | REG_BIT(X86_EBX) | REG_BIT(X86_ECX) | REG_BIT(X86_EDX)));
+					if (regs[0] == X86_NIL) { return FALSE; }
+
+					if (!(as = emit_as(ctx, X86_CVT))) { return FALSE; }
+					as->_dst._format = FormatReg;
+					as->_dst._tycode = (srcty == IR_S8 || srcty == IR_S16) ? IR_S32 : IR_U32;
+					as->_dst._u._regs[0] = regs[0];
+					as->_dst._u._regs[1] = X86_NIL;
+					as->_src = src;
+
+					dst = as->_dst;
+					isdstfilled = TRUE;
+				}
+			}
+		}
+		else if (!cc_is_integer(dstty) && !cc_is_integer(srcty))
+		{
+			/* alloc temp */
+			alloc_temporary_space(ctx, lhs, curseqid);
+		}
+
+		if (!isdstfilled && !cc_get_operand(lhs, &dst)) { return FALSE; }
+		if (!(as = emit_as(ctx, X86_CVT))) { return FALSE; }
+		as->_dst = dst;
+		as->_src = src;
+	}
+		break;
 	case X86_MOV:
+	{
+		struct tagCCASOperand dst = { 0 }, src = { 0 };
+		int regs[2] = { X86_NIL, X86_NIL };
 
+		lhs = triple->_kids[0];
+		rhs = triple->_kids[1];
+
+		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
+		if (dst._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &dst, curseqid)) { return FALSE; }
+		if (!cc_convert_insib_reg_imm_to_sib(ctx, lhs, &dst, curseqid)) { return FALSE; }
+
+		if (!cc_get_operand(rhs, &src)) { return FALSE; }
+		if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, rhs, &src, curseqid)) { return FALSE; }
+		if (src._tycode == IR_BLK)
+		{
+			assert(src._format == FormatInSIB);
+
+			cc_reg_free(ctx, X86_EDI, curseqid);
+			cc_reg_free(ctx, X86_ESI, curseqid);
+			cc_reg_free(ctx, X86_ECX, curseqid);
+
+			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+			as->_dst = dst;
+			as->_src = src;
+			as->_count = rhs->_typesize;
+		}
+		else
+		{
+			if (src._format == FormatInSIB)
+			{
+				/* load to register */
+				regs[0] = cc_reg_alloc(ctx, curseqid, NORMAL_X86REGS);
+				if (regs[0] == X86_NIL) { return FALSE; }
+				cc_reg_make_associated(regs[0], rhs, 0);
+				if (src._tycode == IR_S64 || src._tycode == IR_U64)
+				{
+					regs[1] = cc_reg_alloc(ctx, curseqid, NORMAL_ADDR_X86REGS);
+					if (regs[1] == X86_NIL) { return FALSE; }
+					cc_reg_make_associated(regs[1], rhs, 1);
+				}
+
+				if (!cc_get_operand(rhs, &src)) { return FALSE; }
+			}
+			else if (src._format == FormatSIB)
+			{
+
+			}
+
+			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+			as->_dst = dst;
+			as->_src = src;
+
+			cc_reg_make_associated(rhs->_x._loc._regs[0], lhs, 0);
+			cc_reg_make_associated(rhs->_x._loc._regs[1], lhs, 1);
+		}
+	}
+		break;
 	case X86_PUSH:
-	case X86_CALL:
+	{
+		struct tagCCASOperand dst = { 0 };
+		int regs[2] = { X86_NIL, X86_NIL };
 
+		lhs = triple->_kids[0];
+	
+		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
+		if (dst._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &dst, curseqid)) { return FALSE; }
+		if (dst._tycode == IR_BLK)
+		{
+			assert(dst._format == FormatInSIB);
+
+			cc_reg_free(ctx, X86_EDI, curseqid);
+			cc_reg_free(ctx, X86_ESI, curseqid);
+			cc_reg_free(ctx, X86_ECX, curseqid);
+
+			if (!(as = emit_as(ctx, X86_PUSH))) { return FALSE; }
+			as->_dst = dst;
+			as->_count = lhs->_typesize;
+		}
+		else
+		{
+			if (dst._format == FormatSIB)
+			{
+				if (!cc_convert_insib_sib_imm_to_reg(ctx, lhs, &dst, curseqid)) { return FALSE; }
+			}
+
+			if (!(as = emit_as(ctx, X86_PUSH))) { return FALSE; }
+			as->_dst = dst;
+		}
+	}
+		break;
+	case X86_CALL:
+	{
+		struct tagCCASOperand dst = { 0 };
+
+		result = triple->_result;
+		lhs = triple->_kids[0];
+		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
+		if (dst._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &dst, curseqid)) { return FALSE; }
+
+		cc_reg_free(ctx, X86_EAX, curseqid);
+		cc_reg_free(ctx, X86_ECX, curseqid);
+		cc_reg_free(ctx, X86_EDX, curseqid);
+
+		if (!(as = emit_as(ctx, X86_CALL))) { return FALSE; }
+		as->_dst = dst;
+		as->_count = result->_argsbytes;
+
+		tycode = IR_OPTY0(result->_op);
+		switch (tycode)
+		{
+		case IR_S8:
+		case IR_U8:
+		case IR_S16:
+		case IR_U16:
+		case IR_S32:
+		case IR_U32:
+		case IR_PTR:
+			cc_reg_make_associated(X86_EAX, result, 0);
+			break;
+		case IR_S64:
+		case IR_U64:
+			cc_reg_make_associated(X86_EAX, result, 0);
+			cc_reg_make_associated(X86_EDX, result, 1);
+			break;
+		case IR_F32:
+		case IR_F64:
+			cc_reg_make_associated(X86_ST0, result, 0);
+			break;
+		default:
+			break;
+		}
+	}
+		break;
 	case X86_PROLOGUE:
 	case X86_EPILOGUE:
-
+	{
+		if (!(as = emit_as(ctx, triple->_opcode))) { return FALSE; }
+	}
+		break;
 	/* set memory to zero */
 	case X86_ZERO_M:
+	{
+		struct tagCCASOperand dst = { 0 };
+		
+		lhs = triple->_kids[0];
 
+		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
+		if (dst._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &dst, curseqid)) { return FALSE; }
+		if (!cc_convert_insib_reg_imm_to_sib(ctx, lhs, &dst, curseqid)) { return FALSE; }
+
+		cc_reg_free(ctx, X86_EDI, curseqid);
+		cc_reg_free(ctx, X86_EAX, curseqid);
+		cc_reg_free(ctx, X86_ECX, curseqid);
+
+		if (!(as = emit_as(ctx, X86_ZERO_M))) { return FALSE; }
+		as->_dst = dst;
+		as->_count = triple->_count;
+	}
+		break;
 	default:
 		assert(0); break;
 	}
@@ -968,6 +1647,7 @@ static BOOL cc_gen_asmcodes(struct tagCCGenCodeContext* ctx, FArray* caller, FAr
 		assert((p0->_type->_size & 0x03) == 0);
 		offset += p0->_type->_size;
 	} /* end for i */
+	ctx->_frame_base->_x._frame_offset = 0;
 
 	for (; triple; triple=triple->_next)
 	{

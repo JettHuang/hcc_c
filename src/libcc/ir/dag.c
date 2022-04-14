@@ -237,7 +237,7 @@ static BOOL cc_dag_translate_expr(FCCIRTree* expr, enum EMMArea where)
 		{
 			return FALSE;
 		}
-
+		expr->_dagnode->_argsbytes = expr->_u._f._argsbytes;
 		cc_dag_reset_pool();
 	}
 		break;

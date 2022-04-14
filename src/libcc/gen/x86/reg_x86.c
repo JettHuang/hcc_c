@@ -4,87 +4,133 @@
 
 #include "reg_x86.h"
 #include "ir/ir.h"
+#include "mm.h"
 
-extern int gen_get_tempspace(struct tagCCGenCodeContext* ctx, int seqid, struct tagCCDagNode* dag);
-extern BOOL emit_store_regvalue(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag, int tmpoffset);
 
-typedef struct tagRegisterEntry
-{
-	int _id;
-	int _isreserved : 1;
-	
+extern void alloc_temporary_space(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag, int curseqid);
+extern BOOL emit_store_r2staticmem(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag);
+
+typedef struct tagRegisterUser {
 	struct tagCCDagNode* _dag;
 	int _part;
-} FRegisterEntry;
 
-static struct tagRegisterEntry gRegisters[] = 
+	struct tagRegisterUser* _prev, * _next;
+} FRegisterUser;
+
+typedef struct tagRegisterDescriptor {
+	int _id;
+	int _isreserved : 1;
+	int _isusing : 1;
+	int _lastref;
+	struct tagRegisterUser* _link;
+} FRegisterDescriptor;
+
+static struct tagRegisterDescriptor gregisters[] =
 {
-	{ X86_NIL, 1, NULL, 0 },
-	{ X86_EAX, 0, NULL, 0 },
-	{ X86_EBX, 0, NULL, 0 },
-	{ X86_ECX, 0, NULL, 0 },
-	{ X86_EDX, 0, NULL, 0 },
-	{ X86_ESI, 0, NULL, 0 },
-	{ X86_EDI, 0, NULL, 0 },
-	{ X86_EBP, 1, NULL, 0 },
-	{ X86_ESP, 1, NULL, 0 },
-	{ X86_ST0, 1, NULL, 0 },
-	{ X86_ST1, 1, NULL, 0 }
+	{ X86_NIL, 1, 0, 0, NULL },
+	{ X86_EAX, 0, 0, 0, NULL },
+	{ X86_EBX, 0, 0, 0, NULL },
+	{ X86_ECX, 0, 0, 0, NULL },
+	{ X86_EDX, 0, 0, 0, NULL },
+	{ X86_ESI, 0, 0, 0, NULL },
+	{ X86_EDI, 0, 0, 0, NULL },
+	{ X86_EBP, 1, 0, 0, NULL },
+	{ X86_ESP, 1, 0, 0, NULL },
+	{ X86_ST0, 1, 0, 0, NULL },
+	{ X86_ST1, 1, 0, 0, NULL }
 };
 
-static BOOL cc_reg_spill(struct tagCCGenCodeContext* ctx, int seqid, int regid)
+/* get a free user entry */
+static struct tagRegisterUser* gfreelist = NULL;
+static struct tagRegisterUser* get_userentry()
 {
-	struct tagCCDagNode* dag;
-	int tmpoffset;
+	struct tagRegisterUser* head = NULL;
 
-	dag = gRegisters[regid]._dag;
-	assert(dag);
-	assert(dag->_x._inregister);
-
-	tmpoffset = gen_get_tempspace(ctx, seqid, dag);
-	if (!emit_store_regvalue(ctx, dag, tmpoffset))
+	if (!gfreelist)
 	{
-		return FALSE;
+		int count = 64;
+		
+		head = mm_alloc_area(sizeof(struct tagRegisterUser) * count, CC_MM_TEMPPOOL);
+		while (count-- > 0)
+		{
+			if (gfreelist) { gfreelist->_prev = head; }
+			head->_next = gfreelist;
+			head->_prev = NULL;
+			gfreelist = head;
+
+			head++;
+		}
 	}
 
-	cc_reg_put(dag->_x._loc._registers[0]);
-	cc_reg_put(dag->_x._loc._registers[1]);
-	dag->_x._inregister = 0;
-	dag->_x._intemporary = 1;
-	dag->_x._loc._temp_offset = tmpoffset;
+	if (gfreelist) 
+	{ 
+		head = gfreelist;
+		if (head->_next) { head->_next->_prev = NULL; }
+		gfreelist = head->_next;
+		
+		head->_next = NULL;
+	}
 
-	return TRUE;
+	return head;
+}
+
+static void put_userentry(struct tagRegisterUser* e)
+{
+	if (gfreelist) { gfreelist->_prev = e; }
+	e->_next = gfreelist;
+	e->_prev = NULL;
+	gfreelist = e;
+}
+
+static void calc_lastref(struct tagRegisterDescriptor* desc)
+{
+	struct tagRegisterUser* l;
+	int lastref;
+	
+	lastref = 0;
+	for (l = desc->_link; l; l = l->_next)
+	{
+		if (l->_dag->_lastref > lastref) {
+			lastref = l->_dag->_lastref;
+		}
+	} /* end for l */
+	
+	desc->_lastref = lastref;
 }
 
 void cc_reg_reset()
 {
 	int i;
 
-	for (i = 0; i < ELEMENTSCNT(gRegisters); ++i)
+	for (i = 0; i < ELEMENTSCNT(gregisters); ++i)
 	{
-		gRegisters[i]._dag = NULL;
-		gRegisters[i]._part = 0;
+		gregisters[i]._link = NULL;
 	}
+
+	gfreelist = NULL;
 }
 
-BOOL cc_reg_get(struct tagCCGenCodeContext* ctx, int seqid, int requires, struct tagCCDagNode* dag, int part)
+int cc_reg_alloc(struct tagCCGenCodeContext* ctx, int currseqid, int regflags)
 {
 	int candidates[X86_MAX];
-	int i, cnt;
-	FRegisterEntry* p, *result;
+	struct tagRegisterDescriptor* p, *result;
+	int i, count;
 
 	p = result = NULL;
-	for (i = cnt = 0; i < ELEMENTSCNT(gRegisters); ++i)
+	for (i = count = 0; i < ELEMENTSCNT(gregisters); ++i)
 	{
-		if (requires & REG_BIT(i))
+		if (regflags & REG_BIT(i))
 		{
-			p = &gRegisters[i];
-			if (!p->_dag || p->_dag->_lastref < seqid) {
-				result = p;
-				break;
-			}
-			else {
-				candidates[cnt++] = i;
+			p = &gregisters[i];
+			if (!p->_isusing) 
+			{
+				if (!p->_link || p->_lastref < currseqid) {
+					result = p;
+					break;
+				}
+				else {
+					candidates[count++] = i;
+				}
 			}
 		}
 	} /* end for i */
@@ -92,36 +138,168 @@ BOOL cc_reg_get(struct tagCCGenCodeContext* ctx, int seqid, int requires, struct
 	if (!result)
 	{
 		int lastref = 0;
-		for (i = 0; i < cnt; ++i)
+		for (i = 0; i < count; ++i)
 		{
-			p = &gRegisters[candidates[i]];
-			assert(p->_dag);
-			if (p->_dag->_lastref > lastref)
+			p = &gregisters[candidates[i]];
+			if (p->_lastref > lastref)
 			{
-				lastref = p->_dag->_lastref;
+				lastref = p->_lastref;
 				result = p;
 			}
 		}
 	}
 
-	if (!result) { return FALSE; }
-	if (result->_dag && result->_dag->_lastref > seqid)
-	{
-		if (!cc_reg_spill(ctx, seqid, result->_id)) {
-			return FALSE;
-		}
+	if (!result || !cc_reg_free(ctx, result->_id, currseqid)) { return X86_NIL; }
+
+	return result->_id;
+}
+
+/* spill data from register to memory */
+static BOOL cc_reg_spill(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag, int curseqid)
+{
+	assert(dag->_lastref > curseqid);
+	assert(!dag->_x._inmemory);
+	
+	if (!dag->_x._inmemory) {
+		alloc_temporary_space(ctx, dag, curseqid);
 	}
 
-	result->_dag = dag;
-	result->_part = part;
+	return emit_store_r2staticmem(ctx, dag);
+}
+
+/* free register */
+BOOL cc_reg_free(struct tagCCGenCodeContext* ctx, int regid, int curseqid)
+{
+	struct tagRegisterDescriptor* desc;
+	struct tagRegisterUser* l, *tmp;
+	struct tagCCDagNode* dag;
+
+	assert(regid > X86_NIL && regid <= X86_ST1);
+	desc = &gregisters[regid];
+	
+	for (l = desc->_link; l; )
+	{
+		dag = l->_dag;
+		if (dag->_lastref > curseqid && !dag->_x._inmemory) {
+			if (!cc_reg_spill(ctx, dag, curseqid)) { return FALSE; }
+		}
+
+		if (dag->_x._loc._regs[0] == regid && dag->_x._loc._regs[1] != X86_NIL) {
+			cc_reg_make_unassociated(dag->_x._loc._regs[1], dag, 1);
+		}
+		else if (dag->_x._loc._regs[1] == regid){
+			assert(dag->_x._loc._regs[0] != X86_NIL);
+			cc_reg_make_unassociated(dag->_x._loc._regs[0], dag, 0);
+		}
+		dag->_x._inregister = 0;
+		dag->_x._loc._regs[0] = X86_NIL;
+		dag->_x._loc._regs[1] = X86_NIL;
+
+		tmp = l;
+		l = l->_next;
+		put_userentry(tmp);
+	} /* end for */
+
+	desc->_link = NULL;
+	desc->_lastref = 0;
 	return TRUE;
 }
 
-BOOL cc_reg_put(int regid)
+/* discard register */
+void cc_reg_discard(int regid)
 {
-	assert(regid >= X86_NIL && regid <= X86_ST1);
-	gRegisters[regid]._dag = NULL;
-	gRegisters[regid]._part = 0;
+	struct tagRegisterDescriptor* desc;
+	struct tagRegisterUser* l, * tmp;
+	struct tagCCDagNode* dag;
 
+	assert(regid > X86_NIL && regid <= X86_ST1);
+	desc = &gregisters[regid];
+
+	for (l = desc->_link; l; )
+	{
+		dag = l->_dag;
+		if (dag->_x._loc._regs[0] == regid && dag->_x._loc._regs[1] != X86_NIL) {
+			cc_reg_make_unassociated(dag->_x._loc._regs[1], dag, 1);
+		}
+		else if (dag->_x._loc._regs[1] == regid) {
+			assert(dag->_x._loc._regs[0] != X86_NIL);
+			cc_reg_make_unassociated(dag->_x._loc._regs[0], dag, 0);
+		}
+		dag->_x._inregister = 0;
+		dag->_x._loc._regs[0] = X86_NIL;
+		dag->_x._loc._regs[1] = X86_NIL;
+
+		tmp = l;
+		l = l->_next;
+		put_userentry(tmp);
+	} /* end for */
+
+	desc->_link = NULL;
+	desc->_lastref = 0;
+}
+
+/* associate dag with register */
+BOOL cc_reg_make_associated(int regid, struct tagCCDagNode* dag, int part)
+{
+	struct tagRegisterDescriptor* desc;
+	struct tagRegisterUser* l;
+	
+	if (regid == X86_NIL) { return TRUE; }
+
+	assert(regid > X86_NIL && regid <= X86_ST1);
+	desc = &gregisters[regid];
+	if (!(l = get_userentry())) { return FALSE; }
+	l->_dag = dag;
+	l->_part = part;
+	l->_prev = NULL;
+	l->_next = desc->_link;
+	desc->_link = l;
+
+	dag->_x._inregister = 1;
+	dag->_x._loc._regs[part] = regid;
+	
+	calc_lastref(desc);
 	return TRUE;
+}
+
+BOOL cc_reg_make_unassociated(int regid, struct tagCCDagNode* dag, int part)
+{
+	struct tagRegisterDescriptor* desc;
+	struct tagRegisterUser* l;
+
+	if (regid == X86_NIL) { return TRUE; }
+
+	assert(regid > X86_NIL && regid <= X86_ST1);
+	desc = &gregisters[regid];
+	
+	for (l = desc->_link; l; l = l->_next)
+	{
+		if (l->_dag == dag && l->_part == part)
+		{
+			if (l->_next) { l->_next->_prev = l->_prev; }
+			if (l->_prev) { l->_prev->_next = l->_next; }
+			put_userentry(l);
+			break;
+		}
+	}  /* end for */
+	
+	assert(dag->_x._loc._regs[part] == regid);
+	dag->_x._inregister = 0;
+	dag->_x._loc._regs[part] = X86_NIL;
+
+	calc_lastref(desc);
+	return TRUE;
+}
+
+/* mark register used flags */
+void cc_reg_markused(int regid)
+{
+	assert(regid > X86_NIL && regid <= X86_ST1);
+	gregisters[regid]._isusing = 1;
+}
+
+void cc_reg_unmarkused(int regid)
+{
+	assert(regid > X86_NIL && regid <= X86_ST1);
+	gregisters[regid]._isusing = 0;
 }

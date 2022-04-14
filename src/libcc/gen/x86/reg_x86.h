@@ -32,9 +32,20 @@
 void cc_reg_reset();
 
 /* get register for dag */
-BOOL cc_reg_get(struct tagCCGenCodeContext* ctx, int seqid, int requires, struct tagCCDagNode* dag, int part);
+int cc_reg_alloc(struct tagCCGenCodeContext* ctx, int currseqid, int regflags);
 
-/* put register allocated for dag */
-BOOL cc_reg_put(int regid);
+/* free register */
+BOOL cc_reg_free(struct tagCCGenCodeContext* ctx, int regid, int curseqid);
+
+/* discard register */
+void cc_reg_discard(int regid);
+
+/* associate dag with register */
+BOOL cc_reg_make_associated(int regid, struct tagCCDagNode* dag, int part);
+BOOL cc_reg_make_unassociated(int regid, struct tagCCDagNode* dag, int part);
+
+/* mark register used flags */
+void cc_reg_markused(int regid);
+void cc_reg_unmarkused(int regid);
 
 #endif /* __CC_REG_X86_H__ */

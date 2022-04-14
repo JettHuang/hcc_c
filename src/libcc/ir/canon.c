@@ -161,7 +161,7 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
         break;
     case IR_CALL:
     {
-        int n;
+        int n, argsbytes;
         FCCIRTree* param, ** args, *ret;
 
         ret = expr->_u._f._ret;
@@ -174,15 +174,19 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
 		}
 
         /* evaluate arguments */
+        argsbytes = 0;
         for (--args; n > 0; --n, --args)
         {
             if (!cc_canon_expr_linearize(list, *args, NULL, NULL, &param, where)) { return FALSE; }
             assert(param);
             cc_ir_codelist_append(list, cc_ir_newcode_arg(param, where));
+
+            argsbytes += param->_ty->_size;
         }
         
         if (ret) { /* push receiver address as argument 0 */
             cc_ir_codelist_append(list, cc_ir_newcode_arg(ret, where));
+            argsbytes += ret->_ty->_size;
         }
         
 		/* evaluate function designator */
@@ -190,6 +194,7 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
 
         expr->_u._f._lhs = lhs;
         expr->_u._f._ret = ret;
+        expr->_u._f._argsbytes = argsbytes;
         cc_ir_codelist_append(list, cc_ir_newcode_expr(expr, where));
 
         result = expr;
