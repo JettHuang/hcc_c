@@ -969,6 +969,34 @@ static BOOL cc_is_integer(int tycode)
 	return FALSE;
 }
 
+static int cc_type_size(int tycode)
+{
+	switch (tycode)
+	{
+	case IR_S8:
+	case IR_U8:
+		return 1;
+	case IR_S16:
+	case IR_U16:
+		return 2;
+	case IR_S32:
+	case IR_U32:
+	case IR_PTR:
+		return 4;
+	case IR_S64:
+	case IR_U64:
+		return 8;
+	case IR_F32:
+		return 4;
+	case IR_F64:
+		return 8;
+	default:
+		break;
+	}
+
+	return 0;
+}
+
 /*
 	   Frame Layout
 		  ...
@@ -1117,11 +1145,8 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 	case X86_OR:
 	case X86_XOR:
 	case X86_AND:
-	case X86_ADD:
-	case X86_SUB:
-	case X86_MUL:
 	{
-		struct tagCCASOperand dst = {0}, src = { 0 };
+		struct tagCCASOperand dst = { 0 }, src = { 0 };
 		int regs[2] = { X86_NIL, X86_NIL };
 
 		result = triple->_result;
@@ -1130,37 +1155,269 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 
 		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
 		if (dst._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &dst, curseqid)) { return FALSE; }
-		if (lhs->_x._inregister && lhs->_lastref <= curseqid)
-		{
-			cc_reg_free(ctx, lhs->_x._loc._regs[0], curseqid);
-			cc_reg_make_associated(lhs->_x._loc._regs[0], result, 0);
-		}
-		else
-		{
-			/* load to register */
-			regs[0] = cc_reg_alloc(ctx, curseqid,  NORMAL_X86REGS);
-			if (regs[0] == X86_NIL) { return FALSE; }
-			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
-
-			as->_src = dst;
-			as->_dst._format = FormatReg;
-			as->_dst._tycode = IR_OPTY0(lhs->_op);
-			as->_dst._u._regs[0] = regs[0];
-			as->_count = lhs->_typesize;
-
-			cc_reg_make_associated(regs[0], result, 0);
-		}
-		
-		assert(result->_x._inregister);
-		
-		if (!cc_get_operand(result, &dst)) { return FALSE; }
 		if (!cc_get_operand(rhs, &src)) { return FALSE; }
 		if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, rhs, &src, curseqid)) { return FALSE; }
+
+		switch (IR_OPTY0(lhs->_op))
+		{
+		case IR_S32:
+		case IR_U32:
+		case IR_S64:
+		case IR_U64:
+			if (lhs->_x._inregister)
+			{
+				regs[0] = lhs->_x._loc._regs[0];
+				regs[1] = lhs->_x._loc._regs[1];
+				cc_reg_free(ctx, regs[0], curseqid);
+				cc_reg_make_associated(regs[0], result, 0);
+				if (regs[1] != X86_NIL) 
+				{
+					cc_reg_free(ctx, regs[1], curseqid);
+					cc_reg_make_associated(regs[1], result, 1);
+				}
+			}
+			else
+			{
+				/* load to register */
+				regs[0] = cc_reg_alloc(ctx, curseqid, NORMAL_X86REGS);
+				if (regs[0] == X86_NIL) { return FALSE; }
+				if (IR_OPTY0(lhs->_op) == IR_S64 || IR_OPTY0(lhs->_op) == IR_U64)
+				{
+					regs[1] = cc_reg_alloc(ctx, curseqid, NORMAL_X86REGS);
+					if (regs[1] == X86_NIL) { return FALSE; }
+				}
+
+				if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+
+				as->_src = dst;
+				as->_dst._format = FormatReg;
+				as->_dst._tycode = IR_OPTY0(lhs->_op);
+				as->_dst._u._regs[0] = regs[0];
+				as->_dst._u._regs[1] = regs[1];
+				as->_count = lhs->_typesize;
+
+				dst = as->_dst;
+				cc_reg_make_associated(regs[0], result, 0);
+				cc_reg_make_associated(regs[1], result, 1);
+				if (lhs == rhs) { src = dst; }
+			}
+			break;
+		default:
+			assert(0); break;
+		}
+
 		if (!(as = emit_as(ctx, triple->_opcode))) { return FALSE; }
 		as->_dst = dst;
 		as->_src = src;
 	}
 		break;
+	case X86_ADD:
+	case X86_SUB:
+	{
+		struct tagCCASOperand dst = { 0 }, src = { 0 };
+		int regs[2] = { X86_NIL, X86_NIL };
+
+		result = triple->_result;
+		lhs = triple->_kids[0];
+		rhs = triple->_kids[1];
+
+		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
+		if (dst._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &dst, curseqid)) { return FALSE; }
+		if (!cc_get_operand(rhs, &src)) { return FALSE; }
+		if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, rhs, &src, curseqid)) { return FALSE; }
+
+		switch (IR_OPTY0(lhs->_op))
+		{
+		case IR_S32:
+		case IR_U32:
+		case IR_S64:
+		case IR_U64:
+		{
+			if (lhs->_x._inregister)
+			{
+				regs[0] = lhs->_x._loc._regs[0];
+				regs[1] = lhs->_x._loc._regs[1];
+				cc_reg_free(ctx, regs[0], curseqid);
+				cc_reg_make_associated(regs[0], result, 0);
+				if (regs[1] != X86_NIL)
+				{
+					cc_reg_free(ctx, regs[1], curseqid);
+					cc_reg_make_associated(regs[1], result, 1);
+				}
+			}
+			else
+			{
+				/* load to register */
+				regs[0] = cc_reg_alloc(ctx, curseqid, NORMAL_X86REGS);
+				if (regs[0] == X86_NIL) { return FALSE; }
+				if (IR_OPTY0(lhs->_op) == IR_S64 || IR_OPTY0(lhs->_op) == IR_U64)
+				{
+					regs[1] = cc_reg_alloc(ctx, curseqid, NORMAL_X86REGS);
+					if (regs[1] == X86_NIL) { return FALSE; }
+				}
+
+				if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+
+				as->_src = dst;
+				as->_dst._format = FormatReg;
+				as->_dst._tycode = IR_OPTY0(lhs->_op);
+				as->_dst._u._regs[0] = regs[0];
+				as->_dst._u._regs[1] = regs[1];
+				as->_count = lhs->_typesize;
+
+				dst = as->_dst;
+				cc_reg_make_associated(regs[0], result, 0);
+				cc_reg_make_associated(regs[1], result, 1);
+				if (lhs == rhs) { src = dst; }
+			}
+		}
+			break;
+		case IR_F32:
+		case IR_F64:
+		{
+			if (lhs->_x._inregister)
+			{
+				regs[0] = lhs->_x._loc._regs[0];
+				assert(regs[0] == X86_ST0);
+				cc_reg_free(ctx, regs[0], curseqid);
+				cc_reg_make_associated(regs[0], result, 0);
+			}
+			else
+			{
+				/* load to register */
+				if (rhs->_x._inregister && !rhs->_x._inmemory) {
+					if (!cc_reg_spill(ctx, rhs, curseqid)) { return FALSE; }
+				}
+				cc_reg_free(ctx, X86_ST0, curseqid);
+				cc_reg_make_associated(X86_ST0, result, 0);
+
+				if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+
+				as->_src = dst;
+				as->_dst._format = FormatReg;
+				as->_dst._tycode = IR_OPTY0(lhs->_op);
+				as->_dst._u._regs[0] = X86_ST0;
+				as->_count = lhs->_typesize;
+
+				if (!cc_get_operand(result, &dst)) { return FALSE; }
+				if (lhs == rhs) { src = dst; }
+			}
+		}
+			break;
+		default:
+			assert(0); break;
+		}
+
+		if (!(as = emit_as(ctx, triple->_opcode))) { return FALSE; }
+		as->_dst = dst;
+		as->_src = src;
+	}
+		break;
+	case X86_MUL:
+	{
+		struct tagCCASOperand dst = { 0 }, src = { 0 };
+		int regs[2] = { X86_NIL, X86_NIL };
+
+		result = triple->_result;
+		lhs = triple->_kids[0];
+		rhs = triple->_kids[1];
+
+		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
+		if (dst._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &dst, curseqid)) { return FALSE; }
+		if (!cc_get_operand(rhs, &src)) { return FALSE; }
+		if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, rhs, &src, curseqid)) { return FALSE; }
+
+		switch (IR_OPTY0(lhs->_op))
+		{
+		case IR_S32:
+		case IR_U32:
+		{
+			if (lhs->_x._inregister)
+			{
+				regs[0] = lhs->_x._loc._regs[0];
+				cc_reg_free(ctx, regs[0], curseqid);
+				cc_reg_make_associated(regs[0], result, 0);
+			}
+			else
+			{
+				/* load to register */
+				regs[0] = cc_reg_alloc(ctx, curseqid, NORMAL_X86REGS);
+				if (regs[0] == X86_NIL) { return FALSE; }
+
+				if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+				as->_src = dst;
+				as->_dst._format = FormatReg;
+				as->_dst._tycode = IR_OPTY0(lhs->_op);
+				as->_dst._u._regs[0] = regs[0];
+				as->_count = lhs->_typesize;
+
+				dst = as->_dst;
+				cc_reg_make_associated(regs[0], result, 0);
+				if (lhs == rhs) { src = dst; }
+			}
+		}
+			break;
+		case IR_S64:
+		case IR_U64:
+		{
+			if (!(as = emit_as(ctx, X86_PUSH))) { return FALSE; }
+			as->_dst = src;
+			as->_count = rhs->_typesize;
+
+			if (!(as = emit_as(ctx, X86_PUSH))) { return FALSE; }
+			as->_dst = dst;
+			as->_count = lhs->_typesize;
+
+			cc_reg_free(ctx, X86_EAX, curseqid);
+			cc_reg_free(ctx, X86_ECX, curseqid);
+			cc_reg_free(ctx, X86_EDX, curseqid);
+
+			cc_reg_make_associated(X86_EAX, result, 0);
+			cc_reg_make_associated(X86_EDX, result, 1);
+		}
+			break;
+		case IR_F32:
+		case IR_F64:
+		{
+			if (lhs->_x._inregister)
+			{
+				regs[0] = lhs->_x._loc._regs[0];
+				assert(regs[0] == X86_ST0);
+				cc_reg_free(ctx, regs[0], curseqid);
+				cc_reg_make_associated(regs[0], result, 0);
+			}
+			else
+			{
+				/* load to register */
+				if (rhs->_x._inregister && !rhs->_x._inmemory) {
+					if (!cc_reg_spill(ctx, rhs, curseqid)) { return FALSE; }
+				}
+				cc_reg_free(ctx, X86_ST0, curseqid);
+				cc_reg_make_associated(X86_ST0, result, 0);
+
+				if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+
+				as->_src = dst;
+				as->_dst._format = FormatReg;
+				as->_dst._tycode = IR_OPTY0(lhs->_op);
+				as->_dst._u._regs[0] = X86_ST0;
+				as->_count = lhs->_typesize;
+
+				if (!cc_get_operand(result, &dst)) { return FALSE; }
+				if (lhs == rhs) { src = dst; }
+			}
+		}
+			break;
+		default:
+			assert(0); break;
+		}
+
+		if (!(as = emit_as(ctx, triple->_opcode))) { return FALSE; }
+		as->_dst = dst;
+		as->_src = src;
+	}
+		break;
+
 	case X86_LSH:
 	case X86_RSH:
 	{
@@ -1176,43 +1433,87 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 		if (!cc_get_operand(rhs, &src)) { return FALSE; }
 		if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, rhs, &src, curseqid)) { return FALSE; }
 
-		if (lhs->_x._inregister && lhs->_lastref <= curseqid && (lhs->_x._loc._regs[0] != X86_ECX || src._format == FormatImm))
+		switch (IR_OPTY0(lhs->_op))
 		{
-			cc_reg_free(ctx, lhs->_x._loc._regs[0], curseqid);
-			cc_reg_make_associated(lhs->_x._loc._regs[0], result, 0);
-		}
-		else
+		case IR_S32:
+		case IR_U32:
 		{
-			/* load to register */
-			regs[0] = cc_reg_alloc(ctx, curseqid, (REG_BIT(X86_EAX) | REG_BIT(X86_EBX) | REG_BIT(X86_EDX)));
-			if (regs[0] == X86_NIL) { return FALSE; }
-			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+			if (lhs->_x._inregister && lhs->_lastref <= curseqid && (lhs->_x._loc._regs[0] != X86_ECX || src._format == FormatImm))
+			{
+				regs[0] = lhs->_x._loc._regs[0];
+				cc_reg_free(ctx, regs[0], curseqid);
+				cc_reg_make_associated(regs[0], result, 0);
+			}
+			else
+			{
+				/* load to register */
+				regs[0] = cc_reg_alloc(ctx, curseqid, (REG_BIT(X86_EAX) | REG_BIT(X86_EBX) | REG_BIT(X86_EDX)));
+				if (regs[0] == X86_NIL) { return FALSE; }
+				if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
 
+				as->_src = dst;
+				as->_dst._format = FormatReg;
+				as->_dst._tycode = IR_OPTY0(lhs->_op);
+				as->_dst._u._regs[0] = regs[0];
+				as->_count = lhs->_typesize;
+
+				cc_reg_make_associated(regs[0], result, 0);
+			}
+			assert(result->_x._inregister);
+
+			if (src._format != FormatImm && (src._format != FormatReg || src._u._regs[0] != X86_ECX))
+			{
+				cc_reg_free(ctx, X86_ECX, curseqid);
+				if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+				as->_dst = src;
+				as->_src._format = FormatReg;
+				as->_src._tycode = src._tycode;
+				as->_src._u._regs[0] = X86_ECX;
+
+				cc_reg_make_associated(X86_ECX, rhs, 0);
+			}
+
+			if (!cc_get_operand(result, &dst)) { return FALSE; }
+			if (!cc_get_operand(rhs, &src)) { return FALSE; }
+		}
+			break;
+		case IR_S64:
+		case IR_U64:
+		{
+			if (rhs->_x._inregister && (rhs->_x._loc._regs[0] == X86_EAX || rhs->_x._loc._regs[0] == X86_EDX) 
+				&& !rhs->_x._inmemory) {
+				if (!cc_reg_spill(ctx, rhs, curseqid)) { return FALSE; }
+			}
+
+			cc_reg_free(ctx, X86_EAX, curseqid);
+			cc_reg_free(ctx, X86_ECX, curseqid);
+			cc_reg_free(ctx, X86_EDX, curseqid);
+
+			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
 			as->_src = dst;
 			as->_dst._format = FormatReg;
 			as->_dst._tycode = IR_OPTY0(lhs->_op);
-			as->_dst._u._regs[0] = regs[0];
+			as->_dst._u._regs[0] = X86_EAX;
+			as->_dst._u._regs[1] = X86_EDX;
 			as->_count = lhs->_typesize;
 
-			cc_reg_make_associated(regs[0], result, 0);
-		}
-		assert(result->_x._inregister);
-
-		if (src._format != FormatImm && (src._format != FormatReg || src._u._regs[0] != X86_ECX))
-		{
-			cc_reg_free(ctx, X86_ECX, curseqid);
 			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
-			as->_dst = src;
-			as->_src._format = FormatReg;
-			as->_src._tycode = src._tycode;
-			as->_src._u._regs[0] = X86_ECX;
+			as->_src = src;
+			as->_dst._format = FormatReg;
+			as->_dst._tycode = IR_OPTY0(rhs->_op);
+			as->_dst._u._regs[0] = X86_ECX;
+			as->_dst._u._regs[1] = X86_NIL;
+			as->_count = rhs->_typesize;
 
-			cc_reg_make_associated(X86_ECX, rhs, 0);
+			cc_reg_make_associated(X86_EAX, result, 0);
+			cc_reg_make_associated(X86_EDX, result, 1);
+		}
+			break;
+		default:
+			assert(0);  break;
 		}
 
-		if (!cc_get_operand(result, &dst)) { return FALSE; }
-		if (!cc_get_operand(rhs, &src)) { return FALSE; }
-		if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+		if (!(as = emit_as(ctx, triple->_opcode))) { return FALSE; }
 		as->_dst = dst;
 		as->_src = src;
 	}
@@ -1229,66 +1530,166 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 
 		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
 		if (dst._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &dst, curseqid)) { return FALSE; }
-		if (lhs->_x._inregister && (lhs->_x._loc._regs[0] == X86_EAX))
-		{
-			cc_reg_free(ctx, lhs->_x._loc._regs[0], curseqid);
-			cc_reg_make_associated(lhs->_x._loc._regs[0], result, 0);
-		}
-		else
-		{
-			/* load to register */
-			regs[0] = cc_reg_alloc(ctx, curseqid, REG_BIT(X86_EAX));
-			if (regs[0] == X86_NIL) { return FALSE; }
-			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
-
-			as->_src = dst;
-			as->_dst._format = FormatReg;
-			as->_dst._tycode = IR_OPTY0(lhs->_op);
-			as->_dst._u._regs[0] = regs[0];
-			as->_count = lhs->_typesize;
-
-			cc_reg_make_associated(regs[0], result, 0);
-		}
-
-		assert(result->_x._inregister);
-		/* mark edx is using */
-		cc_reg_free(ctx, X86_EDX, curseqid);
-		cc_reg_markused(X86_EDX);
-
 		if (!cc_get_operand(rhs, &src)) { return FALSE; }
 		if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, rhs, &src, curseqid)) { return FALSE; }
-		if ((src._format != FormatReg) && (src._format != FormatInSIB))
-		{
-			/* load to register */
-			regs[0] = cc_reg_alloc(ctx, curseqid, NORMAL_X86REGS);
-			if (regs[0] == X86_NIL) { return FALSE; }
-			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
 
-			as->_src = src;
-			as->_dst._format = FormatReg;
-			as->_dst._tycode = IR_OPTY0(rhs->_op);
-			as->_dst._u._regs[0] = regs[0];
+		switch (IR_OPTY0(lhs->_op))
+		{
+		case IR_S32:
+		case IR_U32:
+		{
+			/* mark eax edx is using */
+			cc_reg_markused(X86_EDX);
+			cc_reg_markused(X86_EAX);
+
+			if (!cc_convert_insib_sib_imm_to_reg(ctx, rhs, &src, curseqid)) { return FALSE; }
+			if (!lhs->_x._inregister || (lhs->_x._loc._regs[0] != X86_EAX))
+			{
+				cc_reg_free(ctx, X86_EAX, curseqid);
+				if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+
+				as->_src = dst;
+				as->_dst._format = FormatReg;
+				as->_dst._tycode = IR_OPTY0(lhs->_op);
+				as->_dst._u._regs[0] = X86_EAX;
+				as->_count = lhs->_typesize;
+				
+				dst = as->_dst;
+			}
+
+			cc_reg_free(ctx, X86_EDX, curseqid);
+			cc_reg_unmarkused(X86_EDX);
+			cc_reg_unmarkused(X86_EAX);
+			
+			cc_reg_make_associated(triple->_opcode == X86_DIV ? X86_EAX : X86_EDX, result, 0);
+		}
+			break;
+		case IR_S64:
+		case IR_U64:
+		{
+			if (!(as = emit_as(ctx, X86_PUSH))) { return FALSE; }
+			as->_dst = src;
 			as->_count = rhs->_typesize;
 
-			cc_reg_make_associated(regs[0], rhs, 0);
+			if (!(as = emit_as(ctx, X86_PUSH))) { return FALSE; }
+			as->_dst = dst;
+			as->_count = lhs->_typesize;
+
+			cc_reg_free(ctx, X86_EAX, curseqid);
+			cc_reg_free(ctx, X86_ECX, curseqid);
+			cc_reg_free(ctx, X86_EDX, curseqid);
+
+			cc_reg_make_associated(X86_EAX, result, 0);
+			cc_reg_make_associated(X86_EDX, result, 1);
+		}
+			break;
+		case IR_F32:
+		case IR_F64:
+		{
+			if (lhs->_x._inregister)
+			{
+				regs[0] = lhs->_x._loc._regs[0];
+				assert(regs[0] == X86_ST0);
+				cc_reg_free(ctx, regs[0], curseqid);
+				cc_reg_make_associated(regs[0], result, 0);
+			}
+			else
+			{
+				/* load to register */
+				if (rhs->_x._inregister && !rhs->_x._inmemory) {
+					if (!cc_reg_spill(ctx, rhs, curseqid)) { return FALSE; }
+				}
+				cc_reg_free(ctx, X86_ST0, curseqid);
+				cc_reg_make_associated(X86_ST0, result, 0);
+
+				if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+
+				as->_src = dst;
+				as->_dst._format = FormatReg;
+				as->_dst._tycode = IR_OPTY0(lhs->_op);
+				as->_dst._u._regs[0] = X86_ST0;
+				as->_count = lhs->_typesize;
+
+				dst = as->_dst;
+				if (lhs == rhs) { src = dst; }
+			}
+		}
+		break;
+		default:
+			assert(0); break;
 		}
 
-		if (!cc_get_operand(result, &dst)) { return FALSE; }
-		if (!cc_get_operand(rhs, &src)) { return FALSE; }
-		if (!(as = emit_as(ctx, X86_DIV))) { return FALSE; }
+		if (!(as = emit_as(ctx, triple->_opcode))) { return FALSE; }
 		as->_dst = dst;
 		as->_src = src;
-
-		cc_reg_unmarkused(X86_EDX);
-		if (triple->_opcode == X86_MOD)
-		{
-			cc_reg_make_unassociated(result->_x._loc._regs[0], result, 0);
-			cc_reg_make_associated(X86_EDX, result, 0);
-		}
-	}	
+	}
 		break;
-	
 	case X86_NEG:
+	{
+		struct tagCCASOperand dst = { 0 }, src = { 0 };
+		int regs[2] = { X86_NIL, X86_NIL };
+
+		result = triple->_result;
+		lhs = triple->_kids[0];
+
+		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
+		if (dst._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &dst, curseqid)) { return FALSE; }
+
+		switch (IR_OPTY0(lhs->_op))
+		{
+		case IR_S32:
+		case IR_U32:
+		case IR_S64:
+		case IR_U64:
+		{
+			if (!cc_convert_insib_sib_imm_to_reg(ctx, lhs, &dst, curseqid)) { return FALSE; }
+
+			regs[0] = lhs->_x._loc._regs[0];
+			regs[1] = lhs->_x._loc._regs[1];
+		
+			cc_reg_free(ctx, regs[0], curseqid);
+			cc_reg_make_associated(regs[0], result, 0);
+			if (regs[1] != X86_NIL) {
+				cc_reg_free(ctx, regs[1], curseqid);
+				cc_reg_make_associated(regs[1], result, 1);
+			}
+		}
+		break;
+		case IR_F32:
+		case IR_F64:
+		{
+			if (lhs->_x._inregister)
+			{
+				regs[0] = lhs->_x._loc._regs[0];
+				assert(regs[0] == X86_ST0);
+				cc_reg_free(ctx, regs[0], curseqid);
+				cc_reg_make_associated(regs[0], result, 0);
+			}
+			else
+			{
+				/* load to register */
+				cc_reg_free(ctx, X86_ST0, curseqid);
+				if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+
+				as->_src = dst;
+				as->_dst._format = FormatReg;
+				as->_dst._tycode = IR_OPTY0(lhs->_op);
+				as->_dst._u._regs[0] = X86_ST0;
+				as->_count = lhs->_typesize;
+
+				dst = as->_dst;
+				cc_reg_make_associated(X86_ST0, result, 0);
+			}
+		}
+		break;
+		default:
+			assert(0); break;
+		}
+
+		if (!(as = emit_as(ctx, triple->_opcode))) { return FALSE; }
+		as->_dst = dst;
+	}
+		break;
 	case X86_NOT:
 	{
 		struct tagCCASOperand dst = { 0 }, src = { 0 };
@@ -1299,35 +1700,34 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 
 		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
 		if (dst._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &dst, curseqid)) { return FALSE; }
-		if (lhs->_x._inregister && lhs->_lastref <= curseqid)
+		
+		switch (IR_OPTY0(lhs->_op))
 		{
-			cc_reg_free(ctx, lhs->_x._loc._regs[0], curseqid);
-			cc_reg_make_associated(lhs->_x._loc._regs[0], result, 0);
-		}
-		else
+		case IR_S32:
+		case IR_U32:
+		case IR_S64:
+		case IR_U64:
 		{
-			/* load to register */
-			regs[0] = cc_reg_alloc(ctx, curseqid, NORMAL_ADDR_X86REGS);
-			if (regs[0] == X86_NIL) { return FALSE; }
-			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+			if (!cc_convert_insib_sib_imm_to_reg(ctx, lhs, &dst, curseqid)) { return FALSE; }
+			regs[0] = lhs->_x._loc._regs[0];
+			regs[1] = lhs->_x._loc._regs[1];
 
-			as->_src = dst;
-			as->_dst._format = FormatReg;
-			as->_dst._tycode = IR_OPTY0(lhs->_op);
-			as->_dst._u._regs[0] = regs[0];
-			as->_count = lhs->_typesize;
-
+			cc_reg_free(ctx, regs[0], curseqid);
 			cc_reg_make_associated(regs[0], result, 0);
+			if (regs[1] != X86_NIL) {
+				cc_reg_free(ctx, regs[1], curseqid);
+				cc_reg_make_associated(regs[1], result, 1);
+			}
+		}
+			break;
+		default:
+			assert(0); break;
 		}
 
-		assert(result->_x._inregister);
-		if (!cc_get_operand(result, &dst)) { return FALSE; }
 		if (!(as = emit_as(ctx, triple->_opcode))) { return FALSE; }
 		as->_dst = dst;
 	}
 		break;
-	case X86_JZ:
-	case X86_JNZ:
 	case X86_JE:
 	case X86_JNE:
 	case X86_JG:
@@ -1343,27 +1743,56 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 
 		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
 		if (dst._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &dst, curseqid)) { return FALSE; }
-		if (!lhs->_x._inregister)
-		{
-			/* load to register */
-			regs[0] = cc_reg_alloc(ctx, curseqid, NORMAL_ADDR_X86REGS);
-			if (regs[0] == X86_NIL) { return FALSE; }
-			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
-
-			as->_src = dst;
-			as->_dst._format = FormatReg;
-			as->_dst._tycode = IR_OPTY0(lhs->_op);
-			as->_dst._u._regs[0] = regs[0];
-			as->_count = lhs->_typesize;
-
-			cc_reg_make_associated(regs[0], lhs, 0);
-		}
-
-		assert(lhs->_x._inregister);
-
-		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
 		if (!cc_get_operand(rhs, &src)) { return FALSE; }
 		if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, rhs, &src, curseqid)) { return FALSE; }
+
+		switch (IR_OPTY0(lhs->_op))
+		{
+		case IR_S32:
+		case IR_U32:
+		case IR_S64:
+		case IR_U64:
+		{
+			if (!cc_convert_insib_sib_imm_to_reg(ctx, lhs, &dst, curseqid)) { return FALSE; }
+			assert(lhs->_x._inregister);
+		}
+			break;
+		case IR_F32:
+		case IR_F64:
+		{
+			cc_reg_free(ctx, X86_EAX, curseqid);
+
+			if (lhs->_x._inregister)
+			{
+				regs[0] = lhs->_x._loc._regs[0];
+				assert(regs[0] == X86_ST0);
+			}
+			else
+			{
+				/* load to register */
+				if (rhs->_x._inregister && !rhs->_x._inmemory) {
+					if (!cc_reg_spill(ctx, rhs, curseqid)) { return FALSE; }
+				}
+				cc_reg_free(ctx, X86_ST0, curseqid);
+				cc_reg_make_associated(X86_ST0, lhs, 0);
+
+				if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+
+				as->_src = dst;
+				as->_dst._format = FormatReg;
+				as->_dst._tycode = IR_OPTY0(lhs->_op);
+				as->_dst._u._regs[0] = X86_ST0;
+				as->_count = lhs->_typesize;
+
+				dst = as->_dst;
+				if (lhs == rhs) { src = dst; }
+			}
+		}
+			break;
+		default:
+			assert(0); break;
+		}
+
 		if (!(as = emit_as(ctx, triple->_opcode))) { return FALSE; }
 		as->_dst = dst;
 		as->_src = src;
@@ -1404,24 +1833,27 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 			}
 			else
 			{
-				/* alloc temp */
-				alloc_temporary_space(ctx, lhs, curseqid);
+				cc_reg_free(ctx, X86_EAX, curseqid);
+				cc_reg_free(ctx, X86_EDX, curseqid);
+
+				cc_reg_make_associated(X86_EAX, lhs, 0);
+				cc_reg_make_associated(X86_EDX, lhs, 1);
+
 				if (src._format != FormatReg && !cc_convert_insib_sib_imm_to_reg(ctx, rhs, &src, curseqid)) { return FALSE; }
 			}
 		}
 		else if (cc_is_integer(dstty) && !cc_is_integer(srcty))
 		{
-			if (dstty != IR_U64 && dstty != IR_S64)
+			cc_reg_free(ctx, X86_EAX, curseqid);
+			cc_reg_make_associated(X86_EAX, lhs, 0);
+
+			if (dstty == IR_U64 || dstty == IR_S64)
 			{
-				cc_reg_free(ctx, X86_EAX, curseqid);
-				cc_reg_make_associated(X86_EAX, lhs, 0);
+				cc_reg_free(ctx, X86_EDX, curseqid);
+				cc_reg_make_associated(X86_EDX, lhs, 1);
 			}
-			else
-			{
-				/* alloc temp */
-				alloc_temporary_space(ctx, lhs, curseqid);
-				assert(src._format == FormatReg || src._format == FormatInSIB);
-			}
+
+			assert(src._format == FormatReg || src._format == FormatInSIB);
 		}
 		else if (!cc_is_integer(dstty) && cc_is_integer(srcty))
 		{
@@ -1489,24 +1921,9 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 		}
 		else
 		{
-			if (src._format == FormatInSIB)
+			if (src._format == FormatInSIB || src._format == FormatSIB)
 			{
-				/* load to register */
-				regs[0] = cc_reg_alloc(ctx, curseqid, NORMAL_X86REGS);
-				if (regs[0] == X86_NIL) { return FALSE; }
-				cc_reg_make_associated(regs[0], rhs, 0);
-				if (src._tycode == IR_S64 || src._tycode == IR_U64)
-				{
-					regs[1] = cc_reg_alloc(ctx, curseqid, NORMAL_ADDR_X86REGS);
-					if (regs[1] == X86_NIL) { return FALSE; }
-					cc_reg_make_associated(regs[1], rhs, 1);
-				}
-
-				if (!cc_get_operand(rhs, &src)) { return FALSE; }
-			}
-			else if (src._format == FormatSIB)
-			{
-
+				if (!cc_convert_insib_sib_imm_to_reg(ctx, rhs, &src, curseqid)) { return FALSE; }
 			}
 
 			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
@@ -1563,6 +1980,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 		cc_reg_free(ctx, X86_EAX, curseqid);
 		cc_reg_free(ctx, X86_ECX, curseqid);
 		cc_reg_free(ctx, X86_EDX, curseqid);
+		cc_reg_free(ctx, X86_ST0, curseqid);
 
 		if (!(as = emit_as(ctx, X86_CALL))) { return FALSE; }
 		as->_dst = dst;
@@ -1654,6 +2072,1295 @@ static BOOL cc_gen_asmcodes(struct tagCCGenCodeContext* ctx, FArray* caller, FAr
 		if (!cc_gen_triple_to_x86(ctx, triple)) { return FALSE; }
 	} /* end for */
 
+	return TRUE;
+}
+
+/* get operand text */
+static const char* cc_operand_text(const struct tagCCASOperand* operand, const int part, char szbuf[256])
+{
+	switch (operand->_format)
+	{
+	case FormatReg:
+	{
+		const char* reg0;
+
+		reg0 = cc_reg_name(operand->_u._regs[part], cc_type_size(operand->_tycode));
+		sprintf(szbuf, "%s", reg0);
+	}
+		break;
+	case FormatImm:
+	{
+		uint64_t k = operand->_u._imm->_u._cnstval._uint;
+		int32_t val;
+
+		if (cc_type_size(operand->_tycode) < 8) {
+			val = (int)k;
+		} else if (part == 0) {
+			val = (int)k;
+		} else {
+			val = (int)(k >> 32);
+		}
+
+		sprintf(szbuf, "%d", val);
+	}
+		break;
+	case FormatSIB:
+	case FormatInSIB:
+	{
+		int displacement2, len;
+
+		len = 0;
+		displacement2 = part * 4;
+		if (operand->_u._sib._displacement) {
+			len += sprintf(szbuf + len, "%s", operand->_u._sib._displacement->_x._name);
+		}
+		if (operand->_u._sib._basereg) {
+			len += sprintf(szbuf + len, len ? "+%s" : "%s", cc_reg_name(operand->_u._sib._basereg, 4));
+		}
+		displacement2 += operand->_u._sib._displacement2;
+		if (displacement2 != 0) {
+			len += sprintf(szbuf + len, "%+d", displacement2);
+		}
+	}
+		break;
+	default:
+		assert(0); break;
+	}
+
+	return szbuf;
+}
+
+/* output assemble text to file */
+static BOOL cc_output_asmcodes(struct tagCCContext* ctx, struct tagCCSymbol* func, struct tagCCGenCodeContext* genctx)
+{
+	const struct tagCCASCode* as;
+	const struct tagCCASOperand* dst, * src;
+	struct tagCCASOperand tmp;
+	char szdst[256], szsrc[256];
+
+	fprintf(ctx->_outfp, ";function %s begin\n", func->_name);
+	fprintf(ctx->_outfp, "%s:\n", func->_x._name);
+	for (as = genctx->_asmlist._head; as; as = as->_next)
+	{
+		dst = &as->_dst;
+		src = &as->_src;
+
+		switch (as->_opcode)
+		{
+		case X86_LABEL:
+			fprintf(ctx->_outfp, "%s:\n", as->_target->_x._name); break;
+		case X86_OR:
+		case X86_XOR:
+		case X86_AND:
+		{
+			const char* opname;
+
+			switch (as->_opcode)
+			{
+			case X86_OR:
+				opname = "or"; break;
+			case X86_XOR:
+				opname = "xor"; break;
+			case X86_AND:
+				opname = "and"; break;
+			default:
+				opname = NULL; break;
+			}
+			switch (dst->_tycode)
+			{
+			case IR_S32:
+			case IR_U32:
+			case IR_PTR:
+				if (as->_src._format == FormatInSIB) {
+					fprintf(ctx->_outfp, "%s %s, dword ptr [%s]\n", opname, cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+				}
+				else {
+					fprintf(ctx->_outfp, "%s %s, %s\n", opname, cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+				}
+				break;
+			case IR_S64:
+			case IR_U64:
+				if (as->_src._format == FormatInSIB) {
+					fprintf(ctx->_outfp, "%s %s, dword ptr [%s]\n", opname, cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+					fprintf(ctx->_outfp, "%s %s, dword ptr [%s]\n", opname, cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc));
+				}
+				else {
+					fprintf(ctx->_outfp, "%s %s, %s\n", opname, cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+					fprintf(ctx->_outfp, "%s %s, %s\n", opname, cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc));
+				}
+				break;
+			default:
+				assert(0); break;
+			}
+		}
+			break;
+		case X86_ADD:
+		{
+			switch (dst->_tycode)
+			{
+			case IR_S32:
+			case IR_U32:
+			case IR_PTR:
+				if (as->_src._format == FormatInSIB) {
+					fprintf(ctx->_outfp, "add %s, dword ptr [%s] \n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+				}
+				else {
+					fprintf(ctx->_outfp, "add %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+				}
+				break;
+			case IR_S64:
+			case IR_U64:
+				if (as->_src._format == FormatInSIB) {
+					fprintf(ctx->_outfp, "add %s, dword ptr [%s] \n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+					fprintf(ctx->_outfp, "adc %s, dword ptr [%s] \n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc));
+				}
+				else {
+					fprintf(ctx->_outfp, "add %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+					fprintf(ctx->_outfp, "adc %s, %s\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc));
+				}
+				break;
+			case IR_F32:
+				if (as->_src._format == FormatInSIB) {
+					fprintf(ctx->_outfp, "fadd dword ptr [%s] \n", cc_operand_text(src, 0, szsrc));
+				}
+				else {
+					fprintf(ctx->_outfp, "fadd st(0), %s\n", cc_operand_text(src, 0, szsrc));
+				}
+				break;
+			case IR_F64:
+				if (as->_src._format == FormatInSIB) {
+					fprintf(ctx->_outfp, "fadd qword ptr [%s] \n", cc_operand_text(src, 0, szsrc));
+				}
+				else {
+					fprintf(ctx->_outfp, "fadd st(0), %s\n", cc_operand_text(src, 0, szsrc));
+				}
+				break;
+			default:
+				assert(0); break;
+			}
+		}
+			break;
+		case X86_SUB:
+		{
+			switch (dst->_tycode)
+			{
+			case IR_S32:
+			case IR_U32:
+			case IR_PTR:
+				if (as->_src._format == FormatInSIB) {
+					fprintf(ctx->_outfp, "sub %s, dword ptr [%s] \n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+				}
+				else {
+					fprintf(ctx->_outfp, "sub %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+				}
+				break;
+			case IR_S64:
+			case IR_U64:
+				if (as->_src._format == FormatInSIB) {
+					fprintf(ctx->_outfp, "sub %s, dword ptr [%s] \n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+					fprintf(ctx->_outfp, "sbb %s, dword ptr [%s] \n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc));
+				}
+				else {
+					fprintf(ctx->_outfp, "add %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+					fprintf(ctx->_outfp, "sbb %s, %s\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc));
+				}
+				break;
+			case IR_F32:
+				if (as->_src._format == FormatInSIB) {
+					fprintf(ctx->_outfp, "fsub dword ptr [%s] \n", cc_operand_text(src, 0, szsrc));
+				}
+				else {
+					fprintf(ctx->_outfp, "fsub st(0), %s\n", cc_operand_text(src, 0, szsrc));
+				}
+				break;
+			case IR_F64:
+				if (as->_src._format == FormatInSIB) {
+					fprintf(ctx->_outfp, "fsub qword ptr [%s] \n", cc_operand_text(src, 0, szsrc));
+				}
+				else {
+					fprintf(ctx->_outfp, "fsub st(0), %s\n", cc_operand_text(src, 0, szsrc));
+				}
+				break;
+			default:
+				assert(0); break;
+			}
+		}
+			break;
+		case X86_MUL:
+		{
+			switch (dst->_tycode)
+			{
+			case IR_S32:
+			case IR_U32:
+			case IR_PTR:
+				if (as->_src._format == FormatInSIB) {
+					fprintf(ctx->_outfp, "imul %s, dword ptr [%s] \n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+				}
+				else {
+					fprintf(ctx->_outfp, "imul %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+				}
+				break;
+			case IR_S64:
+			case IR_U64:
+				fprintf(ctx->_outfp, "call __allmul\n");
+				break;
+			case IR_F32:
+				if (as->_src._format == FormatInSIB) {
+					fprintf(ctx->_outfp, "fmul dword ptr [%s] \n", cc_operand_text(src, 0, szsrc));
+				}
+				else {
+					fprintf(ctx->_outfp, "fmul st(0), %s\n", cc_operand_text(src, 0, szsrc));
+				}
+				break;
+			case IR_F64:
+				if (as->_src._format == FormatInSIB) {
+					fprintf(ctx->_outfp, "fmul qword ptr [%s] \n", cc_operand_text(src, 0, szsrc));
+				}
+				else {
+					fprintf(ctx->_outfp, "fmul st(0), %s\n", cc_operand_text(src, 0, szsrc));
+				}
+				break;
+			default:
+				assert(0); break;
+			}
+		}
+			break;
+		case X86_LSH:
+		{
+			switch (dst->_tycode)
+			{
+			case IR_S32:
+			case IR_U32:
+			case IR_PTR:
+				if (as->_src._format == FormatReg) {
+					fprintf(ctx->_outfp, "shl %s, cl\n", cc_operand_text(dst, 0, szdst));
+				}
+				else {
+					fprintf(ctx->_outfp, "shl %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+				}
+				break;
+			case IR_S64:
+			case IR_U64:
+				fprintf(ctx->_outfp, "call __allshl\n");
+				break;
+			default:
+				assert(0); break;
+			}
+		}
+		break;
+		case X86_RSH:
+		{
+			switch (dst->_tycode)
+			{
+			case IR_S32:
+				if (as->_src._format == FormatReg) {
+					fprintf(ctx->_outfp, "sar %s, cl\n", cc_operand_text(dst, 0, szdst));
+				}
+				else {
+					fprintf(ctx->_outfp, "sar %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+				}
+				break;
+			case IR_U32:
+				if (as->_src._format == FormatReg) {
+					fprintf(ctx->_outfp, "shr %s, cl\n", cc_operand_text(dst, 0, szdst));
+				}
+				else {
+					fprintf(ctx->_outfp, "shr %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+				}
+				break;
+			case IR_S64:
+				fprintf(ctx->_outfp, "call __allshr\n");
+				break;
+			case IR_U64:
+				fprintf(ctx->_outfp, "call __aullshr\n");
+				break;
+			default:
+				assert(0); break;
+			}
+		}
+			break;
+		case X86_DIV:
+		case X86_MOD:
+		{
+			switch (dst->_tycode)
+			{
+			case IR_S32:
+				if (as->_src._format == FormatInSIB) { /* edx:eax / %1 => eax:quotient edx:remainder */
+					fprintf(ctx->_outfp, "cdq\n idiv dword ptr [%s]\n", cc_operand_text(src, 0, szsrc));
+				}
+				else {
+					fprintf(ctx->_outfp, "cdq\n idiv %s\n", cc_operand_text(src, 0, szsrc));
+				}
+				break;
+			case IR_U32:
+				if (as->_src._format == FormatInSIB) {
+					fprintf(ctx->_outfp, "xor edx, edx\n div dword ptr [%s]\n", cc_operand_text(src, 0, szsrc));
+				}
+				else {
+					fprintf(ctx->_outfp, "xor edx, edx\n div %s\n", cc_operand_text(src, 0, szsrc));
+				}
+				break;
+			case IR_S64:
+				if (as->_opcode == X86_DIV) {
+					fprintf(ctx->_outfp, "call __alldiv\n");
+				}
+				else {
+					fprintf(ctx->_outfp, "call __allrem\n");
+				}
+				break;
+			case IR_U64:
+				if (as->_opcode == X86_DIV) {
+					fprintf(ctx->_outfp, "call __aulldiv\n");
+				}
+				else {
+					fprintf(ctx->_outfp, "call __aullrem\n");
+				}
+				break;
+			case IR_F32:
+				if (as->_src._format == FormatInSIB) {
+					fprintf(ctx->_outfp, "fdiv dword ptr [%s] \n", cc_operand_text(src, 0, szsrc));
+				}
+				else {
+					fprintf(ctx->_outfp, "fdiv st(0), %s\n", cc_operand_text(src, 0, szsrc));
+				}
+				break;
+			case IR_F64:
+				if (as->_src._format == FormatInSIB) {
+					fprintf(ctx->_outfp, "fdiv qword ptr [%s] \n", cc_operand_text(src, 0, szsrc));
+				}
+				else {
+					fprintf(ctx->_outfp, "fdiv st(0), %s\n", cc_operand_text(src, 0, szsrc));
+				}
+				break;
+			default:
+				assert(0); break;
+			}
+		}
+			break;
+		case X86_NEG:
+		{
+			switch (dst->_tycode)
+			{
+			case IR_S32:
+			case IR_U32:
+				if (dst->_format == FormatInSIB) { 
+					fprintf(ctx->_outfp, "neg dword ptr [%s]\n", cc_operand_text(dst, 0, szdst));
+				}
+				else {
+					fprintf(ctx->_outfp, "neg %s\n", cc_operand_text(dst, 0, szdst));
+				}
+				break;
+			case IR_S64:
+			case IR_U64:
+				assert(dst->_format == FormatReg);
+				cc_operand_text(dst, 0, szdst);
+				cc_operand_text(dst, 1, szsrc);
+				fprintf(ctx->_outfp, "neg %s\n adc %s, 0\n neg %s", szdst, szsrc, szsrc);
+				break;
+			case IR_F32: /* Complements the sign bit of ST(0) */
+			case IR_F64:
+				fprintf(ctx->_outfp, "fchs\n");
+				break;
+			default:
+				assert(0); break;
+			}
+		}
+			break;
+		case X86_NOT:
+		{
+			switch (dst->_tycode)
+			{
+			case IR_S32:
+			case IR_U32:
+				fprintf(ctx->_outfp, "not %s\n", cc_operand_text(dst, 0, szdst));
+				break;
+			case IR_S64:
+			case IR_U64:
+				fprintf(ctx->_outfp, "not %s\n not %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(dst, 1, szsrc));
+				break;
+			default:
+				assert(0); break;
+			}
+		}
+			break;
+		case X86_JE:
+		{
+			switch (dst->_tycode)
+			{
+			case IR_S32:
+			case IR_U32:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n je %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n je %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_S64:
+			case IR_U64:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jne @F\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n je %s\n @@:\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n jne @F\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+					fprintf(ctx->_outfp, "cmp %s, %s\n je %s\n @@:\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_F32:
+				fprintf(ctx->_outfp, "fcom dword ptr[%s]\n fnstsw ax\n test ah, 44h\n jnp %s\n", cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				break;
+			case IR_F64:
+				fprintf(ctx->_outfp, "fcom qword ptr[%s]\n fnstsw ax\n test ah, 44h\n jnp %s\n", cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				break;
+			default:
+				assert(0); break;
+			}
+		}
+			break;
+		case X86_JNE:
+		{
+			switch (dst->_tycode)
+			{
+			case IR_S32:
+			case IR_U32:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jne %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n jne %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_S64:
+			case IR_U64:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jne %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jne %s\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n jne %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+					fprintf(ctx->_outfp, "cmp %s, %s\n jne %s\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_F32:
+				fprintf(ctx->_outfp, "fcom dword ptr[%s]\n fnstsw ax\n test ah, 44h\n jp %s\n", cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				break;
+			case IR_F64:
+				fprintf(ctx->_outfp, "fcom qword ptr[%s]\n fnstsw ax\n test ah, 44h\n jp %s\n", cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				break;
+			default:
+				assert(0); break;
+			}
+		}
+			break;
+		case X86_JG:
+		{
+			switch (dst->_tycode)
+			{
+			case IR_S32:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jg %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n jg %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_U32:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n ja %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n ja %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_S64:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jl @F\n jg %s\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n ja %s\n @@:\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n jl @F\n jg %s\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+					fprintf(ctx->_outfp, "cmp %s, %s\n ja %s\n @@:\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_U64:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n ja %s\n jb @F\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n ja %s\n @@:\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n ja %s\n jb @F\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+					fprintf(ctx->_outfp, "cmp %s, %s\n ja %s\n @@:\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_F32:
+				fprintf(ctx->_outfp, "fcom dword ptr[%s]\n fnstsw ax\n test ah, 1h\n jne %s\n", cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				break;
+			case IR_F64:
+				fprintf(ctx->_outfp, "fcom qword ptr[%s]\n fnstsw ax\n test ah, 1h\n jne %s\n", cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				break;
+			default:
+				assert(0); break;
+			}
+		}
+			break;
+		case X86_JL:
+		{
+			switch (dst->_tycode)
+			{
+			case IR_S32:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jl %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n jl %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_U32:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jb %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n jb %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_S64:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jl %s\n jg @F\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jb %s\n @@:\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n jl %s\n jg @F\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+					fprintf(ctx->_outfp, "cmp %s, %s\n jb %s\n @@:\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_U64:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jb %s\n ja @F\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jb %s\n @@:\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n jb %s\n ja @F\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+					fprintf(ctx->_outfp, "cmp %s, %s\n jb %s\n @@:\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_F32:
+				fprintf(ctx->_outfp, "fcom dword ptr[%s]\n fnstsw ax\n test ah, 41h\n jp %s\n", cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				break;
+			case IR_F64:
+				fprintf(ctx->_outfp, "fcom qword ptr[%s]\n fnstsw ax\n test ah, 41h\n jp %s\n", cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				break;
+			default:
+				assert(0); break;
+			}
+		}
+			break;
+		case X86_JGE:
+		{
+			switch (dst->_tycode)
+			{
+			case IR_S32:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jge %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n jge %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_U32:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jae %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n jae %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_S64:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jg %s\n jl @F\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jae %s\n @@:\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n jg %s\n jl @F\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+					fprintf(ctx->_outfp, "cmp %s, %s\n jae %s\n @@:\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_U64:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n ja %s\n jb @F\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jae %s\n @@:\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n ja %s\n jb @F\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+					fprintf(ctx->_outfp, "cmp %s, %s\n jae %s\n @@:\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_F32:
+				fprintf(ctx->_outfp, "fcom dword ptr[%s]\n fnstsw ax\n test ah, 41h\n jne %s\n", cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				break;
+			case IR_F64:
+				fprintf(ctx->_outfp, "fcom qword ptr[%s]\n fnstsw ax\n test ah, 41h\n jne %s\n", cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				break;
+			default:
+				assert(0); break;
+			}
+		}
+			break;
+		case X86_JLE:
+		{
+			switch (dst->_tycode)
+			{
+			case IR_S32:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jle %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n jle %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_U32:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jbe %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n jbe %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_S64:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jl %s\n jg @F\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jbe %s\n @@:\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n jl %s\n jg @F\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+					fprintf(ctx->_outfp, "cmp %s, %s\n jbe %s\n @@:\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_U64:
+				if (src->_format == FormatInSIB) {
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jb %s\n ja @F\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+					fprintf(ctx->_outfp, "cmp %s, dword ptr[%s]\n jbe %s\n @@:\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				else {
+					fprintf(ctx->_outfp, "cmp %s, %s\n jb %s\n ja @F\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc), as->_target->_x._name);
+					fprintf(ctx->_outfp, "cmp %s, %s\n jbe %s\n @@:\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				}
+				break;
+			case IR_F32:
+				fprintf(ctx->_outfp, "fcom dword ptr[%s]\n fnstsw ax\n test ah, 5h\n jp %s\n", cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				break;
+			case IR_F64:
+				fprintf(ctx->_outfp, "fcom qword ptr[%s]\n fnstsw ax\n test ah, 5h\n jp %s\n", cc_operand_text(src, 0, szsrc), as->_target->_x._name);
+				break;
+			default:
+				assert(0); break;
+			}
+		}
+			break;
+		case X86_JMP:
+			fprintf(ctx->_outfp, "jmp %s\n", as->_target->_x._name); 
+			break;
+		case X86_CVT: /* convert */
+		{
+			#define MAKE_CVT_ID(dstty, srcty, dstfmt, srcfmt)		(((dstty) << 24) | ((srcty) << 16) | ((dstfmt) << 8) | ((srcfmt)))
+
+			switch (MAKE_CVT_ID(dst->_tycode, src->_tycode, dst->_format, src->_format))
+			{
+			case MAKE_CVT_ID(IR_S8, IR_S8, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U8, IR_S8, FormatReg, FormatReg):
+				assert(0);
+			case MAKE_CVT_ID(IR_S16, IR_S8, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U16, IR_S8, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_S32, IR_S8, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U32, IR_S8, FormatReg, FormatReg):
+				fprintf(ctx->_outfp, "movsx %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S64, IR_S8, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U64, IR_S8, FormatReg, FormatReg):
+				fprintf(ctx->_outfp, "movsx %s, %s\ncdq\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S8, IR_S8, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U8, IR_S8, FormatReg, FormatInSIB):
+				assert(0);
+			case MAKE_CVT_ID(IR_S16, IR_S8, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U16, IR_S8, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_S32, IR_S8, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U32, IR_S8, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "movsx %s, byte ptr [%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S64, IR_S8, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U64, IR_S8, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "movsx %s, byte ptr [%s]\ncdq\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+
+			case MAKE_CVT_ID(IR_S8, IR_U8, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U8, IR_U8, FormatReg, FormatReg):
+				assert(0);
+			case MAKE_CVT_ID(IR_S16, IR_U8, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U16, IR_U8, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_S32, IR_U8, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U32, IR_U8, FormatReg, FormatReg):
+				fprintf(ctx->_outfp, "movzx %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S64, IR_U8, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U64, IR_U8, FormatReg, FormatReg):
+				fprintf(ctx->_outfp, "movzx %s, %s\ncdq\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+
+			case MAKE_CVT_ID(IR_S8, IR_U8, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U8, IR_U8, FormatReg, FormatInSIB):
+				assert(0);
+			case MAKE_CVT_ID(IR_S16, IR_U8, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U16, IR_U8, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_S32, IR_U8, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U32, IR_U8, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "movzx %s, byte ptr [%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S64, IR_U8, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U64, IR_U8, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "movzx %s, byte ptr [%s]\ncdq\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+
+			case MAKE_CVT_ID(IR_S8, IR_S16, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U8, IR_S16, FormatReg, FormatReg):
+				tmp = *src; tmp._tycode = IR_S8;
+				fprintf(ctx->_outfp, "mov %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(&tmp, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S16, IR_S16, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U16, IR_S16, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_S32, IR_S16, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U32, IR_S16, FormatReg, FormatReg):
+				fprintf(ctx->_outfp, "movsx %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S64, IR_S16, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U64, IR_S16, FormatReg, FormatReg):
+				fprintf(ctx->_outfp, "movsx %s, %s\ncdq\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S8, IR_S16, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U8, IR_S16, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "mov %s, byte ptr[%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S16, IR_S16, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U16, IR_S16, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_S32, IR_S16, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U32, IR_S16, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "movsx %s, word ptr [%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S64, IR_S16, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U64, IR_S16, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "movsx %s, word ptr [%s]\ncdq\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+
+			case MAKE_CVT_ID(IR_S8, IR_U16, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U8, IR_U16, FormatReg, FormatReg):
+				tmp = *src; tmp._tycode = IR_S8;
+				fprintf(ctx->_outfp, "mov %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(&tmp, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S16, IR_U16, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U16, IR_U16, FormatReg, FormatReg):
+				assert(0);
+			case MAKE_CVT_ID(IR_S32, IR_U16, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U32, IR_U16, FormatReg, FormatReg):
+				fprintf(ctx->_outfp, "movzx %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S64, IR_U16, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U64, IR_U16, FormatReg, FormatReg):
+				fprintf(ctx->_outfp, "movzx %s, %s\ncdq\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+
+			case MAKE_CVT_ID(IR_S8, IR_U16, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U8, IR_U16, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "mov %s, byte ptr[%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S16, IR_U16, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U16, IR_U16, FormatReg, FormatInSIB):
+				assert(0);
+			case MAKE_CVT_ID(IR_S32, IR_U16, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U32, IR_U16, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "movzx %s, word ptr [%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S64, IR_U16, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U64, IR_U16, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "movzx %s, word ptr [%s]\ncdq\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+
+			case MAKE_CVT_ID(IR_S8,  IR_S32, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U8,  IR_S32, FormatReg, FormatReg):
+				tmp = *src; tmp._tycode = IR_S8;
+				fprintf(ctx->_outfp, "mov %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(&tmp, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S16, IR_S32, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U16, IR_S32, FormatReg, FormatReg):
+				tmp = *src; tmp._tycode = IR_S16;
+				fprintf(ctx->_outfp, "mov %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(&tmp, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S32, IR_S32, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U32, IR_S32, FormatReg, FormatReg):
+				assert(0);
+			case MAKE_CVT_ID(IR_S64, IR_S32, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U64, IR_S32, FormatReg, FormatReg):
+				fprintf(ctx->_outfp, "mov %s, %s\ncdq\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_F32, IR_S32, FormatInSIB, FormatReg):
+				fprintf(ctx->_outfp, "push %s\n fild dword ptr [esp]\n fstp dword ptr [%s]\n add esp, 4\n", 
+					cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst)); 
+				break;
+			case MAKE_CVT_ID(IR_F32, IR_S32, FormatInSIB, FormatInSIB):
+				fprintf(ctx->_outfp, "push dword ptr[%s]\n fild dword ptr [esp]\n fstp dword ptr [%s]\n add esp, 4\n",
+					cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst));
+				break;
+			case MAKE_CVT_ID(IR_F64, IR_S32, FormatInSIB, FormatReg):
+				fprintf(ctx->_outfp, "push %s\n fild dword ptr [esp]\n fstp qword ptr [%s]\n add esp, 4\n",
+					cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst));
+				break;
+			case MAKE_CVT_ID(IR_F64, IR_S32, FormatInSIB, FormatInSIB):
+				fprintf(ctx->_outfp, "push dword ptr[%s]\n fild dword ptr [esp]\n fstp qword ptr [%s]\n add esp, 4\n",
+					cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst));
+				break;
+
+			case MAKE_CVT_ID(IR_S8, IR_S32, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U8, IR_S32, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "mov %s, byte ptr[%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S16, IR_S32, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U16, IR_S32, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "mov %s, word ptr[%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S32, IR_S32, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U32, IR_S32, FormatReg, FormatInSIB):
+				assert(0);
+			case MAKE_CVT_ID(IR_S64, IR_S32, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U64, IR_S32, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "mov %s, dword ptr[%s]\ncdq\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+
+			case MAKE_CVT_ID(IR_S8, IR_U32, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U8, IR_U32, FormatReg, FormatReg):
+				tmp = *src; tmp._tycode = IR_S8;
+				fprintf(ctx->_outfp, "mov %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(&tmp, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S16, IR_U32, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U16, IR_U32, FormatReg, FormatReg):
+				tmp = *src; tmp._tycode = IR_S16;
+				fprintf(ctx->_outfp, "mov %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(&tmp, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S32, IR_U32, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U32, IR_U32, FormatReg, FormatReg):
+				assert(0);
+			case MAKE_CVT_ID(IR_S64, IR_U32, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U64, IR_U32, FormatReg, FormatReg):
+				fprintf(ctx->_outfp, "mov %s, %s\nxor edx, edx\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_F32, IR_U32, FormatInSIB, FormatReg):
+				fprintf(ctx->_outfp, "push 0\npush %s\n fild qword ptr [esp]\n fstp dword ptr [%s]\n add esp, 8\n",
+					cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst));
+				break;
+			case MAKE_CVT_ID(IR_F32, IR_U32, FormatInSIB, FormatInSIB):
+				fprintf(ctx->_outfp, "push 0\npush dword ptr[%s]\n fild qword ptr [esp]\n fstp dword ptr [%s]\n add esp, 8\n",
+					cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst));
+				break;
+			case MAKE_CVT_ID(IR_F64, IR_U32, FormatInSIB, FormatReg):
+				fprintf(ctx->_outfp, "push 0\npush %s\n fild qword ptr [esp]\n fstp qword ptr [%s]\n add esp, 8\n",
+					cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst));
+				break;
+			case MAKE_CVT_ID(IR_F64, IR_U32, FormatInSIB, FormatInSIB):
+				fprintf(ctx->_outfp, "push 0\npush dword ptr[%s]\n fild qword ptr [esp]\n fstp qword ptr [%s]\n add esp, 8\n",
+					cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst));
+				break;
+
+			case MAKE_CVT_ID(IR_S8, IR_U32, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U8, IR_U32, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "mov %s, byte ptr[%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S16, IR_U32, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U16, IR_U32, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "mov %s, word ptr[%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S32, IR_U32, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U32, IR_U32, FormatReg, FormatInSIB):
+				assert(0);
+			case MAKE_CVT_ID(IR_S64, IR_U32, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U64, IR_U32, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "mov %s, dword ptr[%s]\nxor edx, edx\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+
+			case MAKE_CVT_ID(IR_S8, IR_S64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U8, IR_S64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_S8, IR_U64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U8, IR_U64, FormatReg, FormatReg):
+				tmp = *src; tmp._tycode = IR_S8;
+				fprintf(ctx->_outfp, "mov %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(&tmp, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S16, IR_S64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U16, IR_S64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_S16, IR_U64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U16, IR_U64, FormatReg, FormatReg):
+				tmp = *src; tmp._tycode = IR_S16;
+				fprintf(ctx->_outfp, "mov %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(&tmp, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S32, IR_S64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U32, IR_S64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_S32, IR_U64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U32, IR_U64, FormatReg, FormatReg):
+				fprintf(ctx->_outfp, "mov %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S64, IR_S64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U64, IR_S64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_S64, IR_U64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U64, IR_U64, FormatReg, FormatReg):
+				assert(0);
+			case MAKE_CVT_ID(IR_F32, IR_S64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_F64, IR_S64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_F32, IR_U64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_F64, IR_U64, FormatReg, FormatReg):
+				assert(0);
+			case MAKE_CVT_ID(IR_F32, IR_S64, FormatInSIB, FormatReg):
+			case MAKE_CVT_ID(IR_F32, IR_U64, FormatInSIB, FormatReg):
+				fprintf(ctx->_outfp, "push %s\npush %s\n fild qword ptr [esp]\n fstp dword ptr [%s]\n add esp, 8\n",
+					cc_operand_text(src, 1, szsrc), cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst));
+				break;
+			case MAKE_CVT_ID(IR_F32, IR_S64, FormatInSIB, FormatInSIB):
+			case MAKE_CVT_ID(IR_F32, IR_U64, FormatInSIB, FormatInSIB):
+				fprintf(ctx->_outfp, "fild qword ptr [%s]\n fstp dword ptr [%s]\n",
+					cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst));
+				break;
+			case MAKE_CVT_ID(IR_F64, IR_S64, FormatInSIB, FormatReg):
+			case MAKE_CVT_ID(IR_F64, IR_U64, FormatInSIB, FormatReg):
+				fprintf(ctx->_outfp, "push %s\npush %s\nfild qword ptr [esp]\n fstp qword ptr [%s]\n add esp, 8\n",
+					cc_operand_text(src, 1, szsrc), cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst));
+				break;
+			case MAKE_CVT_ID(IR_F64, IR_S64, FormatInSIB, FormatInSIB):
+			case MAKE_CVT_ID(IR_F64, IR_U64, FormatInSIB, FormatInSIB):
+				fprintf(ctx->_outfp, "fild qword ptr [%s]\n fstp qword ptr [%s]\n",
+					cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst));
+				break;
+
+
+			case MAKE_CVT_ID(IR_S8, IR_S64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U8, IR_S64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_S8, IR_U64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U8, IR_U64, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "mov %s, byte ptr[%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S16, IR_S64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U16, IR_S64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_S16, IR_U64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U16, IR_U64, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "mov %s, word ptr[%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S32, IR_S64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U32, IR_S64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_S32, IR_U64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U32, IR_U64, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "mov %s, dword ptr[%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc)); break;
+			case MAKE_CVT_ID(IR_S64, IR_S64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U64, IR_S64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_S64, IR_U64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U64, IR_U64, FormatReg, FormatInSIB):
+				assert(0);
+
+			case MAKE_CVT_ID(IR_S8, IR_F32, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_S16, IR_F32, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_S32, IR_F32, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U8, IR_F32, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U16, IR_F32, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U32, IR_F32, FormatReg, FormatReg):
+				fprintf(ctx->_outfp, "sub esp, 16\n fnstcw word ptr[esp]\nmovzx eax, word ptr[esp]\n"
+									 "or eax, 0c00H\nmov 4[esp], eax\nfldcw 4[esp]\nfistp dword ptr 8[esp]\n"
+									 "fldcw [esp]\n mov eax, 8[esp]\n add esp, 16\n"); 
+				break;
+			case MAKE_CVT_ID(IR_S64, IR_F32, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U64, IR_F32, FormatReg, FormatReg):
+				fprintf(ctx->_outfp, "sub esp, 16\n fnstcw word ptr[esp]\nmovzx eax, word ptr[esp]\n"
+					"or eax, 0c00H\nmov 4[esp], eax\nfldcw 4[esp]\nfistp dword ptr 8[esp]\n"
+					"fldcw [esp]\n mov eax, 8[esp]\n mov edx, 12[esp]\n add esp, 16\n");
+				break;
+			case MAKE_CVT_ID(IR_F32, IR_F32, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_F64, IR_F32, FormatReg, FormatReg):
+				assert(0);
+			
+			case MAKE_CVT_ID(IR_S8, IR_F32, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U8, IR_F32, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_S16, IR_F32, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U16, IR_F32, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_S32, IR_F32, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U32, IR_F32, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "fld dword ptr[%s]\n sub esp, 16\n fnstcw word ptr[esp]\nmovzx eax, word ptr[esp]\n"
+					"or eax, 0c00H\nmov 4[esp], eax\nfldcw 4[esp]\nfistp dword ptr 8[esp]\n"
+					"fldcw [esp]\n mov eax, 8[esp]\n add esp, 16\n", cc_operand_text(src, 0, szsrc));
+				break;
+			case MAKE_CVT_ID(IR_S64, IR_F32, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U64, IR_F32, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "fld dword ptr[%s]\n sub esp, 16\n fnstcw word ptr[esp]\nmovzx eax, word ptr[esp]\n"
+					"or eax, 0c00H\nmov 4[esp], eax\nfldcw 4[esp]\nfistp dword ptr 8[esp]\n"
+					"fldcw [esp]\n mov eax, 8[esp]\n mov edx, 12[esp]\n add esp, 16\n", cc_operand_text(src, 0, szsrc));
+				break;
+			case MAKE_CVT_ID(IR_F32, IR_F32, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_F64, IR_F32, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "fld dword ptr[%s]\n", cc_operand_text(src, 0, szsrc));
+				break;
+			case MAKE_CVT_ID(IR_F64, IR_F32, FormatInSIB, FormatInSIB):
+				fprintf(ctx->_outfp, "fld dword ptr[%s]\n fstp qword ptr[%s]", cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst));
+				break;
+
+			/* double to integer */
+			case MAKE_CVT_ID(IR_S8, IR_F64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_S16, IR_F64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_S32, IR_F64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U8, IR_F64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U16, IR_F64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U32, IR_F64, FormatReg, FormatReg):
+				fprintf(ctx->_outfp, "sub esp, 16\n fnstcw word ptr[esp]\nmovzx eax, word ptr[esp]\n"
+					"or eax, 0c00H\nmov 4[esp], eax\nfldcw 4[esp]\nfistp dword ptr 8[esp]\n"
+					"fldcw [esp]\n mov eax, 8[esp]\n add esp, 16\n");
+				break;
+			case MAKE_CVT_ID(IR_S64, IR_F64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_U64, IR_F64, FormatReg, FormatReg): /* edx:eax */
+				fprintf(ctx->_outfp, "sub esp, 16\n fnstcw word ptr[esp]\nmovzx eax, word ptr[esp]\n"
+					"or eax, 0c00H\nmov 4[esp], eax\nfldcw 4[esp]\nfistp dword ptr 8[esp]\n"
+					"fldcw [esp]\n mov eax, 8[esp]\n mov edx, 12[esp]\n add esp, 16\n");
+				break;
+			case MAKE_CVT_ID(IR_F32, IR_F64, FormatReg, FormatReg):
+			case MAKE_CVT_ID(IR_F64, IR_F64, FormatReg, FormatReg):
+				assert(0);
+
+			case MAKE_CVT_ID(IR_S8, IR_F64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U8, IR_F64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_S16, IR_F64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U16, IR_F64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_S32, IR_F64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U32, IR_F64, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "fld qword ptr[%s]\n sub esp, 16\n fnstcw word ptr[esp]\nmovzx eax, word ptr[esp]\n"
+					"or eax, 0c00H\nmov 4[esp], eax\nfldcw 4[esp]\nfistp dword ptr 8[esp]\n"
+					"fldcw [esp]\n mov eax, 8[esp]\n add esp, 16\n", cc_operand_text(src, 0, szsrc));
+				break;
+			case MAKE_CVT_ID(IR_S64, IR_F64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_U64, IR_F64, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "fld qword ptr[%s]\n sub esp, 16\n fnstcw word ptr[esp]\nmovzx eax, word ptr[esp]\n"
+					"or eax, 0c00H\nmov 4[esp], eax\nfldcw 4[esp]\nfistp dword ptr 8[esp]\n"
+					"fldcw [esp]\n mov eax, 8[esp]\n mov edx, 12[esp]\n add esp, 16\n", cc_operand_text(src, 0, szsrc));
+				break;
+			case MAKE_CVT_ID(IR_F32, IR_F64, FormatReg, FormatInSIB):
+			case MAKE_CVT_ID(IR_F64, IR_F64, FormatReg, FormatInSIB):
+				fprintf(ctx->_outfp, "fld qword ptr[%s]\n", cc_operand_text(src, 0, szsrc));
+				break;
+			case MAKE_CVT_ID(IR_F32, IR_F64, FormatInSIB, FormatInSIB):
+				fprintf(ctx->_outfp, "fld qword ptr[%s]\n fstp dword ptr[%s]", cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst));
+				break;
+			default:
+				assert(0); break;
+			}
+		}
+			break;
+		case X86_MOV:
+		{
+			switch (src->_tycode)
+			{
+			case IR_S8:
+			case IR_U8:
+			{
+				if (dst->_format == FormatSIB)
+				{
+					fprintf(ctx->_outfp, "mov byte ptr [%s], %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+				}
+				else
+				{
+					if (src->_format == FormatInSIB) {
+						fprintf(ctx->_outfp, "mov %s, byte ptr [%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+					}
+					else if (src->_format == FormatSIB) {
+						fprintf(ctx->_outfp, "lea %s, byte ptr [%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+					}
+					else {
+						fprintf(ctx->_outfp, "mov %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+					}
+				}
+			}
+				break;
+			case IR_S16:
+			case IR_U16:
+			{
+				if (dst->_format == FormatSIB)
+				{
+					fprintf(ctx->_outfp, "mov word ptr [%s], %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+				}
+				else
+				{
+					if (src->_format == FormatInSIB) {
+						fprintf(ctx->_outfp, "mov %s, word ptr [%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+					}
+					else if (src->_format == FormatSIB) {
+						fprintf(ctx->_outfp, "lea %s, word ptr [%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+					}
+					else {
+						fprintf(ctx->_outfp, "mov %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+					}
+				}
+			}
+				break;
+			case IR_S32:
+			case IR_U32:
+			case IR_PTR:
+			{
+				if (dst->_format == FormatSIB)
+				{
+					fprintf(ctx->_outfp, "mov dword ptr [%s], %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+				}
+				else
+				{
+					if (src->_format == FormatInSIB) {
+						fprintf(ctx->_outfp, "mov %s, dword ptr [%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+					}
+					else if (src->_format == FormatSIB) {
+						fprintf(ctx->_outfp, "lea %s, dword ptr [%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+					}
+					else {
+						fprintf(ctx->_outfp, "mov %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+					}
+				}
+			}
+				break;
+			case IR_S64:
+			case IR_U64:
+			{
+				if (dst->_format == FormatSIB)
+				{
+					fprintf(ctx->_outfp, "mov dword ptr [%s], %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+					fprintf(ctx->_outfp, "mov dword ptr [%s], %s\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc));
+				}
+				else
+				{
+					if (src->_format == FormatInSIB) {
+						fprintf(ctx->_outfp, "mov %s, dword ptr [%s]\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+						fprintf(ctx->_outfp, "mov %s, dword ptr [%s]\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc));
+					}
+					else {
+						fprintf(ctx->_outfp, "mov %s, %s\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc));
+						fprintf(ctx->_outfp, "mov %s, %s\n", cc_operand_text(dst, 1, szdst), cc_operand_text(src, 1, szsrc));
+					}
+				}
+			}
+				break;
+			case IR_F32:
+			{
+				if (dst->_format == FormatSIB && src->_format == FormatReg)
+				{
+					assert(src->_u._regs[0] == X86_ST0);
+					fprintf(ctx->_outfp, "fst dword ptr [%s]\n", cc_operand_text(dst, 0, szdst));
+				}
+				else if (dst->_format == FormatReg && src->_format == FormatInSIB)
+				{
+					assert(dst->_u._regs[0] == X86_ST0);
+					fprintf(ctx->_outfp, "fld dword ptr [%s]\n", cc_operand_text(src, 0, szsrc));
+				}
+				else if (dst->_format == FormatSIB && src->_format == FormatInSIB)
+				{
+					fprintf(ctx->_outfp, "fld dword ptr [%s]\n fst dword ptr [%s]\n", cc_operand_text(src, 0, szdst), cc_operand_text(dst, 0, szdst));
+				}
+			}
+				break;
+			case IR_F64:
+			{
+				if (dst->_format == FormatSIB && src->_format == FormatReg)
+				{
+					assert(src->_u._regs[0] == X86_ST0);
+					fprintf(ctx->_outfp, "fst qword ptr [%s]\n", cc_operand_text(dst, 0, szdst));
+				}
+				else if (dst->_format == FormatReg && src->_format == FormatInSIB)
+				{
+					assert(dst->_u._regs[0] == X86_ST0);
+					fprintf(ctx->_outfp, "fld qword ptr [%s]\n", cc_operand_text(src, 0, szsrc));
+				}
+				else if (dst->_format == FormatSIB && src->_format == FormatInSIB)
+				{
+					fprintf(ctx->_outfp, "fld qword ptr [%s]\n fst qword ptr [%s]\n", cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst));
+				}
+			}
+				break;
+			case IR_BLK:
+			{
+				assert(dst->_format == FormatSIB && src->_format == FormatInSIB);
+				fprintf(ctx->_outfp, "lea edi, [%s]\n lea esi, [%s]\n mov ecx, %d\n rep movsb\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_count);
+			}
+				break;
+			default:
+				assert(0); break;
+			}
+		}
+			break;
+		case X86_PUSH:
+		{
+			switch (dst->_tycode)
+			{
+			case IR_S32:
+			case IR_U32:
+			case IR_PTR:
+			{
+				if (dst->_format == FormatInSIB)
+				{
+					fprintf(ctx->_outfp, "push dword ptr [%s]\n", cc_operand_text(dst, 0, szdst));
+				}
+				else
+				{
+					fprintf(ctx->_outfp, "push %s\n", cc_operand_text(dst, 0, szdst));
+				}
+			}
+				break;
+			case IR_S64:
+			case IR_U64:
+			{
+				if (dst->_format == FormatInSIB)
+				{
+					fprintf(ctx->_outfp, "push dword ptr [%s]\n", cc_operand_text(dst, 1, szdst));
+					fprintf(ctx->_outfp, "push dword ptr [%s]\n", cc_operand_text(dst, 0, szdst));
+				}
+				else
+				{
+					fprintf(ctx->_outfp, "push %s\n", cc_operand_text(dst, 1, szdst));
+					fprintf(ctx->_outfp, "push %s\n", cc_operand_text(dst, 0, szdst));
+				}
+			}
+				break;
+			case IR_F32:
+			{
+				if (dst->_format == FormatInSIB)
+				{
+					fprintf(ctx->_outfp, "push dword ptr [%s]\n", cc_operand_text(dst, 0, szdst));
+				}
+				else
+				{
+					assert(dst->_format == FormatReg && dst->_u._regs[0] == X86_ST0);
+					fprintf(ctx->_outfp, "push ecx\n fst dword ptr [esp]\n");
+				}
+			}
+			break;
+			case IR_F64:
+			{
+				if (dst->_format == FormatInSIB)
+				{
+					fprintf(ctx->_outfp, "push dword ptr [%s]\n", cc_operand_text(dst, 1, szdst));
+					fprintf(ctx->_outfp, "push dword ptr [%s]\n", cc_operand_text(dst, 0, szdst));
+				}
+				else
+				{
+					assert(dst->_format == FormatReg && dst->_u._regs[0] == X86_ST0);
+					fprintf(ctx->_outfp, "sub esp, 8\n fst qword ptr [esp]\n");
+				}
+			}
+			break;
+			case IR_BLK:
+			{
+				assert(dst->_format == FormatSIB && src->_format == FormatInSIB);
+				fprintf(ctx->_outfp, "lea edi, [%s]\n lea esi, [%s]\n mov ecx, %d\n rep movsb\n", cc_operand_text(dst, 0, szdst), cc_operand_text(src, 0, szsrc), as->_count);
+			}
+			break;
+			default:
+				assert(0); break;
+			}
+		}
+			break;
+		case X86_CALL:
+		{
+			if (dst->_format == FormatInSIB) {
+				fprintf(ctx->_outfp, "call dword ptr [%s]\n", cc_operand_text(dst, 0, szdst));
+			}
+			else {
+				fprintf(ctx->_outfp, "call %s\n", cc_operand_text(dst, 0, szdst));
+			}
+			if (as->_count > 0) {
+				fprintf(ctx->_outfp, "add esp, %d\n", as->_count);
+			}
+		}
+			break;
+		case X86_PROLOGUE:
+		{
+			fprintf(ctx->_outfp, "push ebp\n mov ebp, esp\n");
+			fprintf(ctx->_outfp, "sub esp, %d\n", genctx->_maxlocalbytes);
+			fprintf(ctx->_outfp, "push ebx\n push esi\n push edi\n");
+		}
+			break;
+		case X86_EPILOGUE:
+		{
+			fprintf(ctx->_outfp, "pop edi\n pop esi\n pop ebx\n");
+			fprintf(ctx->_outfp, "mov esp, ebp\n pop ebp\n ret\n");
+		}
+			break;
+		case X86_ZERO_M: /* set memory to zero */
+		{
+			assert(dst->_format == FormatInSIB);
+			fprintf(ctx->_outfp, "lea edi, [%s]\n  mov al, 0\n mov ecx, %d\n rep stosb\n", cc_operand_text(dst, 0, szdst), as->_count);
+		}
+			break;
+		default:
+			assert(0); break;
+		}
+
+	} /* end for as */
+
+	fprintf(ctx->_outfp, ";function %s end\n", func->_name);
 	return TRUE;
 }
 

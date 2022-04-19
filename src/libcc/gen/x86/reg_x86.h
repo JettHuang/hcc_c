@@ -40,6 +40,9 @@ BOOL cc_reg_free(struct tagCCGenCodeContext* ctx, int regid, int curseqid);
 /* discard register */
 void cc_reg_discard(int regid);
 
+/* spill data to memory */
+BOOL cc_reg_spill(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag, int curseqid);
+
 /* associate dag with register */
 BOOL cc_reg_make_associated(int regid, struct tagCCDagNode* dag, int part);
 BOOL cc_reg_make_unassociated(int regid, struct tagCCDagNode* dag, int part);
@@ -47,5 +50,7 @@ BOOL cc_reg_make_unassociated(int regid, struct tagCCDagNode* dag, int part);
 /* mark register used flags */
 void cc_reg_markused(int regid);
 void cc_reg_unmarkused(int regid);
+
+const char* cc_reg_name(int regid, int size);
 
 #endif /* __CC_REG_X86_H__ */

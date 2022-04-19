@@ -155,7 +155,7 @@ int cc_reg_alloc(struct tagCCGenCodeContext* ctx, int currseqid, int regflags)
 }
 
 /* spill data from register to memory */
-static BOOL cc_reg_spill(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag, int curseqid)
+BOOL cc_reg_spill(struct tagCCGenCodeContext* ctx, struct tagCCDagNode* dag, int curseqid)
 {
 	assert(dag->_lastref > curseqid);
 	assert(!dag->_x._inmemory);
@@ -302,4 +302,69 @@ void cc_reg_unmarkused(int regid)
 {
 	assert(regid > X86_NIL && regid <= X86_ST1);
 	gregisters[regid]._isusing = 0;
+}
+
+const char* cc_reg_name(int regid, int size)
+{
+	switch (regid)
+	{
+	case X86_EAX:
+	{
+		switch (size)
+		{
+		case 1: return "al";
+		case 2: return "ax";
+		case 4: 
+		case 8: return "eax";
+		}
+		assert(0);
+	}
+		break;
+	case X86_EBX:
+	{
+		switch (size)
+		{
+		case 1: return "bl";
+		case 2: return "bx";
+		case 4: 
+		case 8: return "ebx";
+		}
+		assert(0);
+	}
+		break;
+	case X86_ECX:
+	{
+		switch (size)
+		{
+		case 1: return "cl";
+		case 2: return "cx";
+		case 4: 
+		case 8: return "ecx";
+		}
+		assert(0);
+	}
+		break;
+	case X86_EDX:
+	{
+		switch (size)
+		{
+		case 1: return "dl";
+		case 2: return "dx";
+		case 4: 
+		case 8: return "edx";
+		}
+		assert(0);
+	}
+		break;
+	case X86_ESI: return "esi";
+	case X86_EDI: return "edi";
+	case X86_EBP: return "ebp";
+	case X86_ESP: return "esp";
+	case X86_ST0: return "st(0)";
+	case X86_ST1: return "st(1)";
+	default:
+		break;
+	}
+
+	return NULL;
 }
