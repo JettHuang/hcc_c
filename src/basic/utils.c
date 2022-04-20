@@ -122,6 +122,26 @@ const char* util_normalize_pathname(const char* pathname)
 	return hs_hashstr(szbuf);
 }
 
+const char* util_normalize_pathdir(const char* pathname)
+{
+	char szbuf[1024], * ptrstr;
+
+	strcpy(szbuf, pathname);
+	for (ptrstr = szbuf; *ptrstr; ++ptrstr)
+	{
+		if (*ptrstr == '\\') {
+			*ptrstr = '/';
+		}
+	}
+	if (szbuf[0] && *(ptrstr - 1) != '/')
+	{
+		*ptrstr++ = '/';
+		*ptrstr = '\0';
+	}
+
+	return hs_hashstr(szbuf);
+}
+
 const char* util_process_bin_dir()
 {
 	static const char* binstr = NULL;

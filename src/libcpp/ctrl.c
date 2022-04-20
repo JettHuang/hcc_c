@@ -247,6 +247,12 @@ static BOOL ctrl_elif_handler(FCppContext* ctx, FTKListNode* tklist, int* output
 			if (bprevsiblingpass) {
 				break;
 			}
+
+			if (condblk->_ctrltype == Ctrl_if || condblk->_ctrltype == Ctrl_ifdef
+				|| condblk->_ctrltype == Ctrl_ifndef)
+			{
+				break;
+			}
 		} /* end for */
 
 		if (bprevsiblingpass || !eval) {
@@ -305,6 +311,12 @@ static BOOL ctrl_else_handler(FCppContext* ctx, FTKListNode* tklist, int* output
 		{
 			bprevsiblingpass = !(condblk->_flags & COND_FAILED_SELF);
 			if (bprevsiblingpass) {
+				break;
+			}
+
+			if (condblk->_ctrltype == Ctrl_if || condblk->_ctrltype == Ctrl_ifdef
+				|| condblk->_ctrltype == Ctrl_ifndef)
+			{
 				break;
 			}
 		} /* end for */
@@ -448,6 +460,8 @@ static BOOL ctrl_include_handler(FCppContext* ctx, FTKListNode* tklist, int* out
 	ctx->_sourcestack = top;
 	/* process source codes. */
 	cpp_output_linectrl(ctx, newcs->_srcfilename, newcs->_line);
+
+	*outputlines = 1;
 	return TRUE;
 }
 

@@ -60,6 +60,7 @@ BOOL util_is_relative_pathname(const char* pathname);
 
 /* convert xxx\bbb\cc\ to xxx/bbb/cc/ */
 const char* util_normalize_pathname(const char* pathname);
+const char* util_normalize_pathdir(const char* pathname);
 const char* util_process_bin_dir();
 const char* util_process_working_dir();
 const char* util_getpath_from_pathname(const char* pathname);

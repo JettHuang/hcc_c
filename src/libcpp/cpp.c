@@ -114,7 +114,7 @@ void cpp_contex_release(FCppContext* ctx)
 void cpp_add_includedir(FCppContext* ctx, const char* dir)
 {
 	FStrListNode* ptrhead = ctx->_includedirs;
-	const char* ndir = util_normalize_pathname(dir);
+	const char* ndir = util_normalize_pathdir(dir);
 	
 	for (; ptrhead; ptrhead = ptrhead->_next)
 	{
