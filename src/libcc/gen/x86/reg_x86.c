@@ -104,6 +104,8 @@ void cc_reg_reset()
 
 	for (i = 0; i < ELEMENTSCNT(gregisters); ++i)
 	{
+		gregisters[i]._isusing = 0;
+		gregisters[i]._lastref = 0;
 		gregisters[i]._link = NULL;
 	}
 

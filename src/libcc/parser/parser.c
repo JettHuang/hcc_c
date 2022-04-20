@@ -423,6 +423,7 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 				&& (p = cc_symbol_lookup(ctx->_currtk._val._astr._str, gIdentifiers)) && p->_sclass == SC_Typedef)
 			{
 				typespec = TK_TYPEDEF;
+				ty = p->_type;
 				cc_read_token(ctx, &ctx->_currtk);
 			}
 			else
@@ -674,7 +675,7 @@ BOOL cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FAr
 			cc_symbol_enterscope();
 			if (!cc_parser_parameters(ctx, ty, names))
 			{
-				logger_output_s("error: parsing parameter failed. %w\n", &ctx->_currtk);
+				logger_output_s("error: parsing parameter failed. %w\n", &ctx->_currtk._loc);
 				return FALSE;
 			}
 			if (gCurrentLevel > SCOPE_PARAM)
@@ -1056,6 +1057,10 @@ FCCSymbol* cc_parser_declparam(FCCContext* ctx, int storage, const char* id, con
 	else if (IsVolatile(ty) || IsStruct(ty)) {
 		logger_output_s("warning: register storage class ignored for '%s' at %w\n", id, loc);
 		storage = SC_Auto;
+	}
+
+	if (!id || *id == '\0') {
+		id = hs_hashstr(util_itoa(cc_symbol_genlabel(1)));
 	}
 
 	p = cc_symbol_lookup(id, gIdentifiers);

@@ -541,12 +541,11 @@ BOOL cc_canon_codelist_simplify(FCCIRCodeList* list, enum EMMArea where)
     return TRUE;
 }
 
-static void cc_canon_reset_flags(FCCIRBasicBlock* bb)
+static void cc_canon_reset_visitedflags(FCCIRBasicBlock* bb)
 {
     for (; bb; bb = bb->_next)
     {
         bb->_visited = 0;
-        bb->_reachable = 0;
     }
 }
 
@@ -745,7 +744,7 @@ BOOL cc_canon_check_return(FCCSymbol* func, FCCIRBasicBlock* first)
     }
 
     retpaths = noretpaths = 0;
-    cc_canon_reset_flags(first);
+    cc_canon_reset_visitedflags(first);
     cc_canon_check_return_inner(first);
 
     if (retpaths > 0 && noretpaths > 0)

@@ -382,6 +382,7 @@ static void deffunction_begin(struct tagCCContext* ctx, struct tagCCSymbol* func
 {
 	switchsegment(ctx, SEG_CODE);
 
+	fprintf(ctx->_outfp, ";function %s begin\n", func->_name);
 	fprintf(ctx->_outfp, "%s: \n", func->_x._name);
 }
 

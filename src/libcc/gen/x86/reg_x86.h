@@ -21,9 +21,9 @@
 #define X86_EDI		0x06
 #define X86_EBP		0x07
 #define X86_ESP		0x08
-#define X86_ST0		0x10
-#define X86_ST1		0x11
-#define X86_MAX		0x12
+#define X86_ST0		0x09
+#define X86_ST1		0x0a
+#define X86_MAX		0x0b
 
 #define NORMAL_X86REGS	(REG_BIT(X86_EAX) | REG_BIT(X86_EBX) | REG_BIT(X86_ECX) | REG_BIT(X86_EDX))
 #define NORMAL_ADDR_X86REGS	(NORMAL_X86REGS | REG_BIT(X86_ESI) | REG_BIT(X86_EDI))

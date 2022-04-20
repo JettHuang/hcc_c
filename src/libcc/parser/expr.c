@@ -66,6 +66,7 @@ static BOOL cc_expr_parse_primary(FCCContext* ctx, FCCIRTree** outexpr, enum EMM
 		}
 		else
 		{
+			p->_x._refcnt++;
 			if (!(tree = cc_expr_id(p, &ctx->_currtk._loc, where))) {
 				return FALSE;
 			}

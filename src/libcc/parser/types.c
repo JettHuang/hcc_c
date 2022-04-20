@@ -294,7 +294,6 @@ FCCType* cc_type_newstruct(int op, const char* name, const FLocation* loc, int l
 {
 	FCCSymbol* p;
 	
-	assert(name);
 	if (!name || *name == '\0') {
 		name = hs_hashstr(util_itoa(cc_symbol_genlabel(1)));
 	}

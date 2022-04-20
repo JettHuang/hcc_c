@@ -62,5 +62,5 @@ int main(int argc, char* argv[])
 	cc_contex_release(&cc);
 	cc_uninit();
 
-	return bsuccess ? 0 : -1;
+	return bsuccess ? 0 : 1;
 }

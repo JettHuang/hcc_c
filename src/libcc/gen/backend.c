@@ -54,7 +54,7 @@ static void doglobal(struct tagCCContext* ctx, struct tagCCSymbol* p)
 			cc_gen_dumpinitvalues(ctx, p);
 			ctx->_backend->_defglobal_end(ctx, p);
 		}
-		else if (p->_sclass != SC_External) {
+		else if (p->_sclass != SC_External && p->_sclass != SC_Typedef) {
 			ctx->_backend->_defglobal_begin(ctx, p, IsConst(ty) ? SEG_CONST : SEG_BSS);
 			ctx->_backend->_defconst_signed(ctx, 1, 0, p->_type->_size);
 			ctx->_backend->_defglobal_end(ctx, p);
@@ -67,9 +67,11 @@ static void doexport(struct tagCCContext* ctx, struct tagCCSymbol* p)
 	if (!p->_defined && (p->_sclass == SC_External
 		|| (IsFunction(p->_type) && p->_sclass == SC_Auto)))
 	{
-		ctx->_backend->_importsymbol(ctx, p);
+		if (p->_x._refcnt > 0) {
+			ctx->_backend->_importsymbol(ctx, p);
+		}
 	}
-	else if (p->_sclass != SC_Static) {
+	else if (p->_sclass != SC_Static && p->_sclass != SC_Typedef) {
 		ctx->_backend->_exportsymbol(ctx, p);
 	}
 }
@@ -81,12 +83,16 @@ static void doexternal(struct tagCCContext* ctx, struct tagCCSymbol* p)
 
 static void doconstant(struct tagCCContext* ctx, struct tagCCSymbol* p)
 {
-	FCCType* ty;
+	FCCType* ty = UnQual(p->_type);
 
+	/* don't export integers to constant-table */
+	if (ty->_op == Type_SInteger || ty->_op == Type_UInteger)
+	{
+		return;
+	}
 
 	ctx->_backend->_defglobal_begin(ctx, p, SEG_CONST);
 
-	ty = UnQual(p->_type);
 	switch (ty->_op)
 	{
 	case Type_SInteger:

@@ -103,7 +103,7 @@ project "hcpp"
 	dependson { "basic", "libcpp" }
 	links { "basic", "libcpp" }
 	
-	debugargs { "-o \"test0.i\" dist/tests/test0.c" }
+	debugargs { "-I dist/include -o dist/examples/helloworld_01/helloworld.i dist/examples/helloworld_01/helloworld.c" }
 	
     includedirs {
 		"./src/basic",
@@ -118,6 +118,11 @@ project "hcpp"
 		"./src/tools/hcpp/*.h",
 		"./src/tools/hcpp/*.c"
     }
+	
+	postbuildcommands {  
+		-- Copy the hcpp to the dist/bin folder.   
+		'{COPY} "%{cfg.buildtarget.abspath}" "../dist/bin"',  
+	}
 
 -- project hcc
 project "hcc"
@@ -127,7 +132,7 @@ project "hcc"
 	dependson { "basic", "libcc" }
 	links { "basic", "libcc" }
 	
-	debugargs { "dist/tests/stmts.c" }
+	debugargs { "-o dist/examples/helloworld_01/helloworld.asm dist/examples/helloworld_01/helloworld.i" }
 	
     includedirs {
 		"./src/basic",
@@ -143,3 +148,8 @@ project "hcc"
 		"./src/tools/hcc/*.c"
     }
 
+	postbuildcommands {  
+		-- Copy the hcc to the dist/bin folder.   
+		'{COPY} "%{cfg.buildtarget.abspath}" "../dist/bin"',  
+	}
+	

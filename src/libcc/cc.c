@@ -166,7 +166,7 @@ static BOOL cc_read_token_with_handlectrl1(FCCContext* ctx, FCCToken* tk, BOOL *
 			{
 				const char* cnststr = expr->_next->_tk._val._astr._str;
 				linenum = expr->_tk._val._int;
-				filename = hs_hashnstr2(cnststr + 1, strlen(cnststr) - 2); /* omit 2 " */
+				filename = hs_hashstr(cnststr);
 				filename = util_normalize_pathname(filename);
 			}
 			else

@@ -61,5 +61,5 @@ int main(int argc, char* argv[])
 	cpp_contex_release(&cpp);
 	cpp_lexer_uninit();
 
-	return bsuccess ? 0 : -1;
+	return bsuccess ? 0 : 1;
 }
