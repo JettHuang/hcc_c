@@ -218,8 +218,9 @@ int	_vsnprintf (char*, size_t, const char*, va_list);
 
 #ifndef __NO_ISOCEXT  /* externs in libmingwex.a */
 int snprintf(char* s, size_t n, const char*  format, ...);
-extern int vsnprintf (char* s, size_t n, const char* format,
-			   va_list arg);
+extern inline int vsnprintf (char* s, size_t n, const char* format,
+			   va_list arg)
+  { return _vsnprintf ( s, n, format, arg); }
 #endif
 
 /*
@@ -371,8 +372,9 @@ FILE*	_wpopen (const wchar_t*, const wchar_t*);
 
 #ifndef __NO_ISOCEXT  /* externs in libmingwex.a */
 int snwprintf(wchar_t* s, size_t n, const wchar_t*  format, ...);
-extern int vsnwprintf (wchar_t* s, size_t n, const wchar_t* format,
-			   va_list arg);
+extern inline int vsnwprintf (wchar_t* s, size_t n, const wchar_t* format,
+			   va_list arg)
+  { return _vsnwprintf ( s, n, format, arg); }
 #endif
 
 #define _WSTDIO_DEFINED

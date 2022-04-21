@@ -3,8 +3,8 @@
 
 #define NULL ((void *)0)
 typedef unsigned int size_t;
-typedef short 	wchar_t;
-typedef int 	ptrdiff_t;
+typedef short wchar_t;
+typedef int ptrdiff_t;
 #define offsetof(type, field) ((size_t) &((type *)0)->field)
 
 /* need to do that because of glibc 2.1 bug (should have a way to test
@@ -18,6 +18,6 @@ typedef int int32_t;
 typedef long long int int64_t;
 #endif
 
-void *alloca(size_t size);
+void *alloca(size_t);
 
 #endif
