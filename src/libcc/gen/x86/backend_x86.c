@@ -388,5 +388,5 @@ static void deffunction_begin(struct tagCCContext* ctx, struct tagCCSymbol* func
 
 static void deffunction_end(struct tagCCContext* ctx, struct tagCCSymbol* func)
 {
-	fprintf(ctx->_outfp, "\n; end for function '%s'\n", func->_name);
+	fprintf(ctx->_outfp, ";function %s end\n", func->_name);
 }

@@ -3361,7 +3361,7 @@ static BOOL cc_output_asmcodes(struct tagCCContext* ctx, struct tagCCSymbol* fun
 			break;
 		case X86_ZERO_M: /* set memory to zero */
 		{
-			assert(dst->_format == FormatInSIB);
+			assert(dst->_format == FormatSIB);
 			fprintf(ctx->_outfp, "\tlea edi, [%s]\n\tmov al, 0\n\tmov ecx, %d\n\trep stosb\n", cc_operand_text(dst, 0, szdst), as->_count);
 		}
 			break;
@@ -3371,7 +3371,6 @@ static BOOL cc_output_asmcodes(struct tagCCContext* ctx, struct tagCCSymbol* fun
 
 	} /* end for as */
 
-	fprintf(ctx->_outfp, ";function %s end\n", func->_name);
 	return TRUE;
 }
 
