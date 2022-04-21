@@ -3249,7 +3249,7 @@ static void cc_expr_internaldisplay(FCCIRTree* expr, int depth, int maxdepth)
 
 	if (expr->_dagnode) 
 	{
-		logger_output_s("DAG(0x%p)_", expr->_dagnode);
+		/* logger_output_s("DAG(0x%p)_", expr->_dagnode); */
 	}
 
 	depth++;

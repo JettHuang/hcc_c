@@ -532,6 +532,7 @@ BOOL cc_parser_declarator(FCCContext* ctx, FCCType* basety, const char** id, FLo
 	BOOL bgetparams = TRUE;
 	FCCType* ty = NULL;
 
+	*id = NULL;
 	if (!cc_parser_declarator1(ctx, id, loc, params, &bgetparams, &ty))
 	{
 		return FALSE;
