@@ -2458,7 +2458,7 @@ static BOOL cc_output_asmcodes(struct tagCCContext* ctx, struct tagCCSymbol* fun
 				assert(dst->_format == FormatReg);
 				cc_operand_text(dst, 0, szdst);
 				cc_operand_text(dst, 1, szsrc);
-				fprintf(ctx->_outfp, "\tneg %s\n\tadc %s, 0\n\tneg %s", szdst, szsrc, szsrc);
+				fprintf(ctx->_outfp, "\tneg %s\n\tadc %s, 0\n\tneg %s\n", szdst, szsrc, szsrc);
 				break;
 			case IR_F32: /* Complements the sign bit of ST(0) */
 			case IR_F64:
@@ -3066,7 +3066,10 @@ static BOOL cc_output_asmcodes(struct tagCCContext* ctx, struct tagCCSymbol* fun
 				fprintf(ctx->_outfp, "\tfld dword ptr[%s]\n", cc_operand_text(src, 0, szsrc));
 				break;
 			case MAKE_CVT_ID(IR_F64, IR_F32, FormatInSIB, FormatInSIB):
-				fprintf(ctx->_outfp, "\tfld dword ptr[%s]\n\tfstp qword ptr[%s]", cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst));
+				fprintf(ctx->_outfp, "\tfld dword ptr[%s]\n\tfstp qword ptr[%s]\n", cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst));
+				break;
+			case MAKE_CVT_ID(IR_F64, IR_F32, FormatInSIB, FormatReg):
+				fprintf(ctx->_outfp, "\tfst qword ptr[%s]\n", cc_operand_text(dst, 0, szdst));
 				break;
 
 			/* double to integer */
@@ -3111,7 +3114,10 @@ static BOOL cc_output_asmcodes(struct tagCCContext* ctx, struct tagCCSymbol* fun
 				fprintf(ctx->_outfp, "\tfld qword ptr[%s]\n", cc_operand_text(src, 0, szsrc));
 				break;
 			case MAKE_CVT_ID(IR_F32, IR_F64, FormatInSIB, FormatInSIB):
-				fprintf(ctx->_outfp, "\tfld qword ptr[%s]\n\tfstp dword ptr[%s]", cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst));
+				fprintf(ctx->_outfp, "\tfld qword ptr[%s]\n\tfstp dword ptr[%s]\n", cc_operand_text(src, 0, szsrc), cc_operand_text(dst, 0, szdst));
+				break;
+			case MAKE_CVT_ID(IR_F32, IR_F64, FormatInSIB, FormatReg):
+				fprintf(ctx->_outfp, "\tfst dword ptr[%s]\n", cc_operand_text(dst, 0, szdst));
 				break;
 			default:
 				assert(0); break;

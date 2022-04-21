@@ -661,9 +661,15 @@ static BOOL ctrl_define_handler(FCppContext* ctx, FTKListNode* tklist, int* outp
 			for (;;)
 			{
 				argc++;
+
+				if (tkitr->_tk._type == TK_ELLIPSIS)
+				{
+					logger_output_s("syntax error: #define XX(...) is not support, at %s:%d:%d\n", tkitr->_tk._loc._filename, tkitr->_tk._loc._line, tkitr->_tk._loc._col);
+					return FALSE;
+				}
 				if (tkitr->_tk._type != TK_ID)
 				{
-					logger_output_s("syntax error: #define require ID at %s:%d:%d\n", tkitr->_tk._loc._filename, tkitr->_tk._loc._line, tkitr->_tk._loc._col);
+					logger_output_s("syntax error: #define require ID, at %s:%d:%d\n", tkitr->_tk._loc._filename, tkitr->_tk._loc._line, tkitr->_tk._loc._col);
 					return FALSE;
 				}
 

@@ -34,7 +34,7 @@ FCharStream* cs_create_fromfile(const char* filename)
 	assert(filename);
 	FILE* fp = fopen(filename, "rt");
 	if (!fp) {
-		logger_output_s("open source file failed. %s\n", filename);
+		/* logger_output_s("open source file failed. %s\n", filename); */
 		return NULL;
 	}
 

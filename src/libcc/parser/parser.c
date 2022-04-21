@@ -1215,7 +1215,7 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 			return FALSE;
 		}
 #if 1
-		logger_output_s("After DAG :\n");
+		logger_output_s("function '%s' after dag:\n", p->_name);
 		cc_ir_basicblock_display(basicblocks, 5);
 		logger_output_s("\n");
 #endif

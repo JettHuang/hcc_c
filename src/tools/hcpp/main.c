@@ -10,6 +10,7 @@
 #include "libcpp.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
 #include <string.h>
 
@@ -17,6 +18,33 @@
 #define OPTPARSE_API static
 #include "optparse.h"
 
+static void add_sysinclues(FCppContext* ctx)
+{
+	const char* paths = getenv("include");
+	const char sep = ';';
+
+	if (!paths) { return; }
+	while (*paths)
+	{
+		char* p, buf[1024];
+
+		if (p = strchr(paths, sep)) {
+			assert(p - paths < sizeof(buf));
+			strncpy(buf, paths, p - paths);
+			buf[p - paths] = '\0';
+		}
+		else {
+			assert(strlen(paths) < sizeof(buf));
+			strcpy(buf, paths);
+		}
+		/* add include dir*/
+		cpp_add_includedir(ctx, buf);
+
+		if (p == NULL)
+			break;
+		paths = p + 1;
+	}
+}
 
 int main(int argc, char* argv[])
 {
@@ -56,7 +84,14 @@ int main(int argc, char* argv[])
 		srcfilename = arg;
 		break;
 	}
-	
+
+	/* add environment include */
+	add_sysinclues(&cpp);
+	/* add definition*/
+	cpp_add_definition(&cpp, "win32");
+	cpp_add_definition(&cpp, "_WIN32");
+	cpp_add_definition(&cpp, "_M_IX86");
+
 	bsuccess = cpp_process(&cpp, srcfilename, outfilename);
 	cpp_contex_release(&cpp);
 	cpp_lexer_uninit();

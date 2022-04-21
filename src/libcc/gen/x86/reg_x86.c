@@ -279,7 +279,12 @@ BOOL cc_reg_make_unassociated(int regid, struct tagCCDagNode* dag, int part)
 		if (l->_dag == dag && l->_part == part)
 		{
 			if (l->_next) { l->_next->_prev = l->_prev; }
-			if (l->_prev) { l->_prev->_next = l->_next; }
+			if (l->_prev) { 
+				l->_prev->_next = l->_next; 
+			}
+			else {
+				desc->_link = l->_next;
+			}
 			put_userentry(l);
 			break;
 		}

@@ -25,6 +25,9 @@ enum EState
 	S_CCOMENT_WAITSLASH,
 	S_CCOMENT_END,
 	S_CCOMENT_EOF,
+	/* cpp comment '//' */
+	S_CPPCOMENT,
+	S_CPPCOMENT_END,
 
 	/* identifier */
 	S_ID,
@@ -166,6 +169,7 @@ static const FLexerRule kRules[] =
 
 	{ S_DIV,   { C_XX },  MAKE_ACTION(S_END_STAR, TK_DIV) },
 	{ S_DIV,   { '*'},    MAKE_ACTION(S_CCOMENT, TK_NONE)      },
+	{ S_DIV,   { '/'},    MAKE_ACTION(S_CPPCOMENT, TK_NONE)    },
 	{ S_DIV,   { '='},    MAKE_ACTION(S_END, TK_DIV_ASSIGN) },
 
 	/* C Comment */
@@ -176,6 +180,11 @@ static const FLexerRule kRules[] =
 	{ S_CCOMENT_WAITSLASH, { '*' },   MAKE_ACTION(S_SELF, TK_NONE) },
 	{ S_CCOMENT_WAITSLASH, { '/' },   MAKE_ACTION(S_CCOMENT_END, TK_NONE) },
 	{ S_CCOMENT_WAITSLASH, { C_EOF }, MAKE_ACTION(S_CCOMENT_EOF, TK_NONE) },
+
+	/* C++ Comment */
+	{ S_CPPCOMENT, {C_XX},  MAKE_ACTION(S_SELF, TK_NONE) },
+	{ S_CPPCOMENT, {'\n' }, MAKE_ACTION(S_CPPCOMENT_END, TK_NONE) },
+	{ S_CPPCOMENT, { C_EOF }, MAKE_ACTION(S_CPPCOMENT_END, TK_NONE) },
 
 	/* identifier */
 	{ S_ID, { C_XX }, MAKE_ACTION(S_END_STAR, TK_ID) },
@@ -540,6 +549,16 @@ int cpp_lexer_read_token(FCharStream* cs, int bwantheader, FPPToken *tk)
 		case S_CCOMENT_EOF:
 			logger_output_s("error: comment occur eof at line %d:%d\n", cs->_line, cs->_col);
 			return 0;
+
+		case S_CPPCOMENT:
+			cs_forward(cs);
+			break;
+		case S_CPPCOMENT_END:
+			ch = charbuffer_popback(); /* pop the '/' */
+			assert(ch == '/');
+			tk->_wscnt++;
+			currstate = S_START;
+			break;
 
 		case S_CC_NEWLINE:
 		case S_STR_NEWLINE:
