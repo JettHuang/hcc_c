@@ -14,21 +14,21 @@ set CC=%CCROOT%\bin\hcc_d.exe
 set CFLAGS=-D__NO_ISOCEXT -Dwin32 -D_WIN32 -D_M_IX86
 
 
-if exist helloworwld.i del helloworld.i
-if exist helloworwld.asm del helloworld.asm
-if exist helloworwld.obj del helloworld.obj
-if exist helloworld.exe del helloworld.exe
+if exist test.i del test.i
+if exist test.asm del test.asm
+if exist test.obj del test.obj
+if exist test.exe del test.exe
 
-%CPP% %CFLAGS% -o helloworld.i helloworld.c
+%CPP% %CFLAGS% -o test.i test.c
 if errorlevel 1 goto errcpp
 
-%CC% -o helloworld.asm helloworld.i
+%CC% -o test.asm test.i
 if errorlevel 1 goto errcc
 
-ml.exe /c /coff helloworld.asm
+ml.exe /c /coff test.asm
 if errorlevel 1 goto errasm
 
-link.exe /subsystem:console /entry:mainCRTStartup "oldnames.lib" "msvcrt.lib" "legacy_stdio_definitions.lib" "kernel32.lib" helloworld.obj 
+link.exe /subsystem:console /entry:mainCRTStartup "oldnames.lib" "msvcrt.lib" "legacy_stdio_definitions.lib" "kernel32.lib" test.obj 
 if errorlevel 1 goto errlink
 
 goto TheEnd
@@ -54,6 +54,4 @@ echo MASM32 is required...
 goto TheEnd
 
 :TheEnd
-
-pause
 
