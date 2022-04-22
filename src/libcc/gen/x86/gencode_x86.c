@@ -1057,13 +1057,17 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 
 			if (!cc_get_operand(lhs, &src)) { return FALSE; }
 			if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &src, curseqid)) { return FALSE; }
-			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
-			as->_dst._format = FormatReg;
-			as->_dst._tycode = tycode;
-			as->_dst._u._regs[0] = X86_EAX;
-			as->_dst._u._regs[1] = X86_NIL;
-			as->_src = src;
-			as->_count = lhs->_typesize;
+			if (src._format != FormatReg || src._u._regs[0] != X86_EAX)
+			{
+				if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+				as->_dst._format = FormatReg;
+				as->_dst._tycode = tycode;
+				as->_dst._u._regs[0] = X86_EAX;
+				as->_dst._u._regs[1] = X86_NIL;
+				as->_src = src;
+				as->_count = lhs->_typesize;
+			}
+
 		}
 			break;	
 		case IR_S64:
@@ -1073,13 +1077,16 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 
 			if (!cc_get_operand(lhs, &src)) { return FALSE; }
 			if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &src, curseqid)) { return FALSE; }
-			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
-			as->_dst._format = FormatReg;
-			as->_dst._tycode = tycode;
-			as->_dst._u._regs[0] = X86_EAX;
-			as->_dst._u._regs[1] = X86_EDX;
-			as->_src = src;
-			as->_count = lhs->_typesize;
+			if (src._format != FormatReg || src._u._regs[0] != X86_EAX || src._u._regs[1] != X86_EDX)
+			{
+				if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+				as->_dst._format = FormatReg;
+				as->_dst._tycode = tycode;
+				as->_dst._u._regs[0] = X86_EAX;
+				as->_dst._u._regs[1] = X86_EDX;
+				as->_src = src;
+				as->_count = lhs->_typesize;
+			}
 		}
 			break;
 		case IR_F32:
@@ -1089,13 +1096,16 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 
 			if (!cc_get_operand(lhs, &src)) { return FALSE; }
 			if (src._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &src, curseqid)) { return FALSE; }
-			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
-			as->_dst._format = FormatReg;
-			as->_dst._tycode = tycode;
-			as->_dst._u._regs[0] = X86_ST0;
-			as->_dst._u._regs[1] = X86_NIL;
-			as->_src = src;
-			as->_count = lhs->_typesize;
+			if (src._format != FormatReg || src._u._regs[0] != X86_ST0)
+			{
+				if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
+				as->_dst._format = FormatReg;
+				as->_dst._tycode = tycode;
+				as->_dst._u._regs[0] = X86_ST0;
+				as->_dst._u._regs[1] = X86_NIL;
+				as->_src = src;
+				as->_count = lhs->_typesize;
+			}
 		}
 			break;
 		default:

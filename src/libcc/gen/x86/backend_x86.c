@@ -299,27 +299,42 @@ void defconst_real(struct tagCCContext* ctx, int size, double val, int count)
 	}
 }
 
+static const int kNumPerLine = 32;
 static void defconst_string(struct tagCCContext* ctx, const void* str, int count, int charsize)
 {
-	int n;
-
 	if (charsize == 1) {
-		fprintf(ctx->_outfp, "   db   ");
-		for (n=0; n<count-1; n++)
+		int n, thisline;
+		
+		for (n=0; count > 0;)
 		{
-			fprintf(ctx->_outfp, "%u, ", ((const uint8_t*)str)[n]);
-		}
-		fprintf(ctx->_outfp, "%u \n", ((const uint8_t*)str)[n]);
+			thisline = count > kNumPerLine ? kNumPerLine : count;
+			count -= thisline;
+
+			fprintf(ctx->_outfp, "   db   ");
+			for (; thisline > 1; --thisline)
+			{
+				fprintf(ctx->_outfp, "%u, ", ((const uint8_t*)str)[n++]);
+			}
+			fprintf(ctx->_outfp, "%u \n", ((const uint8_t*)str)[n++]);
+		} /* end for count */
+		
 	}
 	else {
-		assert(charsize == 2);
+		int n, thisline;
 
-		fprintf(ctx->_outfp, "   dw   ");
-		for (n = 0; n < count - 1; n++)
+		assert(charsize == 2);
+		for (n = 0; count > 0;)
 		{
-			fprintf(ctx->_outfp, "%u, ", ((const uint16_t*)str)[n]);
-		}
-		fprintf(ctx->_outfp, "%u \n", ((const uint16_t*)str)[n]);
+			thisline = count > kNumPerLine ? kNumPerLine : count;
+			count -= thisline;
+
+			fprintf(ctx->_outfp, "   dw   ");
+			for (; thisline > 1; --thisline)
+			{
+				fprintf(ctx->_outfp, "%u, ", ((const uint16_t*)str)[n++]);
+			}
+			fprintf(ctx->_outfp, "%u \n", ((const uint16_t*)str)[n++]);
+		} /* end for count */
 	}
 }
 
