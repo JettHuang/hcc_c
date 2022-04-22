@@ -880,7 +880,7 @@ FCCSymbol* cc_parser_declglobal(FCCContext* ctx, int storage, const char* id, co
 			return FALSE;
 		}
 
-		if (!cc_varinit_check(ctx, p->_type, initializer, CC_MM_PERMPOOL)) {
+		if (!cc_varinit_check(ctx, p->_type, initializer, TRUE, CC_MM_PERMPOOL)) {
 			return FALSE;
 		}
 
@@ -1005,7 +1005,7 @@ FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, con
 			return FALSE;
 		}
 
-		if (!cc_varinit_check(ctx, p->_type, initializer, storage == SC_Static ? CC_MM_PERMPOOL : CC_MM_TEMPPOOL)) {
+		if (!cc_varinit_check(ctx, p->_type, initializer, bExpectConstant, storage == SC_Static ? CC_MM_PERMPOOL : CC_MM_TEMPPOOL)) {
 			return FALSE;
 		}
 
