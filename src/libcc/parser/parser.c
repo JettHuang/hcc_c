@@ -17,9 +17,21 @@
 
 const char* cc_sclass_displayname(int sclass);
 
+static void cc_ext_types()
+{
+	FCCSymbol* p;
+
+	p = cc_symbol_install(hs_hashstr("_Bool"), &gIdentifiers, SCOPE_GLOBAL, CC_MM_PERMPOOL);
+	p->_type = gbuiltintypes._chartype;
+	p->_sclass = SC_Typedef;
+}
+
 BOOL cc_parser_program(FCCContext* ctx)
 {
 	gCurrentLevel = SCOPE_GLOBAL;
+
+	/* add extension types */
+	cc_ext_types();
 
 	if (!cc_read_token(ctx, &ctx->_currtk)) {
 		return FALSE;
