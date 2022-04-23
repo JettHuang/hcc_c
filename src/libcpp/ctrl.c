@@ -621,7 +621,7 @@ static BOOL ctrl_define_handler(FCppContext* ctx, FTKListNode* tklist, int* outp
 	FTKListNode* id = tklist->_next->_next;
 	const FMacro* ptrexist;
 	FTKListNode* args_head, *args_tail, *body_head, *body_tail, *tkitr;
-	int argc;
+	int argc, isvarg;
 
 
 	if (!bcondblockpass) {
@@ -642,7 +642,7 @@ static BOOL ctrl_define_handler(FCppContext* ctx, FTKListNode* tklist, int* outp
 		return FALSE;
 	}
 
-	argc = -1;
+	argc = -1; isvarg = 0;
 	args_head = args_tail = body_head = body_tail = NULL;
 	tkitr = id->_next;
 	if (tkitr->_tk._type == TK_LPAREN && tkitr->_tk._wscnt == 0)
@@ -662,12 +662,7 @@ static BOOL ctrl_define_handler(FCppContext* ctx, FTKListNode* tklist, int* outp
 			{
 				argc++;
 
-				if (tkitr->_tk._type == TK_ELLIPSIS)
-				{
-					logger_output_s("syntax error: #define XX(...) is not support, at %s:%d:%d\n", tkitr->_tk._loc._filename, tkitr->_tk._loc._line, tkitr->_tk._loc._col);
-					return FALSE;
-				}
-				if (tkitr->_tk._type != TK_ID)
+				if (tkitr->_tk._type != TK_ID && tkitr->_tk._type != TK_ELLIPSIS)
 				{
 					logger_output_s("syntax error: #define require ID, at %s:%d:%d\n", tkitr->_tk._loc._filename, tkitr->_tk._loc._line, tkitr->_tk._loc._col);
 					return FALSE;
@@ -693,6 +688,11 @@ static BOOL ctrl_define_handler(FCppContext* ctx, FTKListNode* tklist, int* outp
 
 				tkitr = tkitr->_next;
 				args_tail->_next = NULL;
+				if (args_tail->_tk._type == TK_ELLIPSIS) 
+				{
+					isvarg = 1;
+					break;
+				}
 				if (tkitr->_tk._type == TK_RPAREN)
 				{
 					break;
@@ -707,6 +707,12 @@ static BOOL ctrl_define_handler(FCppContext* ctx, FTKListNode* tklist, int* outp
 			} /* end for ;; */
 		}
 	
+		if (tkitr->_tk._type != TK_RPAREN)
+		{
+			logger_output_s("syntax error: ')' is required at %s:%d:%d\n", tkitr->_tk._loc._filename, tkitr->_tk._loc._line, tkitr->_tk._loc._col);
+			return FALSE;
+		}
+
 		/* omit ')' */
 		tkitr = tkitr->_next;
 	}
@@ -754,6 +760,7 @@ static BOOL ctrl_define_handler(FCppContext* ctx, FTKListNode* tklist, int* outp
 		m._loc = id->_tk._loc;
 		m._flags = 0;
 		m._argc = argc;
+		m._isvarg = isvarg;
 		m._args = cpp_duplicate_tklist(args_head, CPP_MM_PERMPOOL);
 		m._body = cpp_duplicate_tklist(body_head, CPP_MM_PERMPOOL);
 

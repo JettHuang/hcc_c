@@ -192,7 +192,7 @@ static BOOL macro_expand_builtin(FCppContext* ctx, FTKListNode* curtk, FTKListNo
 	return TRUE;
 }
 
-static BOOL macro_gather_args(FCppContext* ctx, FTKListNode ** tklist, int bscannextlines, FArray *args, int *argc)
+static BOOL macro_gather_args(FCppContext* ctx, const FMacro *m, FTKListNode ** tklist, int bscannextlines, FArray *args, int *argc)
 {
 	FTKListNode *argsstart, *argsitr, *argument, *argumenttail;
 	int lparen_cnt;
@@ -309,7 +309,8 @@ static BOOL macro_gather_args(FCppContext* ctx, FTKListNode ** tklist, int bscan
 			continue;
 		}
 
-		if ((argsitr->_tk._type == TK_COMMA && lparen_cnt == 0)
+		
+		if (((argsitr->_tk._type == TK_COMMA && lparen_cnt == 0) && (!m->_isvarg || (args->_elecount < (m->_argc-1))))
 			|| (lparen_cnt == -1 && (args->_elecount != 0 || argument != NULL)))
 		{
 			array_append(args, &argument);
@@ -337,13 +338,18 @@ static BOOL macro_gather_args(FCppContext* ctx, FTKListNode ** tklist, int bscan
 }
 
 /* find argument index if exist*/
-static int find_argument_index(const FMacro* m, const char* hstr)
+static int find_argument_index(FCppContext*ctx, const FMacro* m, const FPPToken *tk)
 {
 	int index;
 	FTKListNode* itr = m->_args;
 	for (index = 0;itr;itr = itr->_next, index++)
 	{
-		if (itr->_tk._str == hstr) {
+		if (tk->_str == ctx->_HS__VA_ARGS__ && itr->_tk._type == TK_ELLIPSIS)
+		{
+			return index;
+		}
+
+		if (itr->_tk._str == tk->_str) {
 			return index;
 		}
 	}
@@ -561,7 +567,7 @@ static BOOL macro_expand_userdefined(FExpandContext* expctx, FCppContext* ctx, c
 		if (curr->_tk._type == TK_POUND) /* # string operator */
 		{
 			next = curr->_next;
-			if (next && (argidx0 = find_argument_index(m, next->_tk._str)) >= 0)
+			if (next && (argidx0 = find_argument_index(ctx, m, &next->_tk)) >= 0)
 			{
 				FTKListNode* newtk = stringfy_tokenlist(*(FTKListNode**)array_element(args, argidx0), CPP_MM_TEMPPOOL);
 				curr = newtk;
@@ -585,8 +591,8 @@ static BOOL macro_expand_userdefined(FExpandContext* expctx, FCppContext* ctx, c
 				return FALSE;
 			}
 
-			argidx0 = find_argument_index(m, prev->_tk._str);
-			argidx1 = find_argument_index(m, next->_tk._str);
+			argidx0 = find_argument_index(ctx, m, &prev->_tk);
+			argidx1 = find_argument_index(ctx, m, &next->_tk);
 			if (argidx0 < 0) {
 				llist = cpp_duplicate_token(prev, CPP_MM_TEMPPOOL);
 			}
@@ -645,7 +651,7 @@ static BOOL macro_expand_userdefined(FExpandContext* expctx, FCppContext* ctx, c
 				FTKListNode* expandarg;
 
 				expandarg = NULL;
-				argidx0 = find_argument_index(m, curr->_tk._str);
+				argidx0 = find_argument_index(ctx, m, &curr->_tk);
 				if (argidx0 >= 0)
 				{
 					expandarg = cpp_duplicate_tklist(*(FTKListNode**)array_element(args, argidx0), CPP_MM_TEMPPOOL);
@@ -817,7 +823,7 @@ static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKList
 			{
 				/* gather parameters */
 				int argc = -1;
-				if (!macro_gather_args(ctx, &tkitr, bscannextlines, &args, &argc))
+				if (!macro_gather_args(ctx, m, &tkitr, bscannextlines, &args, &argc))
 				{
 					return FALSE;
 				}
@@ -828,7 +834,7 @@ static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKList
 					tkitr = tkitr->_next;
 					continue;
 				}
-				else if (argc != m->_argc)
+				else if (argc != m->_argc && (!m->_isvarg || argc < (m->_argc-1)))
 				{
 					logger_output_s("error: expand macro '%s' failed, disagreement arguments count at %s:%d\n", tkmacro->_tk._str, tkmacro->_tk._loc._filename, tkmacro->_tk._loc._line);
 					return FALSE;

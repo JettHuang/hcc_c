@@ -32,6 +32,7 @@ typedef struct tagMacro {
 	FLocation	 _loc;
 	int16_t		 _flags;
 	int16_t      _argc; /* -1: object macro,  0:no args(#define X() xxx) */
+	int16_t		 _isvarg;
 	FTKListNode* _args;
 	FTKListNode* _body;
 } FMacro;

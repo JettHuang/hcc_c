@@ -63,35 +63,35 @@ void cpp_contex_init(FCppContext* ctx)
 	cpp_init_date(ctx);
 	// built-in macros
 	{
-		FMacro m = { ctx->_HS__DATE__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__DATE__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { ctx->_HS__FILE__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__FILE__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { ctx->_HS__LINE__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__LINE__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { ctx->_HS__STDC__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__STDC__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { ctx->_HS__STDC_HOSTED__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__STDC_HOSTED__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { ctx->_HS__STDC_VERSION__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__STDC_VERSION__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { ctx->_HS__TIME__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__TIME__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 	{
-		FMacro m = { ctx->_HS__VA_ARGS__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, NULL, NULL };
+		FMacro m = { ctx->_HS__VA_ARGS__, empty_loc, MACRO_FLAG_BUILTIN | MACRO_FLAG_UNCHANGE, 0, 0, NULL, NULL };
 		cpp_add_macro(ctx, &m);
 	}
 }
