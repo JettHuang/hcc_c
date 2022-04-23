@@ -17,6 +17,11 @@
 	 return a * a;
  }
  
+ const char *szhelp = "Hello everyone, this is my c99 compiler.\n"
+	"let's try to find the bugs, and fix them.\n"
+	
+	"Best Regard!    --- JettHuang\n";
+
  int main(int argc, char *argv[])
  {
 
@@ -24,8 +29,10 @@
 	int i;
 
 	int b = square(10);
-	
 	printf("b is %d\n", b);
+	
+	printf(szhelp);
+	
 	if (argv[0] != NULL)
 	{
 		printf("fuck you...\n");

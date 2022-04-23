@@ -26,7 +26,7 @@ typedef struct tagTokenListNode {
 } FTKListNode;
 
 static BOOL cc_read_token_with_handlectrl(FCCContext* ctx, FCCToken* tk);
-static BOOL cc_read_rowtokens(FCharStream* cs, FTKListNode** tail);
+static BOOL cc_read_rowtokens(FCCLexerContext *ctx, FTKListNode** tail);
 
 static FCCTypeMetrics defaultmetrics = 
 {
@@ -61,7 +61,9 @@ void cc_contex_init(FCCContext* ctx)
 {
 	ctx->_outfilename = NULL;
 	ctx->_outfp = NULL;
-	ctx->_cs = NULL;
+	ctx->_lexer._cs = NULL;
+	ctx->_lexer._cached[0]._isvalid = FALSE;
+	ctx->_lexer._cached[1]._isvalid = FALSE;
 	ctx->_lookaheadtk._valid = 0;
 	ctx->_bnewline = 1;
 	ctx->_errors = 0;
@@ -73,13 +75,15 @@ void cc_contex_release(FCCContext* ctx)
 	if (ctx->_outfp) {
 		fclose(ctx->_outfp);
 	}
-	if (ctx->_cs) {
-		cs_release(ctx->_cs);
+	if (ctx->_lexer._cs) {
+		cs_release(ctx->_lexer._cs);
 	}
 
 	ctx->_outfilename = NULL;
 	ctx->_outfp = NULL;
-	ctx->_cs = NULL;
+	ctx->_lexer._cs = NULL;
+	ctx->_lexer._cached[0]._isvalid = FALSE;
+	ctx->_lexer._cached[1]._isvalid = FALSE;
 	ctx->_lookaheadtk._valid = 0;
 	ctx->_bnewline = 0;
 }
@@ -91,7 +95,7 @@ BOOL cc_process(FCCContext* ctx, const char* srcfilename, const char* outfilenam
 
 	cs = cs_create_fromfile(absfilename);
 	if (!cs) { return FALSE; }
-	ctx->_cs = cs;
+	ctx->_lexer._cs = cs;
 
 	ctx->_srcfilename = absfilename;
 	ctx->_outfilename = outfilename;
@@ -136,7 +140,7 @@ static BOOL cc_read_token_with_handlectrl1(FCCContext* ctx, FCCToken* tk, BOOL *
 {
 	*bfoundctrl = FALSE;
 
-	if (!cc_lexer_read_token(ctx->_cs, tk))
+	if (!cc_lexer_read_token(&ctx->_lexer, tk))
 	{
 		return FALSE;
 	}
@@ -146,7 +150,7 @@ static BOOL cc_read_token_with_handlectrl1(FCCContext* ctx, FCCToken* tk, BOOL *
 		FTKListNode* tklist = NULL;
 		
 		*bfoundctrl = TRUE;
-		if (!cc_read_rowtokens(ctx->_cs, &tklist))
+		if (!cc_read_rowtokens(&ctx->_lexer, &tklist))
 		{
 			return FALSE;
 		}
@@ -175,8 +179,8 @@ static BOOL cc_read_token_with_handlectrl1(FCCContext* ctx, FCCToken* tk, BOOL *
 				return TRUE;
 			}
 
-			ctx->_cs->_line = linenum;
-			ctx->_cs->_srcfilename = filename;
+			ctx->_lexer._cs->_line = linenum;
+			ctx->_lexer._cs->_srcfilename = filename;
 		}
 	}
 
@@ -201,7 +205,7 @@ static BOOL cc_read_token_with_handlectrl(FCCContext* ctx, FCCToken* tk)
 	return TRUE;
 }
 
-static BOOL cc_read_rowtokens(FCharStream* cs, FTKListNode** tail)
+static BOOL cc_read_rowtokens(FCCLexerContext *ctx, FTKListNode** tail)
 {
 	enum EPPToken tktype = TK_UNCLASS;
 	FTKListNode* tknode = NULL;
@@ -216,7 +220,7 @@ static BOOL cc_read_rowtokens(FCharStream* cs, FTKListNode** tail)
 
 		tknode->_next = NULL;
 
-		if (!cc_lexer_read_token(cs, &tknode->_tk))
+		if (!cc_lexer_read_token(ctx, &tknode->_tk))
 		{
 			return FALSE;
 		}

@@ -656,8 +656,111 @@ void cc_lexer_uninit()
 	charbuffer_release();
 }
 
-static int cc_lexer_postprocess_token(FCCToken* tk, struct tagCharBuffer* charbuf);
-int cc_lexer_read_token(FCharStream* cs, FCCToken* tk)
+static BOOL cc_lexer_read_token_inner(FCharStream* cs, FCCToken* tk);
+BOOL cc_lexer_read_token(struct tagLexerContext* ctx, FCCToken* tk)
+{
+	FCCToken strs[256], newlinetk;
+	int strcnt, totallen;
+
+	if (ctx->_cached[0]._isvalid) 
+	{
+		*tk = ctx->_cached[0]._tk;
+		ctx->_cached[0]._isvalid = FALSE; /* take it away.. */
+		return TRUE;
+	}
+	else if (ctx->_cached[1]._isvalid)
+	{
+		*tk = ctx->_cached[1]._tk;
+		ctx->_cached[1]._isvalid = FALSE; /* take it away.. */
+		return TRUE;
+	}
+	
+	strcnt = totallen = 0;
+	newlinetk._type = TK_NONE;
+	while (1)
+	{
+		if (!cc_lexer_read_token_inner(ctx->_cs, tk)) { return FALSE; }
+		
+		if (tk->_type == TK_CONSTANT_STR || tk->_type == TK_CONSTANT_WSTR)
+		{
+			newlinetk._type = TK_NONE; /* clear the previous newline tag */
+			if (strcnt <= 0 || strs[strcnt - 1]._type == tk->_type)
+			{
+				if (strcnt >= sizeof(strs) / sizeof(strs[0]))
+				{
+					logger_output_s("error: too much string token at %w\n", &tk->_loc);
+					return FALSE;
+				}
+
+				strs[strcnt++] = *tk;
+				totallen += tk->_val._astr._chcnt;
+			}
+			else
+			{
+				logger_output_s("error: inconsistent string token at %w and %w\n", &strs[strcnt - 1]._loc, &tk->_loc);
+				return FALSE;
+			}
+		}
+		else if (tk->_type == TK_NEWLINE)
+		{
+			if (strcnt <= 0) 
+			{ 
+				break;
+			}
+			newlinetk = *tk;
+		}
+		else 
+		{
+			break;
+		}
+	} /* end while */
+
+	if (strcnt <= 0) { return TRUE; }
+	if (newlinetk._type == TK_NEWLINE) 
+	{
+		ctx->_cached[0]._tk = newlinetk;
+		ctx->_cached[0]._isvalid = TRUE;
+	}
+	ctx->_cached[1]._tk = *tk;
+	ctx->_cached[1]._isvalid = TRUE;
+
+	/* merge all the string literal */
+	if (strcnt == 1)
+	{
+		*tk = strs[0];
+	}
+	else 
+	{
+		int i, tailbytes, copybytes;
+		char* szbuf, *ptr;
+
+		tailbytes = (strs[0]._type == TK_CONSTANT_WSTR) ? 2 : 1;
+		totallen -= tailbytes * (strcnt - 1);
+		if (!(szbuf = mm_alloc_area(totallen, CC_MM_TEMPPOOL)))
+		{
+			logger_output_s("error: out of memory when merging string literal at %w\n", &strs[0]._loc);
+			return FALSE;
+		}
+
+		ptr = szbuf;
+		for (i = 0; i < strcnt-1; ++i, ptr += copybytes)
+		{
+			copybytes = strs[i]._val._astr._chcnt - tailbytes;
+			memcpy(ptr, strs[i]._val._astr._str, copybytes);
+		}
+		copybytes = strs[i]._val._astr._chcnt;
+		memcpy(ptr, strs[i]._val._astr._str, copybytes);
+
+		*tk = strs[0];
+		tk->_val._astr._chcnt = totallen;
+		tk->_val._astr._str = hs_hashnstr(szbuf, totallen);
+	}
+	
+	return TRUE;
+}
+
+static BOOL cc_lexer_postprocess_token(FCCToken* tk, struct tagCharBuffer* charbuf);
+static BOOL cc_lexer_read_token_inner(FCharStream* cs, FCCToken* tk)
 {
 	enum EState currstate = S_START;
 	int bContinue = TRUE;
@@ -749,7 +852,7 @@ int cc_lexer_read_token(FCharStream* cs, FCCToken* tk)
 
 static BOOL convert_rawstring_to_string(const char* str, int len, FArray* strarray);
 static BOOL convert_rawstring_to_widestring(const char* str, int len, FArray* strarray);
-static int cc_lexer_postprocess_token(FCCToken* tk, struct tagCharBuffer* charbuf)
+static BOOL cc_lexer_postprocess_token(FCCToken* tk, struct tagCharBuffer* charbuf)
 {
 	int k;
 	char* p_end;

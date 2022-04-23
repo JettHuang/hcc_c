@@ -9,7 +9,7 @@
 #include "charstream.h"
 #include "utils.h"
 #include "mm.h"
-#include "lexer/token.h"
+#include "lexer/lexer.h"
 
 
 #define CC_MM_PERMPOOL		MMA_Area_1
@@ -26,7 +26,7 @@ typedef struct tagCCContext {
 	FILE* _outfp;
 
 	/* source code stream */
-	FCharStream* _cs;
+	FCCLexerContext _lexer;
 
 	FCCToken _currtk;
 	struct {

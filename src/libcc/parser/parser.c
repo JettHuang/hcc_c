@@ -83,7 +83,7 @@ BOOL cc_parser_declaration(FCCContext* ctx, FDeclCallback callback)
 			FArray params;
 			array_init(&params, 32, sizeof(FCCSymbol*), CC_MM_TEMPPOOL);
 			if (!cc_parser_declarator(ctx, basety, &id, &loc, &params, &ty)) {
-				logger_output_s("error: parser declarator failed. at %s:%d:%d\n", ctx->_cs->_srcfilename, ctx->_cs->_line, ctx->_cs->_col);
+				logger_output_s("error: parser declarator failed. at %w\n", &ctx->_currtk._loc);
 				return FALSE;
 			}
 
@@ -107,7 +107,7 @@ BOOL cc_parser_declaration(FCCContext* ctx, FDeclCallback callback)
 		else
 		{
 			if (!cc_parser_declarator(ctx, basety, &id, &loc, NULL, &ty)) {
-				logger_output_s("error: parser declarator failed. at %s:%d:%d\n", ctx->_cs->_srcfilename, ctx->_cs->_line, ctx->_cs->_col);
+				logger_output_s("error: parser declarator failed. at %w\n", &ctx->_currtk._loc);
 				return FALSE;
 			}
 		}
@@ -159,7 +159,7 @@ BOOL cc_parser_declaration(FCCContext* ctx, FDeclCallback callback)
 			id = NULL;
 			if (!cc_parser_declarator(ctx, basety, &id, &loc, NULL, &ty))
 			{
-				logger_output_s("error: parser declarator failed. at %s:%d:%d\n", ctx->_cs->_srcfilename, ctx->_cs->_line, ctx->_cs->_col);
+				logger_output_s("error: parser declarator failed. at %w\n", &ctx->_currtk._loc);
 				return FALSE;
 			}
 		} /* end for ;; */
@@ -169,7 +169,7 @@ BOOL cc_parser_declaration(FCCContext* ctx, FDeclCallback callback)
 		BOOL bStructDecl = IsStruct(basety) && !cc_symbol_isgenerated(UnQual(basety)->_u._symbol->_name);
 		if (!IsEnum(basety) && !bStructDecl)
 		{
-			logger_output_s("warning: empty declaration. at %s:%d:%d\n", ctx->_cs->_srcfilename, ctx->_cs->_line, ctx->_cs->_col);
+			logger_output_s("warning: empty declaration. at %w\n", &ctx->_currtk._loc);
 		}
 	}
 
