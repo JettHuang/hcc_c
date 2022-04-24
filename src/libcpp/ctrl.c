@@ -231,17 +231,8 @@ static BOOL ctrl_elif_handler(FCppContext* ctx, FTKListNode* tklist, int* output
 			return FALSE;
 		}
 
-		if (!cpp_expand_rowtokens(ctx, &expr, FALSE)) {
-			return FALSE;
-		}
-
-		if (!cpp_eval_constexpr(ctx, expr, &eval))
-		{
-			return FALSE;
-		}
-
 		/* check prev siblings condition result */
-		for (condblk = top->_condstack; condblk; condblk=condblk->_up)
+		for (condblk = top->_condstack; condblk; condblk = condblk->_up)
 		{
 			bprevsiblingpass = !(condblk->_flags & COND_FAILED_SELF);
 			if (bprevsiblingpass) {
@@ -254,6 +245,18 @@ static BOOL ctrl_elif_handler(FCppContext* ctx, FTKListNode* tklist, int* output
 				break;
 			}
 		} /* end for */
+
+		if (!bprevsiblingpass)
+		{
+			if (!cpp_expand_rowtokens(ctx, &expr, FALSE)) {
+				return FALSE;
+			}
+
+			if (!cpp_eval_constexpr(ctx, expr, &eval))
+			{
+				return FALSE;
+			}
+		}
 
 		if (bprevsiblingpass || !eval) {
 			flags |= COND_FAILED_SELF;

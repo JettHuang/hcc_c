@@ -830,8 +830,11 @@ static BOOL macro_expand_inner(FExpandContext* expctx, FCppContext* ctx, FTKList
 
 				if (argc < 0) /* not actually a call (no '()'), so don't expanding */
 				{
-					where = &tkitr->_next;
-					tkitr = tkitr->_next;
+					if (tkitr)
+					{
+						where = &tkitr->_next;
+						tkitr = tkitr->_next;
+					}
 					continue;
 				}
 				else if (argc != m->_argc && (!m->_isvarg || argc < (m->_argc-1)))
