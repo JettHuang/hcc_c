@@ -7,16 +7,15 @@
 @echo off
 
 set CCROOT=F:\GitHub\hcc_c\dist
-set INCLUDE=%CCROOT%\include
 set CPP=%CCROOT%\bin\hcpp_d.exe
 set CC=%CCROOT%\bin\hcc_d.exe
 
 set CFLAGS=-D__NO_ISOCEXT -Dwin32 -D_WIN32 -D_M_IX86
 
 
-if exist helloworwld.i del helloworld.i
-if exist helloworwld.asm del helloworld.asm
-if exist helloworwld.obj del helloworld.obj
+if exist helloworld.i del helloworld.i
+if exist helloworld.asm del helloworld.asm
+if exist helloworld.obj del helloworld.obj
 if exist helloworld.exe del helloworld.exe
 
 %CPP% %CFLAGS% -o helloworld.i helloworld.c
@@ -42,18 +41,12 @@ echo Assembly Error
 goto TheEnd
 
 :errcpp
-echo c preprocesser error
+echo C preprocesser error
 goto TheEnd
 
 :errcc
-echo c compile error
-goto TheEnd
-
-:noMASM
-echo MASM32 is required...
+echo C compile error
 goto TheEnd
 
 :TheEnd
-
-pause
 

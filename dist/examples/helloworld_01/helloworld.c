@@ -1,8 +1,46 @@
-/* \brief 
- *		Hello world!
+/* \brief
+ *		Hello World!!
  */
+
+#if 1
+
+ /* the following definitons are used to compile the visual-stdio includes file successfully 
+  *
+  * BEGIN
+  */
+ #define __declspec(...)	/* __declspec is un-support */
+ #define __inline	inline	/* __inline is un-support */
+ #define __forceinline inline
+ #define __cdecl			 /* default is cdecl */
+ #define __fastcall          /* __fastcall is un-support */
+ #define __pragma(...)		 /* __pragma is un-support */
+ 
+ #define __int64 	long long 
+ #define _NO_CRT_STDIO_INLINE
+ #define _CRT_FUNCTIONS_REQUIRED	1  /* errno.h */
+ #define __STDC_WANT_SECURE_LIB__	0
+ /* END */
+ 
  
  #include <stdio.h>
+
+ #include <ctype.h>
+ #include <string.h>
+ #include <math.h>
+ #include <stdlib.h>
+ #include <assert.h>
+ #include <stdarg.h>
+ #include <setjmp.h>
+ #include <signal.h>
+ #include <time.h>
+ #include <limits.h>
+ #include <float.h>
+
+ 
+ extern int printf(const char* fmt, ...);
+ 
+ #define DEBUG(fmt, ...)   printf(fmt, __VA_ARGS__)
+
  
  typedef struct tagCCInfo {
 	int _isdirty:1;
@@ -33,6 +71,8 @@
 	
 	printf(szhelp);
 	
+	DEBUG("debug: %s, %d\n", szhelp, b);
+	
 	if (argv[0] != NULL)
 	{
 		printf("fuck you...\n");
@@ -54,4 +94,27 @@
 	
 	return 0;
  }
+ 
+#else
+	
+  double modf(double _X, double* _Y);
+  
+  inline float modff( float _X, float* _Y)
+    {
+        double _F, _I;
+        _F = modf(_X, &_I);
+        *_Y = (float)_I;
+        return (float)_F;
+    }
+ 
+  int main()
+  {
+	  float x, y;
+	  
+	  x = 10.f; y = 20.f;
+	  modff(x, &y);
+	  return 0;
+  }
+  
+ #endif
  
