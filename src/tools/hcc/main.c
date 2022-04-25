@@ -35,7 +35,7 @@ int main(int argc, char* argv[])
 	optparse_init(&options, argv);
 	srcfilename = NULL;
 	outfilename = "out.i";
-	while ((option = optparse(&options, "I:D:o:")) != -1) {
+	while ((option = optparse(&options, "I:D:o:dt")) != -1) {
 		switch (option) {
 		case 'I':
 			break;
@@ -43,6 +43,12 @@ int main(int argc, char* argv[])
 			break;
 		case 'o':
 			outfilename = options.optarg;
+			break;
+		case 'd':
+			gdebugcfg._output_dag = 1;
+			break;
+		case 't':
+			gdebugcfg._output_tripple = 1;
 			break;
 		case '?':
 			logger_output_s("%s: %s\n", argv[0], options.errmsg);

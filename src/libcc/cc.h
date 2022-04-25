@@ -43,6 +43,13 @@ typedef struct tagCCContext {
 	struct tagCCBackend* _backend;
 } FCCContext;
 
+typedef struct tagCCDebugConfig
+{
+	int _output_dag : 1;
+	int _output_tripple : 1;
+} FCCDebugConfig;
+
+extern struct tagCCDebugConfig  gdebugcfg;
 
 /************************************************************************/
 /* public interface                                                     */

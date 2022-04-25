@@ -86,7 +86,9 @@ static void doconstant(struct tagCCContext* ctx, struct tagCCSymbol* p)
 	FCCType* ty = UnQual(p->_type);
 
 	/* don't export integers to constant-table */
-	if (ty->_op == Type_SInteger || ty->_op == Type_UInteger)
+	if (ty->_op == Type_SInteger 
+		|| ty->_op == Type_UInteger 
+		|| ty->_op == Type_Pointer)
 	{
 		return;
 	}
@@ -103,6 +105,9 @@ static void doconstant(struct tagCCContext* ctx, struct tagCCSymbol* p)
 		break;
 	case Type_Float:
 		ctx->_backend->_defconst_real(ctx, ty->_size, p->_u._cnstval._float, 1);
+		break;
+	case Type_Pointer:
+		ctx->_backend->_defconst_unsigned(ctx, ty->_size, p->_u._cnstval._pointer, 1);
 		break;
 	case Type_Array:
 		ctx->_backend->_defconst_string(ctx, p->_u._cnstval._payload, ty->_size, ty->_type->_size);

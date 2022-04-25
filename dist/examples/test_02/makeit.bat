@@ -7,7 +7,6 @@
 @echo off
 
 set CCROOT=F:\GitHub\hcc_c\dist
-set INCLUDE=%CCROOT%\include
 set CPP=%CCROOT%\bin\hcpp_d.exe
 set CC=%CCROOT%\bin\hcc_d.exe
 
@@ -42,15 +41,11 @@ echo Assembly Error
 goto TheEnd
 
 :errcpp
-echo c preprocesser error
+echo C preprocesser error
 goto TheEnd
 
 :errcc
-echo c compile error
-goto TheEnd
-
-:noMASM
-echo MASM32 is required...
+echo C compile error
 goto TheEnd
 
 :TheEnd

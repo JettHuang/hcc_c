@@ -259,7 +259,7 @@ BOOL emit_store_r2staticmem(struct tagCCGenCodeContext* ctx, struct tagCCDagNode
 	var = dag->_x._loc._mm._var;
 	asm->_dst._format = FormatSIB;
 	asm->_dst._tycode = IR_OPTY0(dag->_op);
-	if (var->_scope == SCOPE_PARAM || var->_scope == SCOPE_LOCAL) {
+	if (var->_scope >= SCOPE_PARAM) {
 		asm->_dst._u._sib._basereg = X86_EBP;
 		asm->_dst._u._sib._displacement2 = var->_x._frame_offset + dag->_x._loc._mm._offset;
 	}
@@ -289,7 +289,7 @@ BOOL emit_load_staticmem2r(struct tagCCGenCodeContext* ctx, struct tagCCDagNode*
 	var = dag->_x._loc._mm._var;
 	asm->_src._format = FormatInSIB;
 	asm->_src._tycode = IR_OPTY0(dag->_op);
-	if (var->_scope == SCOPE_PARAM || var->_scope == SCOPE_LOCAL) {
+	if (var->_scope >= SCOPE_PARAM) {
 		asm->_src._u._sib._basereg = X86_EBP;
 		asm->_src._u._sib._displacement2 = var->_x._frame_offset + dag->_x._loc._mm._offset;
 	}
@@ -699,7 +699,7 @@ static BOOL cc_get_operand(struct tagCCDagNode *dag, struct tagCCASOperand *oper
 
 		operand->_format = FormatInSIB;
 		operand->_tycode = IR_OPTY0(dag->_op);
-		if (var->_scope == SCOPE_PARAM || var->_scope == SCOPE_LOCAL) {
+		if (var->_scope >= SCOPE_PARAM) {
 			operand->_u._sib._basereg = X86_EBP;
 			operand->_u._sib._displacement2 = var->_x._frame_offset + dag->_x._loc._mm._offset;
 		}

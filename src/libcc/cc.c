@@ -43,6 +43,13 @@ static FCCTypeMetrics defaultmetrics =
 	{ 0, 4 }, /* _structmetric */
 };
 
+struct tagCCDebugConfig gdebugcfg = 
+{
+	0,
+	0
+};
+
+
 void cc_init()
 {
 	logger_set(cc_logger_outc, cc_logger_outs);

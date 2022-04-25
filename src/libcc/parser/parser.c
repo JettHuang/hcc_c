@@ -1010,7 +1010,6 @@ FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, con
 		q->_sclass = SC_Static;
 		q->_loc = *loc;
 		q->_generated = 1;
-		q->_defined = 1;
 		cc_gen_internalname(q);
 
 		p->_u._alias = q;
@@ -1052,6 +1051,7 @@ FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, con
 
 		if (storage == SC_Static) {
 			p->_u._alias->_u._initializer = initializer;
+			q->_u._alias->_defined = initializer ? 1 : 0;
 		}
 		else {
 			p->_u._initializer = initializer;
@@ -1256,11 +1256,15 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 			logger_output_s("translate DAG failed.\n");
 			return FALSE;
 		}
-#if 1
-		logger_output_s("function '%s' after dag:\n", p->_name);
-		cc_ir_basicblock_display(basicblocks, 5);
-		logger_output_s("\n");
-#endif
+
+		/* output debug dag */
+		if (gdebugcfg._output_dag)
+		{
+			logger_output_s("function '%s' after dag:\n", p->_name);
+			cc_ir_basicblock_display(basicblocks, 5);
+			logger_output_s("\n");
+		}
+
 		/* generate & dump back-end codes */
 		ctx->_backend->_deffunction_begin(ctx, p);
 		if (!cc_gen_dumpfunction(ctx, p, &caller, &callee, basicblocks)) {

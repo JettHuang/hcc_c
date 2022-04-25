@@ -1,4 +1,22 @@
 
+ /* the following definitons are used to compile the visual-stdio includes file successfully 
+  *
+  * BEGIN
+  */
+ #define __declspec(...)	/* __declspec is un-support */
+ #define __inline	inline	/* __inline is un-support */
+ #define __forceinline inline
+ #define __cdecl			 /* default is cdecl */
+ #define __fastcall          /* __fastcall is un-support */
+ #define __pragma(...)		 /* __pragma is un-support */
+ 
+ #define __int64 	long long 
+ #define _NO_CRT_STDIO_INLINE
+ #define _CRT_FUNCTIONS_REQUIRED	1  /* errno.h */
+ #define __STDC_WANT_SECURE_LIB__	0
+ /* END */
+ 
+
 #include <stdio.h>
 #include <stdlib.h>
 
