@@ -49,7 +49,7 @@ void cpp_contex_init(FCppContext* ctx)
 	ctx->_strdate = NULL;
 	ctx->_strtime = NULL;
 	ctx->_lookaheadtk._valid = 0;
-	
+
 	ctx->_HS__DATE__ = hs_hashstr("__DATE__");
 	ctx->_HS__FILE__ = hs_hashstr("__FILE__");
 	ctx->_HS__LINE__ = hs_hashstr("__LINE__");
@@ -59,6 +59,10 @@ void cpp_contex_init(FCppContext* ctx)
 	ctx->_HS__TIME__ = hs_hashstr("__TIME__");
 	ctx->_HS__VA_ARGS__ = hs_hashstr("__VA_ARGS__");
 	ctx->_HS__DEFINED__ = hs_hashstr("defined");
+	ctx->_HS_ONCE__ = hs_hashstr("once");
+
+	array_init(&ctx->_pragma_onces, 32, sizeof(const char*), CPP_MM_PERMPOOL);
+	ctx->_stop_flag = FALSE;
 
 	cpp_init_date(ctx);
 	// built-in macros
@@ -304,6 +308,23 @@ BOOL cpp_process(FCppContext* ctx, const char* srcfilename, const char* outfilen
 			if (!cpp_do_control(ctx, tklist, &ctrloutputlines)) {
 				return FALSE;
 			}
+
+			if (ctx->_stop_flag)
+			{
+				ctx->_stop_flag = FALSE;
+
+				/* release char stream */
+				cs_release(top->_cs);
+				top = top->_up;
+				if (top)
+				{
+					cpp_output_linectrl(ctx, top->_cs->_srcfilename, top->_cs->_line);
+				}
+				ctx->_sourcestack = top;
+				continue; /* go to while */
+			}
+			
+
 			if (ctrloutputlines >= 0) {
 				cpp_output_blankline(ctx, top->_cs->_line - start_linenum - ctrloutputlines);
 			}

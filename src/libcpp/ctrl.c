@@ -572,8 +572,30 @@ static BOOL ctrl_pragma_handler(FCppContext* ctx, FTKListNode* tklist, int* outp
 {
 	FSourceCodeContext* top = ctx->_sourcestack;
 	int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
+	FTKListNode* tkparam;
 
 	if (!bcondblockpass) {
+		return TRUE;
+	}
+
+	tkparam = tklist->_next->_next;
+	if (tkparam && tkparam->_tk._str == ctx->_HS_ONCE__)
+	{
+		const char* currfile;
+		int n;
+
+		currfile = top->_srcfilename;
+		for (n = 0; n < ctx->_pragma_onces._elecount; ++n)
+		{
+			const char* filename = *(const char**)array_element(&ctx->_pragma_onces, n);
+			if (filename == currfile)
+			{
+				ctx->_stop_flag = TRUE;
+				return TRUE;
+			}
+		} /* end for n */
+
+		array_append(&ctx->_pragma_onces, &currfile);
 		return TRUE;
 	}
 

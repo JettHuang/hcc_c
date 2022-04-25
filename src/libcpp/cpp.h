@@ -102,6 +102,8 @@ typedef struct tagCppContext {
 
 	FMacroListNode* _macrolist;
 	FSourceCodeContext* _sourcestack;
+	FArray _pragma_onces;  /* #pragma once files */
+	BOOL   _stop_flag;
 
 	const char* _strdate;
 	const char* _strtime;
@@ -120,6 +122,7 @@ typedef struct tagCppContext {
 	const char* _HS__TIME__;
 	const char* _HS__VA_ARGS__;
 	const char* _HS__DEFINED__;
+	const char* _HS_ONCE__;
 } FCppContext;
 
 
