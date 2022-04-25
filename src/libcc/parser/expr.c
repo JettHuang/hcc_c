@@ -3002,6 +3002,7 @@ FCCIRTree* cc_expr_condition(FCCIRTree* expr0, FCCIRTree* expr1, FCCIRTree* expr
 FCCIRTree* cc_expr_bool(FCCType* ty, FCCIRTree* expr, FLocation* loc, enum EMMArea where)
 {
 	FCCIRTree *zero, *right;
+	FCCType* castty;
 	int op;
 
 	right = cc_expr_right(expr);
@@ -3022,8 +3023,16 @@ FCCIRTree* cc_expr_bool(FCCType* ty, FCCIRTree* expr, FLocation* loc, enum EMMAr
 		return NULL;
 	}
 
+	castty = expr->_ty;
+	if (IsPtr(castty)) {
+		castty = gbuiltintypes._uinttype;
+	} else if (IsArith(castty)) {
+		castty = cc_type_select(castty, castty);
+	}
+
 	zero = cc_expr_constant(gbuiltintypes._sinttype, cc_ir_typecode(gbuiltintypes._sinttype), loc, where, 0);
-	zero = cc_expr_cast_constant(expr->_ty, zero, loc, where);
+	zero = cc_expr_cast_constant(castty, zero, loc, where);
+	expr = cc_expr_cast(castty, expr, loc, where);
 	return cc_expr_unequal(ty, expr, zero, loc, where);
 }
 
