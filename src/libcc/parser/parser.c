@@ -431,6 +431,7 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 		case TK_ID:
 		{
 			FCCSymbol* p = NULL;
+
 			if (typespec == TK_NONE && size == Size_Unknown && sign == Sign_Unknown
 				&& (p = cc_symbol_lookup(ctx->_currtk._val._astr._str, gIdentifiers)) && p->_sclass == SC_Typedef)
 			{
@@ -448,7 +449,7 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 			bQuitLoop = TRUE;
 			break;
 		}
-	} // end while
+	} /* end while */
 
 	if (typespec == Type_Unknown)
 	{
@@ -458,7 +459,7 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 		}
 		else
 		{
-			logger_output_s("syntax error: no type specifier, at %w", &ctx->_currtk._loc);
+			logger_output_s("syntax error: no type specifier, at %w\n", &ctx->_currtk._loc);
 			return NULL;
 		}
 	}
@@ -467,7 +468,7 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 	{
 		if (size != Size_Unknown)
 		{
-			logger_output_s("syntax error: invalid size specifier for char, at %w", &ctx->_currtk._loc);
+			logger_output_s("syntax error: invalid size specifier for char, at %w\n", &ctx->_currtk._loc);
 			return NULL;
 		}
 
@@ -520,7 +521,7 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 	{
 		if (sign != Sign_Unknown || size != Size_Unknown)
 		{
-			logger_output_s("syntax error: invalid type specifier, at %w", &ctx->_currtk._loc);
+			logger_output_s("syntax error: invalid type specifier, at %w\n", &ctx->_currtk._loc);
 			return NULL;
 		}
 	}
@@ -605,6 +606,7 @@ BOOL cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FAr
 	break;
 	case TK_MUL: /* '*' */
 	{
+		FCCType* tmpty;
 		int qual = 0;
 
 		ty = cc_type_tmp(Type_Pointer, NULL);
@@ -621,12 +623,13 @@ BOOL cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FAr
 			cc_read_token(ctx, &ctx->_currtk);
 		} /* end while */
 
+		tmpty = ty;
 		if (qual) {
 			ty->_type = cc_type_tmp(qual, NULL);
-			ty = ty->_type;
+			tmpty = ty->_type;
 		}
 		
-		if (!cc_parser_declarator1(ctx, id, loc, params, bgetparams, &ty->_type))
+		if (!cc_parser_declarator1(ctx, id, loc, params, bgetparams, &tmpty->_type))
 		{
 			return FALSE;
 		}
@@ -834,12 +837,12 @@ FCCSymbol* cc_parser_declglobal(FCCContext* ctx, int storage, const char* id, co
 			ty = cc_type_compose(ty, p->_type);
 		}
 		else {
-			logger_output_s("error: redeclaration of '%s' previously declared at %w\n", p->_name, &p->_loc);
+			logger_output_s("error: redeclaration of '%s' at %w. previously declared at %w\n", p->_name, loc, &p->_loc);
 			return FALSE;
 		}
 
 		if (!IsFunction(ty) && p->_defined && ctx->_currtk._type == TK_ASSIGN) { /* '=' */
-			logger_output_s("error: redefinition of '%s' previously defined at %w\n", p->_name, &p->_loc);
+			logger_output_s("error: redefinition of '%s' at %w. previously defined at %w\n", p->_name, loc, &p->_loc);
 			return FALSE;
 		}
 
@@ -1288,7 +1291,7 @@ FCCType* cc_parser_declenum(FCCContext* ctx)
 			
 			p = cc_symbol_lookup(id, gIdentifiers);
 			if (p && p->_scope == gCurrentLevel) {
-				logger_output_s("error: redeclaration of '%s' previously declared at %w\n", id, &p->_loc);
+				logger_output_s("error: redeclaration of '%s' at %w. previously declared at %w\n", id, &ctx->_currtk._loc, &p->_loc);
 				return NULL;
 			}
 			loc = ctx->_currtk._loc;

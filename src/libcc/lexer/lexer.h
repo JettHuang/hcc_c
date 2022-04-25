@@ -19,6 +19,6 @@ typedef struct tagLexerContext {
 
 void cc_lexer_init();
 void cc_lexer_uninit();
-BOOL cc_lexer_read_token(struct tagLexerContext *ctx, FCCToken* tk);
+BOOL cc_lexer_read_token(struct tagLexerContext *ctx, FCCToken* tk, BOOL ismergestr);
 
 #endif /* __CC_LEXER_H__ */

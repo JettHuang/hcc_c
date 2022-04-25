@@ -140,7 +140,7 @@ static BOOL cc_read_token_with_handlectrl1(FCCContext* ctx, FCCToken* tk, BOOL *
 {
 	*bfoundctrl = FALSE;
 
-	if (!cc_lexer_read_token(&ctx->_lexer, tk))
+	if (!cc_lexer_read_token(&ctx->_lexer, tk, TRUE))
 	{
 		return FALSE;
 	}
@@ -220,7 +220,7 @@ static BOOL cc_read_rowtokens(FCCLexerContext *ctx, FTKListNode** tail)
 
 		tknode->_next = NULL;
 
-		if (!cc_lexer_read_token(ctx, &tknode->_tk))
+		if (!cc_lexer_read_token(ctx, &tknode->_tk, FALSE))
 		{
 			return FALSE;
 		}

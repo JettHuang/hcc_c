@@ -29,7 +29,7 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
                 cc_ir_codelist_append(list, cc_ir_newcode_jump(NULL, tlab, NULL, where));
             }
         }
-        else if (expr->_ty->_u._symbol->_addressed && outexpr)
+        else if (UnQual(expr->_ty)->_u._symbol->_addressed && outexpr)
         {
 			FCCSymbol* p;
 

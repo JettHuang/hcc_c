@@ -657,7 +657,7 @@ void cc_lexer_uninit()
 }
 
 static BOOL cc_lexer_read_token_inner(FCharStream* cs, FCCToken* tk);
-BOOL cc_lexer_read_token(struct tagLexerContext* ctx, FCCToken* tk)
+BOOL cc_lexer_read_token(struct tagLexerContext* ctx, FCCToken* tk, BOOL ismergestr)
 {
 	FCCToken strs[256], newlinetk;
 	int strcnt, totallen;
@@ -680,7 +680,8 @@ BOOL cc_lexer_read_token(struct tagLexerContext* ctx, FCCToken* tk)
 	while (1)
 	{
 		if (!cc_lexer_read_token_inner(ctx->_cs, tk)) { return FALSE; }
-		
+		if (!ismergestr) { return TRUE; }
+
 		if (tk->_type == TK_CONSTANT_STR || tk->_type == TK_CONSTANT_WSTR)
 		{
 			newlinetk._type = TK_NONE; /* clear the previous newline tag */
