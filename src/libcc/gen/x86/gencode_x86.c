@@ -344,7 +344,16 @@ static void check_static_indir(struct tagCCDagNode* dag)
 				dag->_x._loc._mm._offset = k;
 			}
 		}
-		break;
+			break;
+		case IR_ADDRF:
+		case IR_ADDRL:
+		case IR_ADDRG:
+		{
+			dag->_x._inmemory = 1;
+			dag->_x._loc._mm._var = kid->_symbol;
+			dag->_x._loc._mm._offset = 0;
+		}
+			break;
 		case IR_CONST:
 		{
 			dag->_x._inmemory = 1;
@@ -825,8 +834,14 @@ static int cc_get_regflags_bytype(int tycode)
 	case IR_S32:
 	case IR_U32:
 	case IR_PTR:
+	case IR_S64:
+	case IR_U64:
 		return NORMAL_ADDR_X86REGS;
+	case IR_F32:
+	case IR_F64:
+		return REG_BIT(X86_ST0);
 	default:
+		assert(0);
 		break;
 	}
 
@@ -925,7 +940,7 @@ static BOOL cc_convert_insib_sib_imm_to_reg(struct tagCCGenCodeContext* ctx, str
 	{
 		int regs[2] = { X86_NIL, X86_NIL };
 
-		regs[0] = cc_reg_alloc(ctx, seqid, NORMAL_ADDR_X86REGS);
+		regs[0] = cc_reg_alloc(ctx, seqid, cc_get_regflags_bytype(tycode));
 		if (regs[0] == X86_NIL) { return FALSE; }
 		cc_reg_make_associated(regs[0], dag, 0);
 		if (tycode == IR_S64 || tycode == IR_U64)
@@ -1914,8 +1929,18 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 		}
 		else if (!cc_is_integer(dstty) && !cc_is_integer(srcty))
 		{
-			/* alloc temp */
-			alloc_temporary_space(ctx, lhs, curseqid);
+			if (src._format == FormatReg)
+			{
+				assert(src._u._regs[0] == X86_ST0);
+				cc_reg_make_associated(X86_ST0, lhs, 0);
+				isreused = TRUE;
+			}
+			else
+			{
+				assert(src._format == FormatInSIB);
+				cc_reg_free(ctx, X86_ST0, curseqid);
+				cc_reg_make_associated(X86_ST0, lhs, 0);
+			}
 		}
 
 		if (!isreused) 
@@ -1964,9 +1989,6 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
 			as->_dst = dst;
 			as->_src = src;
-
-			cc_reg_make_associated(rhs->_x._loc._regs[0], lhs, 0);
-			cc_reg_make_associated(rhs->_x._loc._regs[1], lhs, 1);
 		}
 	}
 		break;

@@ -36,7 +36,7 @@ static struct tagRegisterDescriptor gregisters[] =
 	{ X86_EDI, 0, 0, 0, NULL },
 	{ X86_EBP, 1, 0, 0, NULL },
 	{ X86_ESP, 1, 0, 0, NULL },
-	{ X86_ST0, 1, 0, 0, NULL },
+	{ X86_ST0, 0, 0, 0, NULL },
 	{ X86_ST1, 1, 0, 0, NULL }
 };
 
@@ -124,7 +124,7 @@ int cc_reg_alloc(struct tagCCGenCodeContext* ctx, int currseqid, int regflags)
 		if (regflags & REG_BIT(i))
 		{
 			p = &gregisters[i];
-			if (!p->_isusing) 
+			if (!p->_isreserved && !p->_isusing)
 			{
 				if (!p->_link || p->_lastref < currseqid) {
 					result = p;

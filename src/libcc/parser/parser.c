@@ -292,6 +292,15 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 			sclass = SC_Typedef;
 			cc_read_token(ctx, &ctx->_currtk);
 			break;
+		case TK_INLINE:
+			if (funcspec != FS_Unknown)
+			{
+				logger_output_s("error: invalid use 'typedef', at %w\n", &ctx->_currtk._loc);
+				return NULL;
+			}
+			funcspec = FS_INLINE;
+			cc_read_token(ctx, &ctx->_currtk);
+			break;
 
 			// qualifier
 		case TK_RESTRICT:
@@ -517,6 +526,18 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 			}
 		}
 	}
+	else if (typespec == TK_DOUBLE)
+	{
+		if (sign != Sign_Unknown || (size != Size_Unknown && size != Size_Long))
+		{
+			logger_output_s("syntax error: invalid type specifier, at %w\n", &ctx->_currtk._loc);
+			return NULL;
+		}
+		if (size == Size_Long)
+		{
+			ty = gbuiltintypes._ldoubletype;
+		}
+	}
 	else
 	{
 		if (sign != Sign_Unknown || size != Size_Unknown)
@@ -534,6 +555,11 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 	
 	if (storage)
 	{
+		if ((sclass == SC_Unknown || sclass == SC_Static) && funcspec == FS_INLINE)
+		{
+			sclass = SC_Static;
+		}
+
 		*storage = sclass;
 	}
 
