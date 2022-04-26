@@ -194,7 +194,7 @@ void alloc_temporary_space(struct tagCCGenCodeContext* ctx, struct tagCCDagNode*
 		p = array_element(&ctx->_localuses, i);
 		if (p->_kind == LOCAL_TMP)
 		{
-			if (p->_x._tmp._size >= dag->_typesize &&
+			if (p->_x._tmp._size >= dag->_ty->_size &&
 				(!p->_x._tmp._dag || p->_x._tmp._dag->_lastref < curseqid))
 			{
 				if (p->_x._tmp._dag)
@@ -214,7 +214,7 @@ void alloc_temporary_space(struct tagCCGenCodeContext* ctx, struct tagCCDagNode*
 	} /* end for */
 
 	/* create new temp */
-	spacebytes = util_roundup(dag->_typesize, 4);
+	spacebytes = util_roundup(dag->_ty->_size, 4);
 	ctx->_curlocalbytes += spacebytes;
 	if (ctx->_curlocalbytes > ctx->_maxlocalbytes)
 	{
@@ -271,7 +271,7 @@ BOOL emit_store_r2staticmem(struct tagCCGenCodeContext* ctx, struct tagCCDagNode
 	asm->_src._tycode = IR_OPTY0(dag->_op);
 	asm->_src._u._regs[0] = dag->_x._loc._regs[0];
 	asm->_src._u._regs[1] = dag->_x._loc._regs[1];
-	asm->_count = dag->_typesize;
+	asm->_count = dag->_ty->_size;
 
 	return TRUE;
 }
@@ -301,7 +301,7 @@ BOOL emit_load_staticmem2r(struct tagCCGenCodeContext* ctx, struct tagCCDagNode*
 	asm->_dst._tycode = IR_OPTY0(dag->_op);
 	asm->_dst._u._regs[0] = dag->_x._loc._regs[0];
 	asm->_dst._u._regs[1] = dag->_x._loc._regs[1];
-	asm->_count = dag->_typesize;
+	asm->_count = dag->_ty->_size;
 
 	return TRUE;
 }
@@ -646,6 +646,7 @@ static BOOL munch_stmt(struct tagCCTripleCodeContext* ctx, FCCIRCode* ircode)
 	case IR_FEXIT:
 	{
 		if (!(triple = emit_triple(ctx, X86_EPILOGUE))) { return FALSE; }
+		triple->_count = ircode->_u._fexit._parambytes;
 	}
 		break;
 	default:
@@ -892,7 +893,7 @@ static BOOL cc_convert_insib_reg_imm_to_sib(struct tagCCGenCodeContext* ctx, str
 		as->_dst._format = FormatReg;
 		as->_dst._tycode = IR_OPTY0(dag->_op);
 		as->_dst._u._regs[0] = regs[0];
-		as->_count = dag->_typesize;
+		as->_count = dag->_ty->_size;
 
 		operand->_format = FormatSIB;
 		operand->_tycode = IR_OPTY0(dag->_op);
@@ -957,7 +958,7 @@ static BOOL cc_convert_insib_sib_imm_to_reg(struct tagCCGenCodeContext* ctx, str
 		as->_dst._tycode = IR_OPTY0(dag->_op);
 		as->_dst._u._regs[0] = regs[0];
 		as->_dst._u._regs[1] = regs[1];
-		as->_count = dag->_typesize;
+		as->_count = dag->_ty->_size;
 
 		*operand = as->_dst;
 	}
@@ -1080,7 +1081,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 				as->_dst._u._regs[0] = X86_EAX;
 				as->_dst._u._regs[1] = X86_NIL;
 				as->_src = src;
-				as->_count = lhs->_typesize;
+				as->_count = lhs->_ty->_size;
 			}
 
 		}
@@ -1100,7 +1101,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 				as->_dst._u._regs[0] = X86_EAX;
 				as->_dst._u._regs[1] = X86_EDX;
 				as->_src = src;
-				as->_count = lhs->_typesize;
+				as->_count = lhs->_ty->_size;
 			}
 		}
 			break;
@@ -1119,7 +1120,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 				as->_dst._u._regs[0] = X86_ST0;
 				as->_dst._u._regs[1] = X86_NIL;
 				as->_src = src;
-				as->_count = lhs->_typesize;
+				as->_count = lhs->_ty->_size;
 			}
 		}
 			break;
@@ -1158,7 +1159,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 			as->_dst._format = FormatReg;
 			as->_dst._tycode = IR_OPTY0(lhs->_op);
 			as->_dst._u._regs[0] = regs[0];
-			as->_count = lhs->_typesize;
+			as->_count = lhs->_ty->_size;
 		}
 			break;
 		default:
@@ -1224,7 +1225,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 				as->_dst._tycode = IR_OPTY0(lhs->_op);
 				as->_dst._u._regs[0] = regs[0];
 				as->_dst._u._regs[1] = regs[1];
-				as->_count = lhs->_typesize;
+				as->_count = lhs->_ty->_size;
 
 				dst = as->_dst;
 				cc_reg_make_associated(regs[0], result, 0);
@@ -1294,7 +1295,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 				as->_dst._tycode = IR_OPTY0(lhs->_op);
 				as->_dst._u._regs[0] = regs[0];
 				as->_dst._u._regs[1] = regs[1];
-				as->_count = lhs->_typesize;
+				as->_count = lhs->_ty->_size;
 
 				dst = as->_dst;
 				cc_reg_make_associated(regs[0], result, 0);
@@ -1328,7 +1329,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 				as->_dst._format = FormatReg;
 				as->_dst._tycode = IR_OPTY0(lhs->_op);
 				as->_dst._u._regs[0] = X86_ST0;
-				as->_count = lhs->_typesize;
+				as->_count = lhs->_ty->_size;
 
 				if (!cc_get_operand(result, &dst)) { return FALSE; }
 				if (lhs == rhs) { src = dst; }
@@ -1380,7 +1381,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 				as->_dst._format = FormatReg;
 				as->_dst._tycode = IR_OPTY0(lhs->_op);
 				as->_dst._u._regs[0] = regs[0];
-				as->_count = lhs->_typesize;
+				as->_count = lhs->_ty->_size;
 
 				dst = as->_dst;
 				cc_reg_make_associated(regs[0], result, 0);
@@ -1393,11 +1394,11 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 		{
 			if (!(as = emit_as(ctx, X86_PUSH))) { return FALSE; }
 			as->_dst = src;
-			as->_count = rhs->_typesize;
+			as->_count = rhs->_ty->_size;
 
 			if (!(as = emit_as(ctx, X86_PUSH))) { return FALSE; }
 			as->_dst = dst;
-			as->_count = lhs->_typesize;
+			as->_count = lhs->_ty->_size;
 
 			cc_reg_free(ctx, X86_EAX, curseqid);
 			cc_reg_free(ctx, X86_ECX, curseqid);
@@ -1432,7 +1433,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 				as->_dst._format = FormatReg;
 				as->_dst._tycode = IR_OPTY0(lhs->_op);
 				as->_dst._u._regs[0] = X86_ST0;
-				as->_count = lhs->_typesize;
+				as->_count = lhs->_ty->_size;
 
 				if (!cc_get_operand(result, &dst)) { return FALSE; }
 				if (lhs == rhs) { src = dst; }
@@ -1486,7 +1487,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 				as->_dst._format = FormatReg;
 				as->_dst._tycode = IR_OPTY0(lhs->_op);
 				as->_dst._u._regs[0] = regs[0];
-				as->_count = lhs->_typesize;
+				as->_count = lhs->_ty->_size;
 
 				cc_reg_make_associated(regs[0], result, 0);
 			}
@@ -1526,7 +1527,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 			as->_dst._tycode = IR_OPTY0(lhs->_op);
 			as->_dst._u._regs[0] = X86_EAX;
 			as->_dst._u._regs[1] = X86_EDX;
-			as->_count = lhs->_typesize;
+			as->_count = lhs->_ty->_size;
 
 			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
 			as->_src = src;
@@ -1534,7 +1535,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 			as->_dst._tycode = IR_OPTY0(rhs->_op);
 			as->_dst._u._regs[0] = X86_ECX;
 			as->_dst._u._regs[1] = X86_NIL;
-			as->_count = rhs->_typesize;
+			as->_count = rhs->_ty->_size;
 
 			cc_reg_make_associated(X86_EAX, result, 0);
 			cc_reg_make_associated(X86_EDX, result, 1);
@@ -1583,7 +1584,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 				as->_dst._format = FormatReg;
 				as->_dst._tycode = IR_OPTY0(lhs->_op);
 				as->_dst._u._regs[0] = X86_EAX;
-				as->_count = lhs->_typesize;
+				as->_count = lhs->_ty->_size;
 				
 				dst = as->_dst;
 			}
@@ -1600,11 +1601,11 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 		{
 			if (!(as = emit_as(ctx, X86_PUSH))) { return FALSE; }
 			as->_dst = src;
-			as->_count = rhs->_typesize;
+			as->_count = rhs->_ty->_size;
 
 			if (!(as = emit_as(ctx, X86_PUSH))) { return FALSE; }
 			as->_dst = dst;
-			as->_count = lhs->_typesize;
+			as->_count = lhs->_ty->_size;
 
 			cc_reg_free(ctx, X86_EAX, curseqid);
 			cc_reg_free(ctx, X86_ECX, curseqid);
@@ -1639,7 +1640,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 				as->_dst._format = FormatReg;
 				as->_dst._tycode = IR_OPTY0(lhs->_op);
 				as->_dst._u._regs[0] = X86_ST0;
-				as->_count = lhs->_typesize;
+				as->_count = lhs->_ty->_size;
 
 				dst = as->_dst;
 				if (lhs == rhs) { src = dst; }
@@ -1706,7 +1707,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 				as->_dst._format = FormatReg;
 				as->_dst._tycode = IR_OPTY0(lhs->_op);
 				as->_dst._u._regs[0] = X86_ST0;
-				as->_count = lhs->_typesize;
+				as->_count = lhs->_ty->_size;
 
 				dst = as->_dst;
 				cc_reg_make_associated(X86_ST0, result, 0);
@@ -1813,7 +1814,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 				as->_dst._format = FormatReg;
 				as->_dst._tycode = IR_OPTY0(lhs->_op);
 				as->_dst._u._regs[0] = X86_ST0;
-				as->_count = lhs->_typesize;
+				as->_count = lhs->_ty->_size;
 
 				dst = as->_dst;
 				if (lhs == rhs) { src = dst; }
@@ -1855,7 +1856,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 		if (src._format == FormatSIB && !cc_convert_insib_sib_imm_to_reg(ctx, rhs, &src, curseqid)) { return FALSE; }
 		if (cc_is_integer(dstty) && cc_is_integer(srcty))
 		{
-			if (lhs->_typesize == rhs->_typesize)
+			if (lhs->_ty->_size == rhs->_ty->_size)
 			{
 				if (!rhs->_x._inregister)
 				{
@@ -1977,7 +1978,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 			if (!(as = emit_as(ctx, X86_MOV))) { return FALSE; }
 			as->_dst = dst;
 			as->_src = src;
-			as->_count = rhs->_typesize;
+			as->_count = rhs->_ty->_size;
 		}
 		else
 		{
@@ -2011,7 +2012,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 
 			if (!(as = emit_as(ctx, X86_PUSH))) { return FALSE; }
 			as->_dst = dst;
-			as->_count = lhs->_typesize;
+			as->_count = lhs->_ty->_size;
 		}
 		else
 		{
@@ -2028,6 +2029,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 	case X86_CALL:
 	{
 		struct tagCCASOperand dst = { 0 };
+		int convention;
 
 		result = triple->_result;
 		lhs = triple->_kids[0];
@@ -2041,7 +2043,12 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 
 		if (!(as = emit_as(ctx, X86_CALL))) { return FALSE; }
 		as->_dst = dst;
-		as->_count = result->_argsbytes;
+		as->_count = 0;
+
+		assert(IsPtr(lhs->_ty) && IsFunction(lhs->_ty->_type));
+		convention = lhs->_ty->_type->_u._f._convention;
+		assert(convention != Type_Defcall);
+		if (convention == Type_Cdecl) { as->_count = result->_argsbytes; }
 
 		tycode = IR_OPTY0(result->_op);
 		switch (tycode)
@@ -2073,6 +2080,7 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 	case X86_EPILOGUE:
 	{
 		if (!(as = emit_as(ctx, triple->_opcode))) { return FALSE; }
+		as->_count = triple->_count;
 	}
 		break;
 	/* set memory to zero */
@@ -3414,7 +3422,13 @@ static BOOL cc_output_asmcodes(struct tagCCContext* ctx, struct tagCCSymbol* fun
 		case X86_EPILOGUE:
 		{
 			fprintf(ctx->_outfp, "\tpop edi\n\tpop esi\n\tpop ebx\n");
-			fprintf(ctx->_outfp, "\tmov esp, ebp\n\tpop ebp\n\tret\n");
+			fprintf(ctx->_outfp, "\tmov esp, ebp\n\tpop ebp\n");
+			if (as->_count > 0 && func->_type->_u._f._convention == Type_Stdcall) {
+				fprintf(ctx->_outfp, "\tret %d\n", as->_count);
+			}
+			else {
+				fprintf(ctx->_outfp, "\tret\n");
+			}
 		}
 			break;
 		case X86_ZERO_M: /* set memory to zero */
@@ -3436,6 +3450,13 @@ BOOL cc_gen_dumpfunction(struct tagCCContext* ctx, struct tagCCSymbol* func, FAr
 {
 	struct tagCCTripleCodeContext triplectx;
 	struct tagCCGenCodeContext genctx;
+
+	assert(func->_type->_u._f._convention != Type_Defcall);
+	if (func->_type->_u._f._convention == Type_Fastcall)
+	{
+		logger_output_s("error: calling convention '__fastcall' is not support in this version, '%s'\n", func->_name);
+		return FALSE;
+	}
 
 	triplectx._head = NULL;
 	triplectx._tail = NULL;

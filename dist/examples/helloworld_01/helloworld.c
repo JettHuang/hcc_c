@@ -11,8 +11,6 @@
  #define __declspec(...)	/* __declspec is un-support */
  #define __inline	inline	/* __inline is un-support */
  #define __forceinline inline
- #define __cdecl			 /* default is cdecl */
- #define __fastcall          /* __fastcall is un-support */
  #define __pragma(...)		 /* __pragma is un-support */
  
  #define __int64 	long long 
@@ -97,6 +95,23 @@
  
 #else
 	
+  int __stdcall output_string(const char* fmt, ...)
+  {
+	  return 0;
+  }
+  
+  void __fastcall  kill_process();
+  
+  int __cdecl sum(int a, int b)
+  {
+	  return a + b;
+  }
+  
+  int __stdcall mul(int a, int b)
+  {
+	  return a * b;
+  }
+  
   double modf(double _X, double* _Y);
   
   inline float modff( float _X, float* _Y)
@@ -113,7 +128,13 @@
 	  
 	  x = 10.f; y = 20.f;
 	  modff(x, &y);
-	  return 0;
+	 
+	 kill_process();
+	 
+	 output_string("hello! %d", 10);
+	 sum(100, 200);
+	 mul(10, 20);
+	 return 0;
   }
   
  #endif

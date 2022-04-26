@@ -102,6 +102,7 @@ typedef struct tagCCExprTree {
 			struct tagCCExprTree** _args; /* end with null */
 			struct tagCCExprTree* _ret;   /* for receive returned block data */
 			int _argsbytes;
+			int _convention;
 		} _f;
 		FCCConstVal _val;
 	} _u;
@@ -118,10 +119,11 @@ typedef struct tagCCExprTree {
 /* IR DAG node */
 typedef struct tagCCDagNode {
 	unsigned int _op;
-	int _typesize;
-	int _argsbytes;  /* for ir-call */
-	struct tagCCSymbol* _symbol; /* for constant */
+	struct tagCCType* _ty;
+	struct tagCCSymbol* _symbol; /* for constant or addr */
 	struct tagCCDagNode* _kids[2];
+
+	int _argsbytes;  /* for ir-call */
 	int _lastref;
 
 	/* for code gen */
@@ -164,6 +166,10 @@ typedef struct tagCCIRCode {
 			struct tagCCExprTree* _expr;
 			struct tagCCSymbol* _exitlab; /* exitlab maybe NULL */
 		} _ret;
+
+		struct {
+			int _parambytes;
+		} _fexit;
 	} _u;
 
 	struct tagCCIRCode* _prev, *_next;
@@ -198,6 +204,7 @@ FCCIRCode* cc_ir_newcode_var(struct tagCCSymbol* id, enum EMMArea where);
 FCCIRCode* cc_ir_newcode_label(struct tagCCSymbol* lab, enum EMMArea where);
 FCCIRCode* cc_ir_newcode_jump(struct tagCCExprTree* cond, struct tagCCSymbol* tlabel, struct tagCCSymbol* flabel, enum EMMArea where);
 FCCIRCode* cc_ir_newcode_blk(BOOL isbegin, int level, enum EMMArea where);
+FCCIRCode* cc_ir_newcode_fexit(int paramsbytes, enum EMMArea where);
 FCCIRCode* cc_ir_newcode_setzero(struct tagCCExprTree* addr, int bytes, enum EMMArea where);
 
 void cc_ir_codelist_append(FCCIRCodeList* l, FCCIRCode* c);

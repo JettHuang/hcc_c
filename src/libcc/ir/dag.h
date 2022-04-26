@@ -8,8 +8,8 @@
 #include "ir.h"
 
 /* new a DAG node (not in the shared pool) */
-FCCIRDagNode* cc_dag_newnode(unsigned int op, int valsize, FCCIRDagNode* lhs, FCCIRDagNode* rhs, FCCSymbol* sym, enum EMMArea where);
-FCCIRDagNode* cc_dag_newnode_inpool(unsigned int op, int valsize, FCCIRDagNode* lhs, FCCIRDagNode* rhs, FCCSymbol* sym, enum EMMArea where);
+FCCIRDagNode* cc_dag_newnode(unsigned int op, struct tagCCType* ty, FCCIRDagNode* lhs, FCCIRDagNode* rhs, FCCSymbol* sym, enum EMMArea where);
+FCCIRDagNode* cc_dag_newnode_inpool(unsigned int op, struct tagCCType* ty, FCCIRDagNode* lhs, FCCIRDagNode* rhs, FCCSymbol* sym, enum EMMArea where);
 void cc_dag_rmnodes_inpool(FCCSymbol* p);
 void cc_dag_reset_pool();
 

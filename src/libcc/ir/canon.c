@@ -192,9 +192,17 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
 		/* evaluate function designator */
 		if (!cc_canon_expr_linearize(list, expr->_u._f._lhs, NULL, NULL, &lhs, where)) { return FALSE; }
 
+        assert(IsPtr(lhs->_ty) && IsFunction(lhs->_ty->_type));
+        if (lhs->_ty->_type->_u._f._convention == Type_Fastcall)
+        {
+			logger_output_s("error: call '__fastcall' function is not support in this version, at %w\n", &lhs->_loc);
+			return FALSE;
+        }
+
         expr->_u._f._lhs = lhs;
         expr->_u._f._ret = ret;
         expr->_u._f._argsbytes = argsbytes;
+        expr->_u._f._convention = lhs->_ty->_type->_u._f._convention;
         cc_ir_codelist_append(list, cc_ir_newcode_expr(expr, where));
 
         result = expr;

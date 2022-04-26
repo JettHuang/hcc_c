@@ -155,6 +155,16 @@ FCCIRCode* cc_ir_newcode_blk(BOOL isbegin, int level, enum EMMArea where)
 	return c;
 }
 
+FCCIRCode* cc_ir_newcode_fexit(int parambytes, enum EMMArea where)
+{
+	FCCIRCode* c = cc_ir_newcode(IR_FEXIT, where);
+	if (c) {
+		c->_u._fexit._parambytes = parambytes;
+	}
+
+	return c;
+}
+
 FCCIRCode* cc_ir_newcode_setzero(struct tagCCExprTree* addr, int bytes, enum EMMArea where)
 {
 	FCCIRCode* c = cc_ir_newcode(IR_ZERO, where);

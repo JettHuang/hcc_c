@@ -20,7 +20,36 @@ static void cc_gen_dumpinitvalues(struct tagCCContext* ctx, struct tagCCSymbol* 
 
 void cc_gen_internalname(struct tagCCSymbol* sym)
 {
-	if (sym->_generated) {
+	if (sym->_type && IsFunction(sym->_type))
+	{
+		int convention = sym->_type->_u._f._convention;
+
+		assert(convention != Type_Defcall);
+		if (convention == Type_Cdecl)
+		{
+			sym->_x._name = hs_hashstr(util_stringf("_%s", sym->_name));
+		}
+		else
+		{
+			FCCType** protos, *ty;
+			int bytes;
+
+			protos = sym->_type->_u._f._protos;
+			for (bytes = 0; *protos; ++protos)
+			{
+				ty = cc_type_promote(*protos);
+				bytes += ty->_size;
+			} /* end for */
+
+			if (convention == Type_Stdcall) {
+				sym->_x._name = hs_hashstr(util_stringf("_%s@%d", sym->_name, bytes));
+			}
+			else {
+				sym->_x._name = hs_hashstr(util_stringf("@%s@%d", sym->_name, bytes));
+			}
+		}
+	} 
+	else if (sym->_generated) {
 		sym->_x._name = hs_hashstr(util_stringf("$%s_", sym->_name));
 	}
 	else if (sym->_scope == SCOPE_GLOBAL || sym->_sclass == SC_External) {

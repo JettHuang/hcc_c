@@ -84,7 +84,8 @@ BOOL cc_parser_declaration(FCCContext* ctx, FDeclCallback callback)
 	}
 
 	tktype = ctx->_currtk._type;
-	if (tktype == TK_ID || tktype == TK_MUL || tktype == TK_LPAREN || tktype == TK_LBRACKET) /* id * ( [ */
+	if (tktype == TK_ID || tktype == TK_MUL || tktype == TK_LPAREN || tktype == TK_LBRACKET ||
+		tktype == TK_STDCALL || tktype == TK_CDECL || tktype == TK_FASTCALL ) /* id * ( [ */
 	{
 		const char* id = NULL;
 		FCCType* ty = NULL;
@@ -578,16 +579,59 @@ BOOL cc_parser_declarator(FCCContext* ctx, FCCType* basety, const char** id, FLo
 	}
 	for (; ty; ty = ty->_type)
 	{
+		if (ty->_op != Type_Function && (basety->_op == Type_Cdecl || basety->_op == Type_Stdcall || basety->_op == Type_Fastcall))
+		{
+			logger_output_s("syntax error: unexpected function calling convention at %w\n", ctx->_currtk._loc);
+			return FALSE;
+		}
+
 		switch (ty->_op)
 		{
 		case Type_Array:
 			basety = cc_type_newarray(basety, ty->_size, 0);
 			break;
 		case Type_Function:
-			basety = cc_type_func(basety, ty->_u._f._protos);
+		{
+			int callconv = Type_Defcall;
+			if (basety->_op == Type_Cdecl || basety->_op == Type_Stdcall || basety->_op == Type_Fastcall)
+			{
+				callconv = basety->_op;
+				basety = basety->_type;
+			}
+			basety = cc_type_func(basety, callconv, ty->_u._f._protos, ty->_u._f._has_ellipsis);
+			if (cc_type_isvariance(basety))
+			{
+				basety->_u._f._convention = Type_Cdecl;
+			}
+		}
 			break;
 		case Type_Pointer:
 			basety = cc_type_ptr(basety);
+			break;
+		case Type_Cdecl:
+		case Type_Stdcall:
+		case Type_Fastcall:
+		{
+			if (basety->_op == Type_Function)
+			{
+				if (basety->_u._f._convention != Type_Defcall)
+				{
+					logger_output_s("syntax error: too much function calling convention at %w\n", ctx->_currtk._loc);
+					return FALSE;
+				}
+
+				if (cc_type_isvariance(basety)) {
+					basety->_u._f._convention = Type_Cdecl;
+				}
+				else {
+					basety->_u._f._convention = ty->_op;
+				}
+			}
+			else
+			{
+				basety = cc_type_tmp(ty->_op, basety);
+			}
+		}
 			break;
 		default:
 			if (IsQual(ty)) {
@@ -598,15 +642,30 @@ BOOL cc_parser_declarator(FCCContext* ctx, FCCType* basety, const char** id, FLo
 			}
 			break;
 		}
+
 		if (!basety) {
 			return FALSE;
 		}
 
 	} /* end for */
 
+	if (basety->_op == Type_Cdecl || basety->_op == Type_Stdcall || basety->_op == Type_Fastcall)
+	{
+		logger_output_s("syntax error: unexpected function calling convention at %w\n", ctx->_currtk._loc);
+		return FALSE;
+	}
+
 	if (basety->_size > 32767) {
 		logger_output_s("warning: more than 32767 bytes in `%t'\n", basety);
 	}
+
+	for (ty = basety; ty; ty = ty->_type)
+	{
+		if (ty->_op == Type_Function && ty->_u._f._convention == Type_Defcall)
+		{
+			ty->_u._f._convention = gdefcall;
+		}
+	} /* end for */
 	
 	*outty = basety;
 	return TRUE;
@@ -630,13 +689,34 @@ BOOL cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FAr
 		cc_read_token(ctx, &ctx->_currtk);
 	}
 	break;
-	case TK_MUL: /* '*' */
+	case TK_CDECL:
+	case TK_STDCALL:
+	case TK_FASTCALL:
 	{
-		FCCType* tmpty;
+		int callty = Type_Defcall;
+
+		switch (ctx->_currtk._type)
+		{
+		case TK_CDECL: callty = Type_Cdecl; break;
+		case TK_STDCALL: callty = Type_Stdcall; break;
+		case TK_FASTCALL: callty = Type_Fastcall; break;
+		default: break;
+		}
+
+		cc_read_token(ctx, &ctx->_currtk);
+		ty = cc_type_tmp(callty, NULL);
+		if (!cc_parser_declarator1(ctx, id, loc, params, bgetparams, &ty->_type))
+		{
+			return FALSE;
+		}
+	}
+	break;
+	case TK_CONST:
+	case TK_VOLATILE:
+	case TK_RESTRICT:
+	{
 		int qual = 0;
 
-		ty = cc_type_tmp(Type_Pointer, NULL);
-		cc_read_token(ctx, &ctx->_currtk);
 		while (ctx->_currtk._type == TK_CONST || ctx->_currtk._type == TK_VOLATILE || ctx->_currtk._type == TK_RESTRICT)
 		{
 			switch (ctx->_currtk._type)
@@ -649,13 +729,19 @@ BOOL cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FAr
 			cc_read_token(ctx, &ctx->_currtk);
 		} /* end while */
 
-		tmpty = ty;
-		if (qual) {
-			ty->_type = cc_type_tmp(qual, NULL);
-			tmpty = ty->_type;
+		ty = cc_type_tmp(qual, NULL);
+		if (!cc_parser_declarator1(ctx, id, loc, params, bgetparams, &ty->_type))
+		{
+			return FALSE;
 		}
-		
-		if (!cc_parser_declarator1(ctx, id, loc, params, bgetparams, &tmpty->_type))
+	}
+	break;
+	case TK_MUL: /* '*' */
+	{
+		ty = cc_type_tmp(Type_Pointer, NULL);
+		cc_read_token(ctx, &ctx->_currtk);
+
+		if (!cc_parser_declarator1(ctx, id, loc, params, bgetparams, &ty->_type))
 		{
 			return FALSE;
 		}
@@ -702,7 +788,7 @@ BOOL cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FAr
 		return TRUE;
 	}
 
-	while (ctx->_currtk._type == TK_LPAREN || ctx->_currtk._type == TK_LBRACKET) /* '(' ']' */
+	while (ctx->_currtk._type == TK_LPAREN || ctx->_currtk._type == TK_LBRACKET) /* '(' '[' */
 	{
 		if (ctx->_currtk._type == TK_LPAREN) /* ( */
 		{
@@ -1167,6 +1253,7 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 		FCCIRCodeList codelist = { NULL, NULL };
 		FCCSymbol* exitlab;
 		FCCIRBasicBlock* basicblocks;
+		int parambytes;
 
 		exitlab = cc_symbol_label(NULL, NULL, CC_MM_TEMPPOOL);
 		ctx->_function = p;
@@ -1227,6 +1314,13 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 
 				array_append(&caller, &p1);
 			} /* end for n */
+
+			/* get parameter's total size */
+			for (parambytes = 0, n = 0; n < caller._elecount; ++n)
+			{
+				p0 = *(FCCSymbol**)array_element(&caller, n);
+				parambytes += p0->_type->_size;
+			} /* end for */
 		}
 
 		if (!cc_stmt_compound(ctx, &codelist, NULL, NULL)) 
@@ -1236,7 +1330,7 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 
 		exitlab->_loc = ctx->_currtk._loc;
 		cc_ir_codelist_append(&codelist, cc_ir_newcode_label(exitlab, CC_MM_TEMPPOOL));
-		cc_ir_codelist_append(&codelist, cc_ir_newcode(IR_FEXIT, CC_MM_TEMPPOOL));
+		cc_ir_codelist_append(&codelist, cc_ir_newcode_fexit(parambytes, CC_MM_TEMPPOOL));
 		if (cc_ir_check_undeflabels(&codelist) > 0) {
 			return FALSE;
 		}

@@ -12,6 +12,7 @@
 
 
 FCCBuiltinTypes gbuiltintypes = { NULL };
+int gdefcall = Type_Cdecl;
 static FCCTypeMetrics sTypeMetric;
 static struct tagCCSymbol* sPointersym = NULL;
 static struct tagTypeEntry {
@@ -194,6 +195,8 @@ FCCType* cc_type_tmp(int16_t op, FCCType* ty)
 		return NULL;
 	}
 
+	util_memset(tmp, 0, sizeof(*tmp));
+
 	tmp->_op = op;
 	tmp->_type = ty;
 	return tmp;
@@ -341,6 +344,7 @@ FCCField* cc_type_newfield(const char* name, const FLocation* loc, FCCType* sty,
 		logger_output_s("out of memory. %s:%d\n", __FILE__, __LINE__);
 		return NULL;
 	}
+	util_memset(p, 0, sizeof(*p));
 
 	*q = p;
 	p->_name = name;
@@ -378,7 +382,7 @@ BOOL cc_type_has_cfields(FCCType* sty)
 	return sty->_u._symbol->_u._s._cfields;
 }
 
-FCCType* cc_type_func(FCCType* ret, FCCType** proto)
+FCCType* cc_type_func(FCCType* ret, int convention, FCCType** proto, int ellipsis)
 {
 	FCCType* ty = NULL;
 
@@ -388,7 +392,9 @@ FCCType* cc_type_func(FCCType* ret, FCCType** proto)
 	}
 
 	ty = cc_type_new(Type_Function, ret, 0, 0, NULL);
+	ty->_u._f._convention = convention;
 	ty->_u._f._protos = proto;
+	ty->_u._f._has_ellipsis = ellipsis;
 
 	return ty;
 }
@@ -444,8 +450,13 @@ BOOL cc_type_isequal(FCCType* ty1, FCCType* ty2, BOOL option)
 	case Type_Function:
 		if (cc_type_isequal(ty1->_type, ty2->_type, TRUE)) {
 			FCCType** p1 = ty1->_u._f._protos, **p2 = ty2->_u._f._protos;
+			int convention1 = ty1->_u._f._convention, convention2 = ty2->_u._f._convention;
 
 			assert(p1 && p2);
+			assert(convention1 != Type_Defcall && convention2 != Type_Defcall);
+
+			if (convention1 != convention2) { return FALSE; }
+
 			if (p1 == p2) { return TRUE; }
 			if (p1 && p2) {
 				for (; *p1 && *p2; p1++, p2++)

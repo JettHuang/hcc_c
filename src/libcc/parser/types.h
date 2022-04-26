@@ -33,6 +33,12 @@
 #define Type_Defined	11
 #define Type_Ellipsis	12
 
+/* extension call types */
+#define Type_Defcall	13
+#define Type_Cdecl		14
+#define Type_Stdcall	15
+#define Type_Fastcall	16
+
 /* qualifiers */
 #define	Type_Const		0x0100
 #define Type_Restrict	0x0200
@@ -83,6 +89,7 @@ typedef struct tagCCType
 		struct tagCCSymbol* _symbol; /* for other types */
 		struct
 		{
+			int _convention;  /* calling convention */
 			struct tagCCType** _protos; /* params type array, end with NULL */
 			int _has_ellipsis : 1;
 		} _f; /* function proto */
@@ -152,6 +159,7 @@ typedef struct tagCCBuiltinTypes
 } FCCBuiltinTypes;
 
 extern FCCBuiltinTypes gbuiltintypes;
+extern int gdefcall;
 
 void cc_type_init(const FCCTypeMetrics* m);
 
@@ -183,7 +191,7 @@ FCCField* cc_type_fields(FCCType* sty);
 BOOL cc_type_has_cfields(FCCType* sty);
 
 /* new a function type */
-FCCType* cc_type_func(FCCType* ret, FCCType** proto);
+FCCType* cc_type_func(FCCType* ret, int convention, FCCType** proto, int ellipsis);
 FCCType* cc_type_rettype(FCCType* fn);
 /* check a function has variance parameter */
 BOOL cc_type_isvariance(FCCType* fn);
