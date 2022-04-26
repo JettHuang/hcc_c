@@ -1268,7 +1268,7 @@ static BOOL cc_expr_parse_bitor(FCCContext* ctx, FCCIRTree** outexpr, enum EMMAr
 		}
 
 		if (!IsInt(lhs->_ty) || !IsInt(rhs->_ty)) {
-			logger_output_s("error: integer operand is expected for '^' at %w\n", &loc);
+			logger_output_s("error: integer operand is expected for '|' at %w\n", &loc);
 			return FALSE;
 		}
 
@@ -2958,6 +2958,11 @@ FCCIRTree* cc_expr_condition(FCCIRTree* expr0, FCCIRTree* expr1, FCCIRTree* expr
 	else {
 		logger_output_s("error: invalid operands for '?:' '%t' : '%t' at %w\n", xty, yty, loc);
 		return NULL;
+	}
+
+	if (IR_OP(expr0->_op) == IR_CONST)
+	{
+		return expr0->_u._val._sint ? expr1 : expr2;
 	}
 
 	if (IsPtr(ty)) {

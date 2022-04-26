@@ -60,6 +60,8 @@ BOOL cc_stmt_statement(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list
 		bSuccess = cc_stmt_compound(ccctx, list, loop, swtch); break;
 	case TK_SEMICOLON: /* ';' */
 		bSuccess = cc_read_token(ccctx, &ccctx->_currtk); break;
+	case TK_INLINEASM: /* __asm */
+		bSuccess = cc_stmt_inline_asm(ccctx, list, loop, swtch); break;
 	case TK_ID:
 	{
 		FCCToken aheadtk;
@@ -820,5 +822,42 @@ BOOL cc_stmt_return(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 	}
 
 	cc_ir_codelist_append(list, cc_ir_newcode_ret(expr, ccctx->_funcexit, CC_MM_TEMPPOOL));
+	return TRUE;
+}
+
+
+BOOL cc_stmt_inline_asm(struct tagCCContext* ccctx, struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch)
+{
+   /* __asm {  } 
+	*  __asm xx xx
+	*  __asm xx xx  __asm yy yy
+	* 
+	* we omit the __asm block.
+	*/
+	logger_output_s("warning: __asm { } block will be omit by compiler. at %w\n", &ccctx->_currtk._loc);
+
+	if (!cc_parser_expect(ccctx, TK_INLINEASM)) {
+		return FALSE;
+	}
+
+	if (ccctx->_currtk._type == TK_LBRACE) /* '{' */
+	{
+		do
+		{
+			cc_read_token(ccctx, &ccctx->_currtk);
+		} while (ccctx->_currtk._type != TK_RBRACE && ccctx->_currtk._type != TK_EOF);
+
+		return cc_parser_expect(ccctx, TK_RBRACE); /* '}' */
+	}
+	
+	do {
+		cc_read_token_withnewline(ccctx, &ccctx->_currtk);
+	} while (ccctx->_currtk._type != TK_NEWLINE && ccctx->_currtk._type != TK_EOF && ccctx->_currtk._type != TK_INLINEASM);
+	
+	if (ccctx->_currtk._type == TK_NEWLINE)
+	{
+		cc_read_token(ccctx, &ccctx->_currtk);
+	}
+
 	return TRUE;
 }

@@ -43,13 +43,14 @@ typedef struct tagCCContext {
 	struct tagCCBackend* _backend;
 } FCCContext;
 
-typedef struct tagCCDebugConfig
+typedef struct tagCCConfig
 {
 	int _output_dag : 1;
 	int _output_tripple : 1;
-} FCCDebugConfig;
+	int _must_retvalue : 1; /* function must return value, otherwise failed. */
+} FCCConfig;
 
-extern struct tagCCDebugConfig  gdebugcfg;
+extern struct tagCCConfig  gccconfig;
 
 /************************************************************************/
 /* public interface                                                     */
@@ -64,6 +65,7 @@ BOOL cc_process(FCCContext* ctx, const char* srcfilename, const char* outfilenam
 
 BOOL cc_read_token(FCCContext* ctx, FCCToken* tk);
 BOOL cc_lookahead_token(FCCContext* ctx, FCCToken* tk);
+BOOL cc_read_token_withnewline(FCCContext* ctx, FCCToken* tk);
 
 void cc_print_token(FCCToken* tk);
 

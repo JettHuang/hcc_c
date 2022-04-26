@@ -384,7 +384,7 @@ static BOOL ctrl_include_handler(FCppContext* ctx, FTKListNode* tklist, int* out
 {
 	FSourceCodeContext* top = ctx->_sourcestack;
 	int bcondblockpass = top->_condstack == NULL || CHECK_COND_PASS(top->_condstack->_flags);
-	int bsearchsysdir = 0;
+	int bsearchsysdir = 0, repeatcnt;
 	const char* headerfile = NULL;
 	FCharStream* newcs = NULL;
 
@@ -434,19 +434,25 @@ static BOOL ctrl_include_handler(FCppContext* ctx, FTKListNode* tklist, int* out
 
 	newcs = cpp_open_includefile(ctx, headerfile, top->_srcdir, bsearchsysdir);
 	if (!newcs) {
-		logger_output_s("error: open header file failed, %s at %s:%d\n", headerfile, tklist->_tk._loc._filename, tklist->_tk._loc._line);
+		logger_output_s("error: open header file '%s' failed at %s:%d\n", headerfile, tklist->_tk._loc._filename, tklist->_tk._loc._line);
 		return FALSE;
 	}
 
 	/* check recursive including */
+	repeatcnt = 0;
 	for (top = ctx->_sourcestack; top; top = top->_up)
 	{
 		if (top->_cs->_srcfilename == newcs->_srcfilename)
 		{
-			logger_output_s("error: open header file recursive, %s at %s:%d\n", headerfile, tklist->_tk._loc._filename, tklist->_tk._loc._line);
-			return FALSE;
+			repeatcnt++;
 		}
 	} /* end for */
+
+	if (repeatcnt >= 2)
+	{
+		logger_output_s("error: open header file '%' recursively at %s:%d\n", headerfile, tklist->_tk._loc._filename, tklist->_tk._loc._line);
+		return FALSE;
+	}
 
 	/* push new source code */
 	top = mm_alloc_area(sizeof(FSourceCodeContext), CPP_MM_PERMPOOL);

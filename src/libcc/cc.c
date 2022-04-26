@@ -25,7 +25,7 @@ typedef struct tagTokenListNode {
 	struct tagTokenListNode* _next;
 } FTKListNode;
 
-static BOOL cc_read_token_with_handlectrl(FCCContext* ctx, FCCToken* tk);
+static BOOL cc_read_token_with_handlectrl(FCCContext* ctx, FCCToken* tk, BOOL bomitnewline);
 static BOOL cc_read_rowtokens(FCCLexerContext *ctx, FTKListNode** tail);
 
 static FCCTypeMetrics defaultmetrics = 
@@ -43,10 +43,11 @@ static FCCTypeMetrics defaultmetrics =
 	{ 0, 4 }, /* _structmetric */
 };
 
-struct tagCCDebugConfig gdebugcfg = 
+struct tagCCConfig gccconfig =
 {
 	0,
-	0
+	0,
+	1
 };
 
 
@@ -125,7 +126,7 @@ BOOL cc_read_token(FCCContext* ctx, FCCToken* tk)
 		return TRUE;
 	}
 
-	return cc_read_token_with_handlectrl(ctx, tk);
+	return cc_read_token_with_handlectrl(ctx, tk, TRUE);
 }
 
 BOOL cc_lookahead_token(FCCContext* ctx, FCCToken* tk)
@@ -137,10 +138,21 @@ BOOL cc_lookahead_token(FCCContext* ctx, FCCToken* tk)
 		return TRUE;
 	}
 
-	result = cc_read_token_with_handlectrl(ctx, &(ctx->_lookaheadtk._tk));
+	result = cc_read_token_with_handlectrl(ctx, &(ctx->_lookaheadtk._tk), TRUE);
 	ctx->_lookaheadtk._valid = 1;
 	*tk = ctx->_lookaheadtk._tk;
 	return result;
+}
+
+BOOL cc_read_token_withnewline(FCCContext* ctx, FCCToken* tk)
+{
+	if (ctx->_lookaheadtk._valid) {
+		ctx->_lookaheadtk._valid = 0;
+		*tk = ctx->_lookaheadtk._tk;
+		return TRUE;
+	}
+
+	return cc_read_token_with_handlectrl(ctx, tk, FALSE);
 }
 
 static BOOL cc_read_token_with_handlectrl1(FCCContext* ctx, FCCToken* tk, BOOL *bfoundctrl)
@@ -194,7 +206,7 @@ static BOOL cc_read_token_with_handlectrl1(FCCContext* ctx, FCCToken* tk, BOOL *
 	return TRUE;
 }
 
-static BOOL cc_read_token_with_handlectrl(FCCContext* ctx, FCCToken* tk)
+static BOOL cc_read_token_with_handlectrl(FCCContext* ctx, FCCToken* tk, BOOL bomitnewline)
 {
 	BOOL bfoundctrl;
 
@@ -207,6 +219,10 @@ static BOOL cc_read_token_with_handlectrl(FCCContext* ctx, FCCToken* tk)
 		}
 
 		ctx->_bnewline = bfoundctrl || (tk->_type == TK_NEWLINE);
+		if (tk->_type == TK_NEWLINE && !bomitnewline)
+		{
+			break;
+		}
 	} while (ctx->_bnewline);
 
 	return TRUE;

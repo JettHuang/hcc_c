@@ -760,8 +760,12 @@ BOOL cc_canon_check_return(FCCSymbol* func, FCCIRBasicBlock* first)
         logger_output_s("warning: not all control paths return a value in function %s\n", func->_name);
     }
     else if (noretpaths > 0) {
-        logger_output_s("error: must return a value in function %s\n", func->_name);
-        return FALSE;
+        if (gccconfig._must_retvalue) {
+            logger_output_s("error: must return a value in function %s\n", func->_name);
+            return FALSE;
+        }
+
+        logger_output_s("warning: no return value in function %s\n", func->_name);
     }
 
     return TRUE;

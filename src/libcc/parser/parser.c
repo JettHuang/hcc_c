@@ -1352,7 +1352,7 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 		}
 
 		/* output debug dag */
-		if (gdebugcfg._output_dag)
+		if (gccconfig._output_dag)
 		{
 			logger_output_s("function '%s' after dag:\n", p->_name);
 			cc_ir_basicblock_display(basicblocks, 5);

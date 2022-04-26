@@ -47,5 +47,5 @@ BOOL cc_stmt_continue(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list,
 BOOL cc_stmt_break(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch);
 BOOL cc_stmt_return(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch);
 
-
+BOOL cc_stmt_inline_asm(struct tagCCContext* ccctx, struct tagCCIRCodeList* list, struct tagCCLoopContext* loop, struct tagCCSwitchContext* swtch);
 #endif /* __CC_STMT_H__ */
