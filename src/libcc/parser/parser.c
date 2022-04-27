@@ -806,7 +806,7 @@ BOOL cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FAr
 				logger_output_s("error: parsing parameter failed. %w\n", &ctx->_currtk._loc);
 				return FALSE;
 			}
-			if (gCurrentLevel > SCOPE_PARAM)
+			if (gCurrentLevel > SCOPE_PARAM || ctx->_instruct > 0)
 			{
 				cc_symbol_exitscope();
 			}
