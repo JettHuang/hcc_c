@@ -55,7 +55,7 @@ BOOL cc_parser_program(FCCContext* ctx)
 			}
 			else
 			{
-				logger_output_s("error: unrecognized declaration at %w.\n", &ctx->_currtk._loc);
+				logger_output_s("warning: unrecognized declaration at %w.\n", &ctx->_currtk._loc);
 			}
 
 			if (!cc_read_token(ctx, &ctx->_currtk)) {
@@ -766,7 +766,7 @@ BOOL cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FAr
 				logger_output_s("error: parsing parameter failed. %w\n", &ctx->_currtk);
 				return FALSE;
 			}
-			if (gCurrentLevel > SCOPE_PARAM)
+			if (gCurrentLevel > SCOPE_PARAM || ctx->_instruct > 0)
 			{
 				cc_symbol_exitscope(); 
 			}
@@ -1573,6 +1573,8 @@ BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
 	FCCField *field, **where;
 	int cnt = 0;
 
+	ctx->_instruct++;
+
 	where = &(sty->_u._symbol->_u._s._fields);
 	while (cc_parser_is_typename(&ctx->_currtk))
 	{
@@ -1734,6 +1736,8 @@ BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
 	}
 
 	sty->_size = util_roundup(sty->_size, sty->_align);
+
+	ctx->_instruct--;
 	return TRUE;
 }
 

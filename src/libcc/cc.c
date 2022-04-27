@@ -75,6 +75,7 @@ void cc_contex_init(FCCContext* ctx)
 	ctx->_lookaheadtk._valid = 0;
 	ctx->_bnewline = 1;
 	ctx->_errors = 0;
+	ctx->_instruct = 0;
 	ctx->_backend = cc_new_backend();
 }
 
