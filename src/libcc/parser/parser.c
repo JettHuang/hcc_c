@@ -823,7 +823,7 @@ BOOL cc_parser_declarator1(FCCContext* ctx, const char** id, FLocation* loc, FAr
 					logger_output_s("error: need integer constant. at %w.\n", &ctx->_currtk._loc);
 					return FALSE;
 				}
-				if (cnt <= 0)
+				if (cnt < 0)
 				{
 					logger_output_s("error: illegal array size %d. at %w.\n", cnt, &ctx->_currtk._loc);
 					return FALSE;
@@ -1400,6 +1400,9 @@ FCCType* cc_parser_declenum(FCCContext* ctx)
 		if (!ty) {
 			return NULL;
 		}
+		ty->_type = gbuiltintypes._sinttype;
+		ty->_size = ty->_type->_size;
+		ty->_align = ty->_type->_align;
 
 		cc_read_token(ctx, &ctx->_currtk);
 		if (ctx->_currtk._type != TK_ID)
@@ -1462,9 +1465,6 @@ FCCType* cc_parser_declenum(FCCContext* ctx)
 		p = NULL;
 		array_append(&enumerators, &p); /* append end null */
 
-		ty->_type = gbuiltintypes._sinttype;
-		ty->_size = ty->_type->_size;
-		ty->_align = ty->_type->_align;
 		ty->_u._symbol->_u._enumids = (FCCSymbol**)enumerators._data;
 		ty->_u._symbol->_defined = 1;
 	}
@@ -1558,7 +1558,7 @@ FCCType* cc_parser_declstruct(FCCContext* ctx, int op)
 			return NULL;
 		}
 
-		ty = cc_type_newstruct(Type_Enum, tag, &loc, gCurrentLevel);
+		ty = cc_type_newstruct(op, tag, &loc, gCurrentLevel);
 		if (!ty) {
 			return NULL;
 		}
@@ -1608,10 +1608,16 @@ BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
 			{
 				int bitsize;
 
-				if (UnQual(ty) != gbuiltintypes._sinttype && UnQual(ty) != gbuiltintypes._uinttype)
+				if ((UnQual(ty)->_op != Type_SInteger && UnQual(ty)->_op != Type_UInteger))
 				{
 					logger_output_s("error: illegal bit-field type, expecting int or unsigned int, at %w.\n", &ctx->_currtk._loc);
 					return FALSE;
+				}
+				if (ty->_size < gbuiltintypes._sinttype->_size)
+				{
+					logger_output_s("warning: bit-field type will be promote to int or unsigned int at %w.\n", &ctx->_currtk._loc);
+					ty = IsUnsigned(ty) ? gbuiltintypes._uinttype : gbuiltintypes._sinttype;
+					field->_type = ty;
 				}
 
 				cc_read_token(ctx, &ctx->_currtk);
@@ -1630,15 +1636,10 @@ BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
 			else
 			{
 				if (!id) {
-					logger_output_s("warning: expecting a identifier at %w.\n", &ctx->_currtk._loc);
+					logger_output_s("warning: expecting an identifier name at %w.\n", &ctx->_currtk._loc);
 				}
 				if (IsFunction(ty)) {
 					logger_output_s("error: illegal field type %t at %w.\n", ty, &ctx->_currtk._loc);
-					return FALSE;
-				}
-				else if (field->_type->_size == 0)
-				{
-					logger_output_s("error: undefined size for '%s' at %w.\n", field->_name, &field->_loc);
 					return FALSE;
 				}
 			}
@@ -1674,8 +1675,10 @@ BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
 	/* calculate field offset & size */
 	{
 		int bitsmax, bitsused, offset;
+		FCCField* prevfield;
 
 		bitsmax = bitsused = offset = 0;
+		prevfield = NULL;
 		field = sty->_u._symbol->_u._s._fields;
 		for (; field; field = field->_next)
 		{
@@ -1683,6 +1686,12 @@ BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
 
 			if (align > sty->_align) {
 				sty->_align = align;
+			}
+
+			if (field->_type->_size <= 0 && (!IsArray(field->_type) || field->_next != NULL))
+			{
+				logger_output_s("error: undefined size for structure field '%s' at %w.\n", field->_name, &field->_loc);
+				return FALSE;
 			}
 
 			if (IsUnion(sty)) {
@@ -1695,10 +1704,11 @@ BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
 				field->_offset = offset;
 				offset += field->_type->_size; /* update for next field offset */
 				bitsmax = 0;
+				prevfield = NULL;
 			}
 			else
 			{
-				if (bitsmax != 0) /* check reuse previous bit-field's remained bits */
+				if (bitsmax != 0 && (!prevfield || prevfield->_type->_size == field->_type->_size)) /* check reuse previous bit-field's remained bits */
 				{
 					assert(util_roundup(offset, align) == offset);
 
@@ -1719,6 +1729,7 @@ BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
 				field->_offset = offset;
 				field->_lsb = bitsused + 1; /* lsb is one more than real index */
 				bitsused += field->_bitsize;
+				prevfield = field;
 			}
 
 			/* expand structure */

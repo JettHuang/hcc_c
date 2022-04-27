@@ -218,7 +218,7 @@ static BOOL cc_varinit_dump_scalar(struct tagCCContext* ctx, struct tagCCType* t
 	return TRUE;
 }
 
-static BOOL cc_varinit_get_scalar_int(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock, int *outval)
+static BOOL cc_varinit_get_scalar_int(struct tagCCContext* ctx, struct tagCCType* ty, FVarInitializer* init, int* outerindex, BOOL bUsingOuterBlock, int64_t *outval)
 {
 	FVarInitializer* thisinit;
 	FCCIRTree* expr;
@@ -250,10 +250,10 @@ static BOOL cc_varinit_get_scalar_int(struct tagCCContext* ctx, struct tagCCType
 	switch (UnQual(ty)->_op)
 	{
 	case Type_SInteger:
-		*outval = (int32_t)expr->_u._val._sint;
+		*outval = expr->_u._val._sint;
 		break;
 	case Type_UInteger:
-		*outval = (int32_t)expr->_u._val._uint;
+		*outval = expr->_u._val._uint;
 		break;
 	default:
 		assert(0);
@@ -291,14 +291,14 @@ static BOOL cc_varinit_dump_union(struct tagCCContext* ctx, struct tagCCType* ty
 		int innerindex = 0;
 
 		if (first->_lsb > 0) {
-			int bitsval;
+			int64_t bitsval;
 			if (!cc_varinit_get_scalar_int(ctx, first->_type, thisinit, &innerindex, TRUE, &bitsval))
 			{
 				return FALSE;
 			}
 
 			bitsval = bitsval << (first->_lsb - 1);
-			ctx->_backend->_defconst_unsigned(ctx, 4, (uint64_t)bitsval, 1);
+			ctx->_backend->_defconst_unsigned(ctx, first->_type->_size, (uint64_t)bitsval, 1);
 		} else {
 			if (!cc_gen_dumpinitvalues_inner(ctx, first->_type, thisinit, &innerindex, TRUE))
 			{
@@ -313,14 +313,14 @@ static BOOL cc_varinit_dump_union(struct tagCCContext* ctx, struct tagCCType* ty
 	}
 	else {
 		if (first->_lsb > 0) {
-			int bitsval;
+			int64_t bitsval;
 			if (!cc_varinit_get_scalar_int(ctx, first->_type, thisinit, outerindex, TRUE, &bitsval))
 			{
 				return FALSE;
 			}
 
 			bitsval = bitsval << (first->_lsb - 1);
-			ctx->_backend->_defconst_unsigned(ctx, 4, (uint64_t)bitsval, 1);
+			ctx->_backend->_defconst_unsigned(ctx, first->_type->_size, (uint64_t)bitsval, 1);
 		}
 		else {
 			if (!cc_gen_dumpinitvalues_inner(ctx, first->_type, thisinit, outerindex, TRUE))
@@ -365,9 +365,10 @@ static BOOL cc_varinit_dump_struct(struct tagCCContext* ctx, struct tagCCType* t
 			}
 
 			if (field->_lsb > 0) {
-				int bitsval = 0, val = 0;
+				int64_t bitsval = 0, val = 0;
+				int fieldsize;
 
-				assert(field->_type->_size == 4);
+				fieldsize = field->_type->_size;
 				for (; field; field = field->_next) {
 					if (field->_offset != offset) {
 						break;
@@ -381,8 +382,8 @@ static BOOL cc_varinit_dump_struct(struct tagCCContext* ctx, struct tagCCType* t
 					}
 				}
 
-				ctx->_backend->_defconst_unsigned(ctx, 4, bitsval, 1);
-				offset += 4;
+				ctx->_backend->_defconst_unsigned(ctx, fieldsize, bitsval, 1);
+				offset += fieldsize;
 			}
 			else {
 				if (innerindex < thisinit->_u._kids._cnt) {
@@ -411,9 +412,10 @@ static BOOL cc_varinit_dump_struct(struct tagCCContext* ctx, struct tagCCType* t
 			}
 
 			if (field->_lsb > 0) {
-				int bitsval = 0, val = 0;
+				int64_t bitsval = 0, val = 0;
+				int fieldsize;
 
-				assert(field->_type->_size == 4);
+				fieldsize = field->_type->_size;
 				for (; field; field = field->_next) {
 					if (field->_offset != offset) {
 						break;
@@ -427,8 +429,8 @@ static BOOL cc_varinit_dump_struct(struct tagCCContext* ctx, struct tagCCType* t
 					}
 				}
 
-				ctx->_backend->_defconst_unsigned(ctx, 4, bitsval, 1);
-				offset += 4;
+				ctx->_backend->_defconst_unsigned(ctx, fieldsize, bitsval, 1);
+				offset += fieldsize;
 			}
 			else {
 				if (*outerindex < thisinit->_u._kids._cnt) {
