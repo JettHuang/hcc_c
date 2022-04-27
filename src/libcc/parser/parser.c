@@ -1613,12 +1613,6 @@ BOOL cc_parser_structfields(FCCContext* ctx, FCCType* sty)
 					logger_output_s("error: illegal bit-field type, expecting int or unsigned int, at %w.\n", &ctx->_currtk._loc);
 					return FALSE;
 				}
-				if (ty->_size < gbuiltintypes._sinttype->_size)
-				{
-					logger_output_s("warning: bit-field type will be promote to int or unsigned int at %w.\n", &ctx->_currtk._loc);
-					ty = IsUnsigned(ty) ? gbuiltintypes._uinttype : gbuiltintypes._sinttype;
-					field->_type = ty;
-				}
 
 				cc_read_token(ctx, &ctx->_currtk);
 				if (!cc_expr_parse_constant_int(ctx, &bitsize))
