@@ -736,6 +736,33 @@ static BOOL cc_expr_parse_unary(FCCContext* ctx, FCCIRTree** outexpr, enum EMMAr
 		*outexpr = tree;
 		return TRUE;
 	}
+	else if (ctx->_currtk._type == TK_ALIGNOF)
+	{
+		int sclass;
+		const char* id;
+		FCCType* ty;
+
+		loc = ctx->_currtk._loc;
+		cc_read_token(ctx, &ctx->_currtk);
+
+		/*  __alignof (typename) */
+		if (!cc_parser_expect(ctx, TK_LPAREN)) /* '(' */
+		{
+			return FALSE;
+		}
+
+		if (!cc_parser_declarator(ctx, cc_parser_declspecifier(ctx, &sclass), &id, &loc, NULL, &ty) || sclass || id) {
+			logger_output_s("error: illegal __alignof(type) at %w.\n", &ctx->_currtk._loc);
+			return FALSE;
+		}
+
+		if (!(tree = cc_expr_constant(gbuiltintypes._sinttype, cc_ir_typecode(gbuiltintypes._sinttype), &loc, where, ty->_align))) {
+			return FALSE;
+		}
+
+		*outexpr = tree;
+		return cc_parser_expect(ctx, TK_RPAREN); /* ')' */
+	}
 	else
 	{
 		return cc_expr_parse_postfix(ctx, outexpr, where);
@@ -782,6 +809,7 @@ static BOOL cc_expr_parse_cast(FCCContext* ctx, FCCIRTree** outexpr, enum EMMAre
 			}
 
 			tree = cc_expr_value(tree, where);
+			tree = cc_expr_adjust(tree, where);
 			if (!(tree = cc_expr_cast(ty, tree, &loc, where))) {
 				return FALSE;
 			}
