@@ -55,8 +55,11 @@ void cc_gen_internalname(struct tagCCSymbol* sym)
 	else if (sym->_scope == SCOPE_GLOBAL || sym->_sclass == SC_External) {
 		sym->_x._name = hs_hashstr(util_stringf("_%s", sym->_name));
 	}
+	else if (sym->_scope == SCOPE_LABEL) {
+		sym->_x._name = hs_hashstr(util_stringf("$%s$%d", sym->_name, cc_symbol_genlabel(1)));
+	}
 	else {
-		sym->_x._name = hs_hashstr(util_stringf("%s$", sym->_name));
+		sym->_x._name = hs_hashstr(sym->_name);
 	}
 }
 
@@ -68,26 +71,29 @@ void cc_gen_dumpsymbols(struct tagCCContext* ctx)
 	ctx->_backend->_comment(ctx, "--------export & import-----------");
 	cc_symbol_foreach(ctx, gGlobals, SCOPE_GLOBAL, &doexport);
 	cc_symbol_foreach(ctx, gExternals, SCOPE_GLOBAL, &doexternal);
+
+	ctx->_backend->_comment(ctx, "--------additional----------");
+	ctx->_backend->_additionalsymbols(ctx);
 }
 
 static void doglobal(struct tagCCContext* ctx, struct tagCCSymbol* p)
 {
-	if (!IsFunction(p->_type)) 
-	{
-		FCCType* ty;
+	FCCType* ty;
 
-		for (ty = p->_type; IsArray(ty); ty = ty->_type) { /* do nothing */ }
+	if (p->_sclass == SC_Enum) { return; }
+	if (IsFunction(p->_type)) { return; }
 
-		if (p->_defined) {
-			ctx->_backend->_defglobal_begin(ctx, p, IsConst(ty) ? SEG_CONST : SEG_DATA);
-			cc_gen_dumpinitvalues(ctx, p);
-			ctx->_backend->_defglobal_end(ctx, p);
-		}
-		else if (p->_sclass != SC_External && p->_sclass != SC_Typedef) {
-			ctx->_backend->_defglobal_begin(ctx, p, IsConst(ty) ? SEG_CONST : SEG_BSS);
-			ctx->_backend->_defconst_signed(ctx, 1, 0, p->_type->_size);
-			ctx->_backend->_defglobal_end(ctx, p);
-		}
+	for (ty = p->_type; IsArray(ty); ty = ty->_type) { /* do nothing */ }
+
+	if (p->_defined) {
+		ctx->_backend->_defglobal_begin(ctx, p, IsConst(ty) ? SEG_CONST : SEG_DATA);
+		cc_gen_dumpinitvalues(ctx, p);
+		ctx->_backend->_defglobal_end(ctx, p);
+	}
+	else if (p->_sclass != SC_External && p->_sclass != SC_Typedef) {
+		ctx->_backend->_defglobal_begin(ctx, p, IsConst(ty) ? SEG_CONST : SEG_BSS);
+		ctx->_backend->_defconst_signed(ctx, 1, 0, p->_type->_size);
+		ctx->_backend->_defglobal_end(ctx, p);
 	}
 }
 
@@ -100,7 +106,8 @@ static void doexport(struct tagCCContext* ctx, struct tagCCSymbol* p)
 			ctx->_backend->_importsymbol(ctx, p);
 		}
 	}
-	else if (p->_sclass != SC_Static && p->_sclass != SC_Typedef) {
+	else if (p->_sclass != SC_Static && p->_sclass != SC_Typedef &&
+		p->_sclass != SC_Enum) {
 		ctx->_backend->_exportsymbol(ctx, p);
 	}
 }

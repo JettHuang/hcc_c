@@ -20,6 +20,7 @@ static void comment(struct tagCCContext* ctx, const char* szstr);
 static void switchsegment(struct tagCCContext* ctx, enum tagCCSegment seg);
 static void importsymbol(struct tagCCContext* ctx, struct tagCCSymbol* sym);
 static void exportsymbol(struct tagCCContext* ctx, struct tagCCSymbol* sym);
+static void additionalsymbols(struct tagCCContext* ctx);
 static void defglobal_begin(struct tagCCContext* ctx, struct tagCCSymbol* sym, enum tagCCSegment seg);
 static void defconst_space(struct tagCCContext* ctx, int count);
 static void defconst_signed(struct tagCCContext* ctx, int size, int64_t val, int count);
@@ -49,6 +50,7 @@ struct tagCCBackend* cc_new_backend()
 	backend->_comment = &comment;
 	backend->_importsymbol = &importsymbol;
 	backend->_exportsymbol = &exportsymbol;
+	backend->_additionalsymbols = &additionalsymbols;
 	backend->_defglobal_begin = &defglobal_begin;
 	backend->_defconst_space = &defconst_space;
 	backend->_defconst_signed = &defconst_signed;
@@ -91,6 +93,18 @@ static void importsymbol(struct tagCCContext* ctx, struct tagCCSymbol* sym)
 static void exportsymbol(struct tagCCContext* ctx, struct tagCCSymbol* sym)
 {
 	fprintf(ctx->_outfp, "public %s\n", sym->_x._name);
+}
+
+static void additionalsymbols(struct tagCCContext* ctx)
+{
+	fprintf(ctx->_outfp, "extern __aullshr:near\n");
+	fprintf(ctx->_outfp, "extern __aullrem:near\n");
+	fprintf(ctx->_outfp, "extern __aulldiv:near\n");
+	fprintf(ctx->_outfp, "extern __allshr:near\n");
+	fprintf(ctx->_outfp, "extern __allshl:near\n");
+	fprintf(ctx->_outfp, "extern __allrem:near\n");
+	fprintf(ctx->_outfp, "extern __allmul:near\n");
+	fprintf(ctx->_outfp, "extern __alldiv:near\n");
 }
 
 static void switchsegment(struct tagCCContext* ctx, enum tagCCSegment seg)

@@ -145,6 +145,8 @@ BOOL cc_stmt_label(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, st
 	}
 	p->_defined = 1;
 	
+	cc_ir_codelist_append(list, cc_ir_newcode_label(p, CC_MM_TEMPPOOL));
+
 	cc_read_token(ccctx, &ccctx->_currtk);
 	if (!cc_parser_expect(ccctx, TK_COLON)) { /* ':' */
 		return FALSE;
@@ -690,8 +692,7 @@ BOOL cc_stmt_goto(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, str
 	id = ccctx->_currtk._val._astr._str;
 	p = cc_symbol_lookup(id, gLabels);
 	if (!p) {
-		p = cc_symbol_install(id, &gLabels, SCOPE_LABEL, CC_MM_TEMPPOOL);
-		p->_loc = ccctx->_currtk._loc;
+		p = cc_symbol_label(id, &ccctx->_currtk._loc, CC_MM_TEMPPOOL);
 	}
 	
 	cc_read_token(ccctx, &ccctx->_currtk);
