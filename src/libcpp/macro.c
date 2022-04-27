@@ -625,6 +625,7 @@ static BOOL macro_expand_userdefined(FExpandContext* expctx, FCppContext* ctx, c
 				newtklist->_tk._wscnt = 1;
 				newtklist->_tk._str = NULL;
 			}
+			newtklist->_tk._wscnt = prev->_tk._wscnt;
 
 			curr = newtklist;
 			savednext = next->_next;
