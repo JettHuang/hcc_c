@@ -18,10 +18,12 @@
 #define SC_Typedef		5
 #define SC_Enum			6
 
+#define SC_LOWMASK		0xFF
+#define SC_INLINE		0x100
+
 /* function specifier */
 #define FS_Unknown		0
-#define FS_Normal		1
-#define FS_INLINE		2
+#define FS_INLINE		1
 
 /* scopes */
 #define SCOPE_None		0
@@ -59,6 +61,8 @@ typedef struct tagCCSymbol
 	uint16_t _generated : 1;
 	uint16_t _defined : 1;
 	uint16_t _isparameter : 1;
+	uint16_t _isinline : 1;
+	uint16_t _notoutput : 1;
 
 	union {
 		struct tagCCSymbol** _enumids; /* for enum identifiers, end with NULL */

@@ -80,6 +80,7 @@ static void doglobal(struct tagCCContext* ctx, struct tagCCSymbol* p)
 {
 	FCCType* ty;
 
+	if (p->_notoutput) { return; }
 	if (p->_sclass == SC_Enum) { return; }
 	if (IsFunction(p->_type)) { return; }
 
@@ -99,6 +100,8 @@ static void doglobal(struct tagCCContext* ctx, struct tagCCSymbol* p)
 
 static void doexport(struct tagCCContext* ctx, struct tagCCSymbol* p)
 {
+	if (p->_notoutput) { return; }
+
 	if (!p->_defined && (p->_sclass == SC_External
 		|| (IsFunction(p->_type) && p->_sclass == SC_Auto)))
 	{
@@ -114,6 +117,8 @@ static void doexport(struct tagCCContext* ctx, struct tagCCSymbol* p)
 
 static void doexternal(struct tagCCContext* ctx, struct tagCCSymbol* p)
 {
+	if (p->_notoutput) { return; }
+
 	ctx->_backend->_importsymbol(ctx, p);
 }
 
@@ -121,6 +126,7 @@ static void doconstant(struct tagCCContext* ctx, struct tagCCSymbol* p)
 {
 	FCCType* ty = UnQual(p->_type);
 
+	if (p->_notoutput) { return; }
 	/* don't export integers to constant-table */
 	if (ty->_op == Type_SInteger 
 		|| ty->_op == Type_UInteger 

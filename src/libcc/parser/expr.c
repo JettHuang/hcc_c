@@ -66,7 +66,11 @@ static BOOL cc_expr_parse_primary(FCCContext* ctx, FCCIRTree** outexpr, enum EMM
 		}
 		else
 		{
-			p->_x._refcnt++;
+			/* hack: omit symbol used by inline function when the inline function is omit */
+			if (!ctx->_function || !ctx->_function->_isinline || !gccconfig._omit_inlinefunc) {
+				p->_x._refcnt++;
+			}
+
 			if (!(tree = cc_expr_id(p, &ctx->_currtk._loc, where))) {
 				return FALSE;
 			}
@@ -1547,7 +1551,7 @@ BOOL cc_expr_parse_constant_expression(FCCContext* ctx, FCCIRTree** outexpr, enu
 		return TRUE;
 	}
 
-	logger_output_s("error: constant expression is expected at %w\n", &((*outexpr)->_loc));
+	logger_output_s("error: constant expression is expected at %w\n", *outexpr != NULL ? &((*outexpr)->_loc) : &ctx->_currtk._loc);
 	return FALSE;
 }
 

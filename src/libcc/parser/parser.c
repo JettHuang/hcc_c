@@ -296,7 +296,7 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 		case TK_INLINE:
 			if (funcspec != FS_Unknown)
 			{
-				logger_output_s("error: invalid use 'typedef', at %w\n", &ctx->_currtk._loc);
+				logger_output_s("error: invalid use 'inline', at %w\n", &ctx->_currtk._loc);
 				return NULL;
 			}
 			funcspec = FS_INLINE;
@@ -556,9 +556,9 @@ FCCType* cc_parser_declspecifier(FCCContext* ctx, int* storage)
 	
 	if (storage)
 	{
-		if ((sclass == SC_Unknown || sclass == SC_Static) && funcspec == FS_INLINE)
+		if (funcspec == FS_INLINE)
 		{
-			sclass = SC_Static;
+			sclass |= SC_INLINE;
 		}
 
 		*storage = sclass;
@@ -1045,6 +1045,12 @@ FCCSymbol* cc_parser_decllocal(FCCContext* ctx, int storage, const char* id, con
 		storage = SC_Auto;
 	}
 
+	if (storage != SC_Auto && storage != SC_External && storage != SC_Register && storage != SC_Static)
+	{
+		logger_output_s("error: invalid storage class of '%s' at '%w'.\n", id, loc);
+		return NULL;
+	}
+
 	q = cc_symbol_lookup(id, gIdentifiers);
 	if (q && (q->_scope >= gCurrentLevel || (q->_scope == SCOPE_PARAM && gCurrentLevel == SCOPE_LOCAL)))
 	{
@@ -1239,7 +1245,9 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 	{
 		p = cc_symbol_install(name, &gGlobals, SCOPE_GLOBAL, CC_MM_PERMPOOL);
 	}
-	p->_sclass = storage;
+
+	p->_sclass = storage & SC_LOWMASK;
+	p->_isinline = (storage & SC_INLINE) ? 1 : 0;
 	p->_loc = *loc;
 	p->_type = fty;
 	p->_defined = 1;
@@ -1359,12 +1367,19 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 			logger_output_s("\n");
 		}
 
-		/* generate & dump back-end codes */
-		ctx->_backend->_deffunction_begin(ctx, p);
-		if (!cc_gen_dumpfunction(ctx, p, &caller, &callee, basicblocks)) {
-			return FALSE;
+		if (!p->_isinline || !gccconfig._omit_inlinefunc)
+		{
+			/* generate & dump back-end codes */
+			ctx->_backend->_deffunction_begin(ctx, p);
+			if (!cc_gen_dumpfunction(ctx, p, &caller, &callee, basicblocks)) {
+				return FALSE;
+			}
+			ctx->_backend->_deffunction_end(ctx, p);
 		}
-		ctx->_backend->_deffunction_end(ctx, p);
+		else
+		{
+			p->_notoutput = 1; /* don't dump this symbol */
+		}
 	}
 	
 	/* exit param scope */

@@ -47,7 +47,8 @@ struct tagCCConfig gccconfig =
 {
 	0,
 	0,
-	1
+	1,
+	1   /* omit inline function */
 };
 
 
