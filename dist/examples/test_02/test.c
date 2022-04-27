@@ -6,8 +6,6 @@
  #define __declspec(...)	/* __declspec is un-support */
  #define __inline	inline	/* __inline is un-support */
  #define __forceinline inline
- #define __cdecl			 /* default is cdecl */
- #define __fastcall          /* __fastcall is un-support */
  #define __pragma(...)		 /* __pragma is un-support */
  
  #define __int64 	long long 
@@ -55,6 +53,11 @@ typedef int myint;
  ***************************/
 
 int main() {
+  __asm {
+	assemble /* this block will be omit */
+  }
+  
+  
   EXPECT(0, 0);
   EXPECT(1, 1);
   EXPECT(493, 0755);
@@ -152,5 +155,6 @@ int main() {
   EXPECT(128, ((((((1+1)+(1+1))+(1+1)+(1+1))+(((1+1)+(1+1))+(1+1)+(1+1)))+((((1+1)+(1+1))+(1+1)+(1+1))+(((1+1)+(1+1))+(1+1)+(1+1))))+(((((1+1)+(1+1))+(1+1)+(1+1))+(((1+1)+(1+1))+(1+1)+(1+1)))+((((1+1)+(1+1))+(1+1)+(1+1))+(((1+1)+(1+1))+(1+1)+(1+1)))))+((((((1+1)+(1+1))+(1+1)+(1+1))+(((1+1)+(1+1))+(1+1)+(1+1)))+((((1+1)+(1+1))+(1+1)+(1+1))+(((1+1)+(1+1))+(1+1)+(1+1))))+(((((1+1)+(1+1))+(1+1)+(1+1))+(((1+1)+(1+1))+(1+1)+(1+1)))+((((1+1)+(1+1))+(1+1)+(1+1))+(((1+1)+(1+1))+(1+1)+(1+1))))));
 
   printf("======= PASSED OK ==========\n");
+  
   return 0;
 }

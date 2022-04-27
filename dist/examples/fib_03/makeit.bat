@@ -13,22 +13,21 @@ set CC=%CCROOT%\bin\hcc_d.exe
 set CFLAGS=-D__NO_ISOCEXT -Dwin32 -D_WIN32 -D_M_IX86
 
 
-if exist hellowin.i del hellowin.i
-if exist hellowin.asm del hellowin.asm
-if exist hellowin.obj del hellowin.obj
-if exist hellowin.exe del hellowin.exe
+if exist fib.i del fib.i
+if exist fib.asm del fib.asm
+if exist fib.obj del fib.obj
+if exist fib.exe del fib.exe
 
-%CPP% %CFLAGS% -o hellowin.i hellowin.c
+%CPP% %CFLAGS% -o fib.i fib.c
 if errorlevel 1 goto errcpp
 
-%CC% -o hellowin.asm -r0 hellowin.i
+%CC% -o fib.asm fib.i
 if errorlevel 1 goto errcc
 
-ml.exe /c /coff hellowin.asm
+ml.exe /c /coff fib.asm
 if errorlevel 1 goto errasm
 
-set LIBS="oldnames.lib" "msvcrt.lib" "legacy_stdio_definitions.lib" "kernel32.lib" "user32.lib" "Gdi32.lib"
-link.exe /subsystem:windows /entry:WinMainCRTStartup %LIBS% hellowin.obj 
+link.exe /subsystem:console /entry:mainCRTStartup "oldnames.lib" "msvcrt.lib" "legacy_stdio_definitions.lib" "kernel32.lib" fib.obj 
 if errorlevel 1 goto errlink
 
 goto TheEnd
