@@ -11,6 +11,7 @@
 
 
 #define MAX_LOOKAHEAD_CNT		3
+#define FILE_BUFSIZE			2048
 
 enum EStreamType
 {
@@ -22,7 +23,13 @@ typedef struct tagCharStream
 {
 	enum EStreamType _streamtype;
 	union {
-		FILE* _file;
+		struct {
+			FILE* _fp;
+			char _buf[FILE_BUFSIZE];
+			int  _charcnt;
+			int  _cursor;
+		} _file;
+		
 		const char* _str;
 	} _charsource;
 

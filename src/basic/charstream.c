@@ -45,7 +45,9 @@ FCharStream* cs_create_fromfile(const char* filename)
 	}
 
 	cs->_streamtype = EST_FILE;
-	cs->_charsource._file = fp;
+	cs->_charsource._file._fp = fp;
+	cs->_charsource._file._charcnt = 0;
+	cs->_charsource._file._cursor = 0;
 	cs->_srcfilename = hs_hashstr(filename);
 	cs->_line = 1;
 	cs->_col = 1;
@@ -60,8 +62,9 @@ void cs_release(FCharStream* cs)
 
 	if (cs->_streamtype == EST_FILE)
 	{
-		if (cs->_charsource._file) {
-			fclose(cs->_charsource._file);
+		if (cs->_charsource._file._fp) {
+			fclose(cs->_charsource._file._fp);
+			cs->_charsource._file._fp = NULL;
 		}
 	}
 
@@ -79,8 +82,17 @@ static char read_char(FCharStream* cs)
 
 	if (cs->_streamtype == EST_FILE)
 	{
-		if (cs->_charsource._file) {
-			ch = fgetc(cs->_charsource._file);
+		if (cs->_charsource._file._cursor >= cs->_charsource._file._charcnt)
+		{
+			if (cs->_charsource._file._fp) {
+				cs->_charsource._file._charcnt = fread(cs->_charsource._file._buf, 1, FILE_BUFSIZE, cs->_charsource._file._fp);
+				cs->_charsource._file._cursor = 0;
+			}
+		}
+		if (cs->_charsource._file._cursor < cs->_charsource._file._charcnt)
+		{
+			ch = cs->_charsource._file._buf[cs->_charsource._file._cursor];
+			++cs->_charsource._file._cursor;
 		}
 	}
 	else 
