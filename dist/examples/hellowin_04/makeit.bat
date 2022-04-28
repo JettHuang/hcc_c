@@ -21,7 +21,7 @@ if exist hellowin.exe del hellowin.exe
 %CPP% %CFLAGS% -o hellowin.i hellowin.c
 if errorlevel 1 goto errcpp
 
-%CC% -o hellowin.asm -r0 hellowin.i
+%CC% -o hellowin.asm --checkret=0 --inline=0 hellowin.i
 if errorlevel 1 goto errcc
 
 ml.exe /c /coff hellowin.asm
