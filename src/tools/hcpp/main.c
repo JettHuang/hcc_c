@@ -18,6 +18,27 @@
 #define OPTPARSE_API static
 #include "optparse.h"
 
+
+/* options */
+#define OPTION_HELP				0x01
+#define OPTION_DEFINE			0x02
+#define OPTION_INCDIR			0x02
+#define OPTION_OUTFILE			0x03
+
+static struct optparse_long g_options[] =
+{
+	{ "help",    OPTION_HELP, OPTPARSE_NONE },
+	{ NULL, 0, OPTPARSE_NONE }
+};
+
+const char* szhelp = "help: hcpp [options] sourcefile\n"
+					"options:\n"
+					"\t -I  include directory\n"
+					"\t -D  macro define\n"
+					"\t -o  output filename\n"
+					"\t --help print help\n";
+
+
 static void add_sysinclues(FCppContext* ctx)
 {
 	const char* paths = getenv("include");
@@ -73,6 +94,18 @@ int main(int argc, char* argv[])
 			break;
 		case '?':
 			logger_output_s("%s: %s\n", argv[0], options.errmsg);
+			break;
+		}
+	} /* end while */
+
+	while ((option = optparse_long(&options, g_options, NULL)) != -1)
+	{
+		switch (option)
+		{
+		case OPTION_HELP:
+			printf(szhelp);
+			return 0;
+		default:
 			break;
 		}
 	} /* end while */
