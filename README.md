@@ -1,5 +1,6 @@
 # hcc_c
 A C Compiler implemented in C language.
+https://zhuanlan.zhihu.com/p/506669546
 
 # references
  1. C99 standard final draft http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1124.pdf
