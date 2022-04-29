@@ -1246,8 +1246,8 @@ BOOL cc_parser_funcdefinition(FCCContext* ctx, int storage, const char* name, FC
 		p = cc_symbol_install(name, &gGlobals, SCOPE_GLOBAL, CC_MM_PERMPOOL);
 	}
 
-	p->_sclass = storage & SC_LOWMASK;
 	p->_isinline = (storage & SC_INLINE) ? 1 : 0;
+	p->_sclass = p->_isinline ? SC_Static : storage & SC_LOWMASK;
 	p->_loc = *loc;
 	p->_type = fty;
 	p->_defined = 1;

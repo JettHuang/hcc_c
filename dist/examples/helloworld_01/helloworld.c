@@ -50,6 +50,11 @@
  
  int square(int a) 
  {
+	 int i;
+	 
+	 a++;
+	 i = a++;
+	 
 	 return a * a;
  }
  
