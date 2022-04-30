@@ -397,7 +397,7 @@ BOOL cc_stmt_switch(struct tagCCContext* ccctx,  struct tagCCIRCodeList* list, s
 	{
 		FCCIRCodeList tmplist = { NULL, NULL };
 		
-		if (!cc_canon_expr_linearize(list, intexpr, NULL, NULL, &intexpr, CC_MM_TEMPPOOL)) {
+		if (!cc_canon_expr_linearize(&tmplist, intexpr, NULL, NULL, &intexpr, CC_MM_TEMPPOOL)) {
 			return FALSE;
 		}
 
