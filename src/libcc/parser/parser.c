@@ -655,8 +655,9 @@ BOOL cc_parser_declarator(FCCContext* ctx, FCCType* basety, const char** id, FLo
 		return FALSE;
 	}
 
-	if (basety->_size > 32767) {
-		logger_output_s("warning: more than 32767 bytes in `%t'\n", basety);
+	if (basety->_size < 0) {
+		logger_output_s("error: size is < 0 bytes in `%t'\n", basety);
+		return FALSE;
 	}
 
 	for (ty = basety; ty; ty = ty->_type)
