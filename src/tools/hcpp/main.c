@@ -121,9 +121,7 @@ int main(int argc, char* argv[])
 	/* add environment include */
 	add_sysinclues(&cpp);
 	/* add definition*/
-	cpp_add_definition(&cpp, "win32");
-	cpp_add_definition(&cpp, "_WIN32");
-	cpp_add_definition(&cpp, "_M_IX86");
+	cpp_add_definition(&cpp, "HCC=1");
 
 	bsuccess = cpp_process(&cpp, srcfilename, outfilename);
 	cpp_contex_release(&cpp);
