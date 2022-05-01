@@ -3186,6 +3186,21 @@ FCCIRTree* cc_expr_value(FCCIRTree* expr, enum EMMArea where)
 		return cc_expr_read_bitvalue(expr, where);
 	}
 
+	/* check temporary */
+	right = expr;
+	while (IR_OP(right->_op) == IR_SEQ)
+	{
+		right = right->_u._kids[1];
+	}
+	if (IR_OP(right->_op) == IR_INDIR && IR_OP(right->_u._kids[0]->_op) == IR_ADDRL)
+	{
+		FCCIRTree* kid = right->_u._kids[0];
+		if (kid->_symbol->_temporary)
+		{
+			kid->_symbol->_x._refcnt++;
+		}
+	}
+
 	return expr;
 }
 

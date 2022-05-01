@@ -55,7 +55,11 @@ BOOL cc_canon_expr_linearize(FCCIRCodeList* list, FCCIRTree* expr, FCCSymbol* tl
         assert(lhs && rhs);
         expr->_u._kids[0] = lhs;
         expr->_u._kids[1] = rhs;
-		cc_ir_codelist_append(list, cc_ir_newcode_expr(expr, where));
+
+        if (IR_OP(lhs->_op) != IR_ADDRL || !lhs->_symbol->_temporary || lhs->_symbol->_x._refcnt > 0) /* omit used temporary assignment */
+        {
+            cc_ir_codelist_append(list, cc_ir_newcode_expr(expr, where));
+        }
     }
         break;
     case IR_ADD:
