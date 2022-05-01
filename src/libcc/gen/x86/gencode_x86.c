@@ -1961,12 +1961,6 @@ static BOOL cc_gen_triple_to_x86(struct tagCCGenCodeContext* ctx, struct tagCCTr
 		lhs = triple->_kids[0];
 		rhs = triple->_kids[1];
 
-		/* check if a temporary, ie. i++ i-- */
-		if (IR_OP(lhs->_op) == IR_ADDRL && lhs->_symbol->_temporary && lhs->_lastref <= curseqid)
-		{
-			break; /* don't emit mov instruction */
-		}
-
 		if (!cc_get_operand(lhs, &dst)) { return FALSE; }
 		if (dst._format == FormatInSIB2 && !cc_convert_insib2_to_insib(ctx, lhs, &dst, curseqid)) { return FALSE; }
 		if (!cc_convert_insib_reg_imm_to_sib(ctx, lhs, &dst, curseqid)) { return FALSE; }
