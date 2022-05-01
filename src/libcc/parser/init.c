@@ -482,8 +482,14 @@ static BOOL cc_gen_localvar_assign(struct tagCCIRCodeList* list, FCCIRTree* base
 {
 	FCCIRTree*lhs, *assign;
 
-	lhs = cc_expr_constant(gbuiltintypes._sinttype, IR_S32, NULL, CC_MM_TEMPPOOL, offset);
-	lhs = cc_expr_add(cc_type_ptr(rhs->_ty), baseAddr, lhs, &rhs->_loc, CC_MM_TEMPPOOL);
+	if (offset != 0) {
+		lhs = cc_expr_constant(gbuiltintypes._sinttype, IR_S32, NULL, CC_MM_TEMPPOOL, offset);
+		lhs = cc_expr_add(cc_type_ptr(rhs->_ty), baseAddr, lhs, &rhs->_loc, CC_MM_TEMPPOOL);
+	}
+	else {
+		lhs = baseAddr;
+	}
+
 	lhs = cc_expr_indir(lhs, &rhs->_loc, CC_MM_TEMPPOOL);
 	assign = cc_expr_assign(rhs->_ty, lhs, rhs, &rhs->_loc, CC_MM_TEMPPOOL);
 
