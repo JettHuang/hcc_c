@@ -44,11 +44,12 @@ void cpp_contex_init(FCppContext* ctx)
 	ctx->_includedirs = NULL;
 	ctx->_outfilename = NULL;
 	ctx->_outfp = NULL;
-	ctx->_macrolist = NULL;
 	ctx->_sourcestack = NULL;
 	ctx->_strdate = NULL;
 	ctx->_strtime = NULL;
 	ctx->_lookaheadtk._valid = 0;
+
+	util_memset(&ctx->_macros_hash, 0, sizeof(ctx->_macros_hash));
 
 	ctx->_HS__DATE__ = hs_hashstr("__DATE__");
 	ctx->_HS__FILE__ = hs_hashstr("__FILE__");
@@ -108,7 +109,6 @@ void cpp_contex_release(FCppContext* ctx)
 	ctx->_includedirs = NULL;
 	ctx->_outfilename = NULL;
 	ctx->_outfp = NULL;
-	ctx->_macrolist = NULL;
 	ctx->_sourcestack = NULL;
 	ctx->_strdate = NULL;
 	ctx->_strtime = NULL;

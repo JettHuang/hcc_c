@@ -9,7 +9,7 @@
 
 
 #define HASH_POOL		MMA_Area_0
-#define TABLE_SIZE		421 /* should be prime */ 
+#define TABLE_SIZE		1024 
 
 typedef struct tagHashEntry
 {
@@ -31,7 +31,7 @@ const char* hs_hashstr(const char* str)
 const char* hs_hashnstr(const char* str, unsigned int len)
 {
 	unsigned int hash = util_str_hash(str, len);
-	unsigned int index = hash % TABLE_SIZE;
+	unsigned int index = hash & (TABLE_SIZE - 1);
 	FHashEntry* ptrentry = g_htable[index];
 
 	while (ptrentry)
@@ -58,7 +58,7 @@ const char* hs_hashnstr(const char* str, unsigned int len)
 const char* hs_hashnstr2(const char* str, unsigned int len)
 {
 	unsigned int hash = util_str_hash2(str, len);
-	unsigned int index = hash % TABLE_SIZE;
+	unsigned int index = hash & (TABLE_SIZE - 1);
 	FHashEntry* ptrentry = g_htable[index];
 
 	len++;

@@ -569,6 +569,8 @@ static BOOL ctrl_error_handler(FCppContext* ctx, FTKListNode* tklist, int* outpu
 		return TRUE;
 	}
 
+	logger_output_s("#error at %w\n", &tklist->_tk._loc);
+
 	cpp_output_tokens(ctx, tklist);
 	*outputlines = 1;
 	return FALSE;

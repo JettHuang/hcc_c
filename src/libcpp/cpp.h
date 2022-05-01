@@ -94,13 +94,19 @@ typedef struct tagStringListNode {
 	struct tagStringListNode* _next;
 } FStrListNode;
 
+/* macro hash */
+#define MACRO_TABLE_SIZE	1024
+typedef struct tagMacroHash {
+	FMacroListNode* _hash[MACRO_TABLE_SIZE];
+} FMacroHash;
+
 /* runtime context of cpp */
 typedef struct tagCppContext {
 	FStrListNode* _includedirs;
 	const char* _outfilename;
 	FILE* _outfp;
 
-	FMacroListNode* _macrolist;
+	FMacroHash  _macros_hash;
 	FSourceCodeContext* _sourcestack;
 	FArray _pragma_onces;  /* #pragma once files */
 	BOOL   _stop_flag;

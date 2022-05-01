@@ -10,23 +10,28 @@
 #include <string.h>
 
 
+#define MACRO_HASHKEY(x)	(((unsigned int)(x)) >> 3)
+
 void cpp_add_macro(FCppContext* ctx, const FMacro* m)
 {
 	FMacroListNode* mnode = mm_alloc_area(sizeof(FMacroListNode), CPP_MM_PERMPOOL);
 	if (mnode)
 	{
+		unsigned int hs = MACRO_HASHKEY(m->_name) & (MACRO_TABLE_SIZE - 1);
+
 		mnode->_macro = *m;
-		mnode->_next = ctx->_macrolist;
-		ctx->_macrolist = mnode;
+		mnode->_next = ctx->_macros_hash._hash[hs];
+		ctx->_macros_hash._hash[hs] = mnode;
 	}
 }
 
 void cpp_remove_macro(FCppContext* ctx, const char* name)
 {
 	FMacroListNode* current, **ptrprev; 
-	
-	ptrprev = &ctx->_macrolist;
-	current = ctx->_macrolist;
+	unsigned int hs = MACRO_HASHKEY(name) & (MACRO_TABLE_SIZE - 1);
+
+	ptrprev = &(ctx->_macros_hash._hash[hs]);
+	current = ctx->_macros_hash._hash[hs];
 	for (; current; current = current->_next)
 	{
 		if (current->_macro._name == name)
@@ -41,7 +46,9 @@ void cpp_remove_macro(FCppContext* ctx, const char* name)
 
 const FMacro* cpp_find_macro(FCppContext* ctx, const char* name)
 {
-	FMacroListNode* current = ctx->_macrolist;
+	unsigned int hs = MACRO_HASHKEY(name) & (MACRO_TABLE_SIZE - 1);
+
+	FMacroListNode* current = ctx->_macros_hash._hash[hs];
 	for (; current; current = current->_next)
 	{
 		if (current->_macro._name == name)
