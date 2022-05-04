@@ -88,13 +88,23 @@
 	
 	printf("is dirty? %d\n", info._isdirty);
 	printf("is visited? %d\n", info._isvisited);
+	printf("我爱你，中国！\n");
+	printf("源文件得是ANSI编码哦，否则中文乱码!\n");
 	
 	for (i=0; i<10; i++)
 	{
 		printf("hello, world!\n");
 	}
 
-	
+	/* test long long */
+	{
+		unsigned long long ll;
+		ll = 0xFFFFF000;
+		
+		printf("test long long\n");
+		printf("ll >> 12 = 0x%08x \n", ll >> 12);
+	}
+
 	return 0;
  }
  
