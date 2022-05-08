@@ -32,7 +32,7 @@ static struct optparse_long g_options[] =
 {
 	{ "help",    OPTION_HELP, OPTPARSE_NONE },
 	{ "dag",     OPTION_PRINTDAG, OPTPARSE_NONE },
-	{ "tripple", OPTION_PRINTTRIPPLE, OPTPARSE_NONE },
+	{ "triple", OPTION_PRINTTRIPPLE, OPTPARSE_NONE },
 	{ "checkret", OPTION_CHECKRET,    OPTPARSE_REQUIRED },
 	{ "inline",  OPTION_COMPILEINLINE, OPTPARSE_REQUIRED },
 
@@ -46,7 +46,7 @@ const char* szhelp = "help: hcc [options] sourcefile\n"
 					"\t -o  output filename\n"
 					"\t --help print help\n"
 					"\t --dag  print dag\n"
-					"\t --tripple print tripple code\n"
+					"\t --triple print triple code\n"
 					"\t --checkret=0/1 check function return\n"
 					"\t --inline=0/1 enable compile inline function\n";
 
@@ -92,7 +92,7 @@ int main(int argc, char* argv[])
 		case OPTION_PRINTDAG:
 			gccconfig._output_dag = 1; break;
 		case OPTION_PRINTTRIPPLE:
-			gccconfig._output_tripple = 1; break;
+			gccconfig._output_triple = 1; break;
 		case OPTION_CHECKRET:
 			gccconfig._must_retvalue = atoi(options.optarg) ? 1 : 0;
 			break;

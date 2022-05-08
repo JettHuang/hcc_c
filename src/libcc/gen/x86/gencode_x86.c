@@ -3446,6 +3446,8 @@ static BOOL cc_output_asmcodes(struct tagCCContext* ctx, struct tagCCSymbol* fun
 	return TRUE;
 }
 
+static void cc_display_triples(const struct tagCCTripleCode* triple);
+
 BOOL cc_gen_dumpfunction(struct tagCCContext* ctx, struct tagCCSymbol* func, FArray* caller, FArray* callee, struct tagCCIRBasicBlock* body)
 {
 	struct tagCCTripleCodeContext triplectx;
@@ -3466,6 +3468,12 @@ BOOL cc_gen_dumpfunction(struct tagCCContext* ctx, struct tagCCSymbol* func, FAr
 		return FALSE;
 	}
 
+	/* display triples */
+	if (gccconfig._output_triple) {
+		logger_output_s("'%s' triple codes:\n", func->_name);
+		cc_display_triples(triplectx._head);
+	}
+
 	gen_context_init(&genctx, CC_MM_TEMPPOOL);
 	if (!cc_gen_asmcodes(&genctx, caller, callee, triplectx._head)) {
 		logger_output_s("failed to generate x86 codes for function '%s'\n", func->_name);
@@ -3478,4 +3486,83 @@ BOOL cc_gen_dumpfunction(struct tagCCContext* ctx, struct tagCCSymbol* func, FAr
 	}
 
 	return TRUE;
+}
+
+static void cc_display_triples(const struct tagCCTripleCode *triple)
+{
+	for (; triple; triple = triple->_next)
+	{
+		switch (triple->_opcode)
+		{
+		case X86_BLKENTER:
+			logger_output_s("X86_BLKENTER %d\n", triple->_count); break;
+		case X86_BLKLEAVE:
+			logger_output_s("X86_BLKLEAVE %d\n", triple->_count); break;
+		case X86_LOCALVAR:
+			logger_output_s("X86_LOCALVAR %s\n", triple->_target->_name); break;
+		case X86_MOVERET:
+			logger_output_s("X86_MOVERET dag0:%p\n", triple->_kids[0]); break;
+		case X86_LOAD:
+			logger_output_s("X86_LOAD dag0:%p\n", triple->_kids[0]); break;
+		case X86_LABEL:
+			logger_output_s("X86_LABEL %s\n", triple->_target->_x._name); break;
+		case X86_OR:
+			logger_output_s("X86_OR dag0:%p, dag1:%p\n", triple->_kids[0], triple->_kids[1]); break;
+		case X86_XOR:
+			logger_output_s("X86_XOR dag0:%p, dag1:%p\n", triple->_kids[0], triple->_kids[1]); break;
+		case X86_AND:
+			logger_output_s("X86_AND dag0:%p, dag1:%p\n", triple->_kids[0], triple->_kids[1]); break;
+		case X86_ADD:
+			logger_output_s("X86_ADD dag0:%p, dag1:%p\n", triple->_kids[0], triple->_kids[1]); break;
+		case X86_SUB:
+			logger_output_s("X86_SUB dag0:%p, dag1:%p\n", triple->_kids[0], triple->_kids[1]); break;
+		case X86_MUL:
+			logger_output_s("X86_MUL dag0:%p, dag1:%p\n", triple->_kids[0], triple->_kids[1]); break;
+		case X86_LSH:
+			logger_output_s("X86_LSH dag0:%p, dag1:%p\n", triple->_kids[0], triple->_kids[1]); break;
+		case X86_RSH:
+			logger_output_s("X86_RSH dag0:%p, dag1:%p\n", triple->_kids[0], triple->_kids[1]); break;
+		case X86_DIV:
+			logger_output_s("X86_DIV dag0:%p, dag1:%p\n", triple->_kids[0], triple->_kids[1]); break;
+		case X86_MOD:
+			logger_output_s("X86_MOD dag0:%p, dag1:%p\n", triple->_kids[0], triple->_kids[1]); break;
+		case X86_NEG:
+			logger_output_s("X86_NEG dag0:%p\n", triple->_kids[0]); break;
+		case X86_NOT:
+			logger_output_s("X86_NOT dag0:%p\n", triple->_kids[0]); break;
+		case X86_JE:
+			logger_output_s("X86_JE dag0:%p, dag1:%p  %s\n", triple->_kids[0], triple->_kids[1], triple->_target->_x._name); break;
+		case X86_JNE:
+			logger_output_s("X86_JNE dag0:%p, dag1:%p  %s\n", triple->_kids[0], triple->_kids[1], triple->_target->_x._name); break;
+		case X86_JG:
+			logger_output_s("X86_JG dag0:%p, dag1:%p  %s\n", triple->_kids[0], triple->_kids[1], triple->_target->_x._name); break;
+		case X86_JL:
+			logger_output_s("X86_JL dag0:%p, dag1:%p  %s\n", triple->_kids[0], triple->_kids[1], triple->_target->_x._name); break;
+		case X86_JGE:
+			logger_output_s("X86_JGE dag0:%p, dag1:%p  %s\n", triple->_kids[0], triple->_kids[1], triple->_target->_x._name); break;
+		case X86_JLE:
+			logger_output_s("X86_JLE dag0:%p, dag1:%p  %s\n", triple->_kids[0], triple->_kids[1], triple->_target->_x._name); break;
+		case X86_JMP:
+			logger_output_s("X86_JMP %s\n", triple->_target->_x._name); break;
+		/* convert */
+		case X86_CVT:
+			logger_output_s("X86_CVT dag0:%p\n", triple->_kids[0]); break;
+		case X86_MOV:
+			logger_output_s("X86_MOV dag0:%p, dag1:%p\n", triple->_kids[0], triple->_kids[1]); break;
+		case X86_PUSH:
+			logger_output_s("X86_PUSH dag0:%p\n", triple->_kids[0]); break;
+		case X86_CALL:
+			logger_output_s("X86_CALL dag0:%p\n", triple->_kids[0]); break;
+		case X86_PROLOGUE:
+			logger_output_s("X86_PROLOGUE\n"); break;
+		case X86_EPILOGUE:
+			logger_output_s("X86_EPILOGUE\n"); break;
+		/* set memory to zero */
+		case X86_ZERO_M:
+			logger_output_s("X86_ZERO_M dag0:%p\n", triple->_kids[0]); break;
+		default:
+			assert(0); break;
+		}
+
+	} /* end for */
 }

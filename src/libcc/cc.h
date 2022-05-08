@@ -47,7 +47,7 @@ typedef struct tagCCContext {
 typedef struct tagCCConfig
 {
 	int _output_dag : 1;
-	int _output_tripple : 1;
+	int _output_triple : 1;
 	int _must_retvalue : 1; /* function must return value, otherwise failed. */
 	int _omit_inlinefunc : 1; /* don't generate code for inline function */
 } FCCConfig;
