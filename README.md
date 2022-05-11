@@ -1,5 +1,7 @@
 # hcc_c
 A C Compiler implemented in C language.
+
+# articles:
 https://zhuanlan.zhihu.com/p/506669546
 
 # references
@@ -12,22 +14,21 @@ https://zhuanlan.zhihu.com/p/506669546
  7. https://blog.csdn.net/sheisc/article/list/1?t=1
  
 # source tree 
-	hcc
-	  +--dist (final distribute compiler tools)
-           +--include
-           +--lib
+     hcc
+	+--dist (final distribute compiler tools)
            +--bin
-		   +--examples
-      +--doc (document of development)
-      +--src
-			+--basic (commone used codes)
-			+--libcpp (lib of c preprocessor)
-			+--libcc (lib of c compiler)
-			+--tools 
-				+-- common (common codes for tools)
-				+-- hcpp (c preprocessor app)
-				+-- hcc (c compiler app)
-	  +--build (solution)
+	   +--examples
+	+--include
+        +--doc (document of development)
+        +--src
+           +--basic (commone used codes)
+           +--libcpp (lib of c preprocessor)
+           +--libcc (lib of c compiler)
+           +--tools 
+              +-- common (common codes for tools)
+              +-- hcpp (c preprocessor app)
+              +-- hcc (c compiler app)
+        +--build (solution)
 
 # pipeline
  1. lexer
@@ -40,3 +41,8 @@ https://zhuanlan.zhihu.com/p/506669546
   1. using c99 as reference
   2. not support universal char name
   
+# snapshots
+![console example](https://pic2.zhimg.com/80/v2-d8da4dfc2242d64ca6608c7440d06195_720w.jpg)
+![gui example](https://pic2.zhimg.com/80/v2-bd8f2f88b5ff601a9e7dbaf0d4d5d2b1_720w.jpg)
+
+
